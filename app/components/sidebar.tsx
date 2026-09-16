@@ -25,11 +25,7 @@ import { useAuth } from "@/app/contexts/auth-context"
 import { lariaAPI, Document } from "@/lib/laria-api"
 import { useEffect } from "react"
 
-interface SidebarProps {
-  onRequireAuth?: () => void
-}
-
-export function Sidebar({ onRequireAuth }: SidebarProps) {
+export function Sidebar() {
   const router = useRouter()
   const { chats, activeChatId, createChat, selectChat, deleteChat } = useChat()
   const { isAuthenticated } = useAuth()
@@ -48,10 +44,6 @@ export function Sidebar({ onRequireAuth }: SidebarProps) {
   }, [openPanel, isAuthenticated])
 
   const handleNewChat = async () => {
-    if (!isAuthenticated) {
-      onRequireAuth?.()
-      return
-    }
     await createChat()
     router.push("/")
   }
