@@ -197,7 +197,7 @@ export function SearchBar() {
       {/* Input */}
       <div
         className={`animate-in fade-in slide-in-from-bottom-4 duration-500 rounded-2xl border-2 bg-card shadow-[0_4px_20px_rgb(0,0,0,0.03)] transition-all hover:shadow-[0_4px_30px_rgb(0,0,0,0.06)] ${
-          isFocused ? "border-teal-500/50 ring-1 ring-teal-500/20" : "border-teal-500/20 hover:border-teal-500/30"
+          isFocused ? "border-ring/50 ring-1 ring-ring/20" : "border-border hover:border-ring/40"
         }`}
       >
         <div className="flex items-center px-4 md:px-5 py-3 md:py-3.5">
@@ -265,7 +265,7 @@ export function SearchBar() {
               <Button
                 variant="ghost"
                 size="icon"
-                className="h-8 w-8 md:h-9 md:w-9 rounded-lg bg-teal-600 text-white hover:bg-teal-700 transition-all"
+                className="h-8 w-8 md:h-9 md:w-9 rounded-lg bg-primary text-primary-foreground hover:bg-primary/90 transition-all"
                 onClick={handleSend}
                 disabled={isLoading}
               >

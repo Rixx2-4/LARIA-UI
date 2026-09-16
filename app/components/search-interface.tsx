@@ -19,7 +19,7 @@ export function Search() {
             <header className="flex items-center justify-between">
               <div className="flex items-center gap-0">
                 <span className="text-2xl md:text-3xl font-bold tracking-tight text-foreground">LARIA</span>
-                <span className="ml-1 rounded-full bg-teal-600 px-2 md:px-2.5 py-0.5 text-[10px] md:text-xs font-semibold text-white">
+                <span className="ml-1 rounded-full bg-primary px-2 md:px-2.5 py-0.5 text-[10px] md:text-xs font-semibold text-primary-foreground">
                   IA
                 </span>
               </div>
