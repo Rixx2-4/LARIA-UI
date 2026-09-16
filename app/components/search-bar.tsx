@@ -5,11 +5,6 @@ import { Button } from "@/components/ui/button"
 import { Search, Paperclip, Mic, Send, Loader2, FileText, X } from "lucide-react"
 import { useChat } from "@/app/contexts/chat-context"
 import { lariaAPI } from "@/lib/laria-api"
-import { useAuth } from "@/app/contexts/auth-context"
-
-interface SearchBarProps {
-  onRequireAuth?: () => void
-}
 
 const ALLOWED_EXTENSIONS = [
   ".pdf", ".docx", ".doc", ".txt", ".md", ".rtf", ".odt", ".epub",
@@ -18,7 +13,7 @@ const ALLOWED_EXTENSIONS = [
   ".css", ".sql", ".json", ".xml", ".php", ".rb",
 ]
 
-export function SearchBar({ onRequireAuth }: SearchBarProps) {
+export function SearchBar() {
   const [query, setQuery] = useState("")
   const [showSuggestions, setShowSuggestions] = useState(false)
   const [isFocused, setIsFocused] = useState(false)
@@ -28,7 +23,6 @@ export function SearchBar({ onRequireAuth }: SearchBarProps) {
   const fileInputRef = useRef<HTMLInputElement>(null)
 
   const { messages, setMessages, loadChats } = useChat()
-  const { isAuthenticated } = useAuth()
 
   const generateTitle = async (chatId: string, history: { role: string; content: string }[]) => {
     try {
@@ -54,10 +48,6 @@ export function SearchBar({ onRequireAuth }: SearchBarProps) {
   }
 
   const handleFileUpload = async (file: File) => {
-    if (!isAuthenticated) {
-      onRequireAuth?.()
-      return
-    }
     if (isUploading) return
 
     const ext = "." + (file.name.split(".").pop() || "").toLowerCase()
@@ -111,10 +101,6 @@ export function SearchBar({ onRequireAuth }: SearchBarProps) {
     const userMessage = query.trim()
     if (!userMessage || isLoading) return
 
-    if (!isAuthenticated) {
-      onRequireAuth?.()
-      return
-    }
 
     setQuery("")
     setIsLoading(true)

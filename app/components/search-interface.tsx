@@ -1,19 +1,16 @@
 "use client"
-import { useState } from "react"
 import { Sidebar } from "./sidebar"
 import { SearchBar } from "./search-bar"
-import { AuthModal } from "./auth-modal"
 import { useAuth } from "@/app/contexts/auth-context"
 import { Button } from "@/components/ui/button"
-import { LogIn, LogOut } from "lucide-react"
+import { LogOut } from "lucide-react"
 
 export function Search() {
-  const { isAuthenticated, user, logout } = useAuth()
-  const [showAuthModal, setShowAuthModal] = useState(false)
+  const { user, logout } = useAuth()
 
   return (
     <>
-      <Sidebar onRequireAuth={() => setShowAuthModal(true)} />
+      <Sidebar />
 
       {/* Main Content */}
       <main className="flex flex-1 flex-col bg-background">
@@ -28,39 +25,21 @@ export function Search() {
               </div>
               
               <div className="flex items-center gap-2">
-                {isAuthenticated ? (
-                  <>
-                    <span className="text-sm text-muted-foreground">{user?.username}</span>
-                    <Button
-                      variant="ghost"
-                      size="sm"
-                      onClick={logout}
-                      className="text-muted-foreground hover:text-foreground"
-                    >
-                      <LogOut className="h-4 w-4 mr-2" />
-                      Salir
-                    </Button>
-                  </>
-                ) : (
-                  <Button
-                    variant="ghost"
-                    size="sm"
-                    onClick={() => setShowAuthModal(true)}
-                    className="text-muted-foreground hover:text-foreground"
-                  >
-                    <LogIn className="h-4 w-4 mr-2" />
-                    Iniciar sesión
+                <>
+                  <span className="text-sm text-muted-foreground">{user?.username}</span>
+                  <Button variant="ghost" size="sm" onClick={logout} className="rounded-full text-muted-foreground transition-all duration-200 hover:text-foreground">
+                    <LogOut data-icon="inline-start" />
+                    Salir
                   </Button>
-                )}
+                </>
               </div>
             </header>
 
-            <SearchBar onRequireAuth={() => setShowAuthModal(true)} />
+            <SearchBar />
           </div>
         </div>
       </main>
 
-      <AuthModal isOpen={showAuthModal} onClose={() => setShowAuthModal(false)} />
     </>
   )
 }
