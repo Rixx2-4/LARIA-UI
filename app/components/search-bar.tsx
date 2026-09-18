@@ -2,7 +2,7 @@
 
 import { useState, useRef } from "react"
 import { Button } from "@/components/ui/button"
-import { Search, Paperclip, Mic, Send, Loader2, FileText, X } from "lucide-react"
+import { Search, Paperclip, Mic, Send, Loader2 } from "lucide-react"
 import { useChat } from "@/app/contexts/chat-context"
 import { lariaAPI } from "@/lib/laria-api"
 
@@ -19,10 +19,10 @@ export function SearchBar() {
   const [isFocused, setIsFocused] = useState(false)
   const [isLoading, setIsLoading] = useState(false)
   const [isUploading, setIsUploading] = useState(false)
-  const [chatId, setChatId] = useState<string | null>(null)
   const fileInputRef = useRef<HTMLInputElement>(null)
 
-  const { messages, setMessages, loadChats } = useChat()
+  const { messages, setMessages, loadChats, activeChatId } = useChat()
+  const chatId = activeChatId
 
   const handleFileUpload = async (file: File) => {
     if (isUploading) return
@@ -41,7 +41,6 @@ export function SearchBar() {
       if (!currentChatId) {
         const chat = await lariaAPI.chats.create(`Dudas de ${file.name}`, doc.id)
         currentChatId = chat.id
-        setChatId(currentChatId)
         await loadChats()
       } else {
         await lariaAPI.chats.update(currentChatId, { document_id: doc.id })
@@ -72,7 +71,6 @@ export function SearchBar() {
       if (!currentChatId) {
         const chat = await lariaAPI.chats.create()
         currentChatId = chat.id
-        setChatId(currentChatId)
         await loadChats()
       }
 
