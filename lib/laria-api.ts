@@ -215,7 +215,9 @@ async function fetchAPI<T>(endpoint: string, options?: RequestInit): Promise<T> 
 
   if (!response.ok) {
     const error = await response.json().catch(() => ({ detail: "Error desconocido" }))
-    throw new Error(error.detail || `Error ${response.status}`)
+    const err = new Error(error.detail || `Error ${response.status}`)
+    ;(err as Error & { status?: number }).status = response.status
+    throw err
   }
 
   if (response.status === 204) {

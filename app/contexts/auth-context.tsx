@@ -17,6 +17,7 @@ const AuthContext = createContext<AuthContextType | undefined>(undefined)
 export function AuthProvider({ children }: { children: ReactNode }) {
   const [user, setUser] = useState<User | null>(null)
   const [isLoading, setIsLoading] = useState(true)
+  const [hasToken, setHasToken] = useState(false)
 
   const loadUser = useCallback(async () => {
     const token = getAuthToken()
@@ -25,13 +26,19 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       return
     }
 
+    setHasToken(true)
+
     try {
       const userData = await lariaAPI.auth.me()
       setUser(userData)
     } catch (error) {
       console.error("Error loading user:", error)
-      setAuthToken(null)
-      setUser(null)
+      const status = (error as Error & { status?: number }).status
+      if (status === 401) {
+        setAuthToken(null)
+        setUser(null)
+        setHasToken(false)
+      }
     } finally {
       setIsLoading(false)
     }
@@ -43,6 +50,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
   const login = useCallback(async (email: string, password: string) => {
     await lariaAPI.auth.login(email, password)
+    setHasToken(true)
     const userData = await lariaAPI.auth.me()
     setUser(userData)
   }, [])
@@ -55,13 +63,14 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const logout = useCallback(() => {
     lariaAPI.auth.logout()
     setUser(null)
+    setHasToken(false)
   }, [])
 
   return (
     <AuthContext.Provider
       value={{
         user,
-        isAuthenticated: !!user,
+        isAuthenticated: !!user || hasToken,
         isLoading,
         login,
         register,

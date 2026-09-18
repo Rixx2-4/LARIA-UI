@@ -9,12 +9,12 @@ export function Search() {
   const { user, logout } = useAuth()
 
   return (
-    <>
+    <div className="flex h-screen w-full overflow-hidden">
       <Sidebar />
 
       {/* Main Content */}
-      <main className="flex flex-1 flex-col bg-background">
-        <div className="flex min-h-screen flex-col items-center justify-center px-4 md:px-6 pt-16 md:pt-0">
+      <main className="flex flex-1 flex-col bg-background overflow-auto">
+        <div className="flex min-h-full flex-col items-center justify-center px-4 md:px-6 py-8">
           <div className="w-full max-w-3xl space-y-6 md:space-y-8">
             <header className="flex items-center justify-between">
               <div className="flex items-center gap-0">
@@ -25,13 +25,11 @@ export function Search() {
               </div>
               
               <div className="flex items-center gap-2">
-                <>
-                  <span className="text-sm text-muted-foreground">{user?.username}</span>
-                  <Button variant="ghost" size="sm" onClick={logout} className="rounded-full text-muted-foreground transition-all duration-200 hover:text-foreground">
-                    <LogOut data-icon="inline-start" />
-                    Salir
-                  </Button>
-                </>
+                <span className="text-sm text-muted-foreground">{user?.username}</span>
+                <Button variant="ghost" size="sm" onClick={logout} className="rounded-full text-muted-foreground transition-all duration-200 hover:text-foreground">
+                  <LogOut data-icon="inline-start" />
+                  Salir
+                </Button>
               </div>
             </header>
 
@@ -39,7 +37,6 @@ export function Search() {
           </div>
         </div>
       </main>
-
-    </>
+    </div>
   )
 }
