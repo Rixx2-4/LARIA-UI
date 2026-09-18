@@ -35,7 +35,7 @@ export function SearchBar() {
 
     setIsUploading(true)
     try {
-      const doc = await lariaAPI.documents.upload(file, "General")
+      const doc = await lariaAPI.documents.upload(file, "Ciencias")
 
       let currentChatId = chatId
       if (!currentChatId) {
