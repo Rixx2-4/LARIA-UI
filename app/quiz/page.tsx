@@ -1,71 +1,48 @@
 "use client"
 
-import { useState, useEffect } from "react"
+import { useState } from "react"
 import { useRouter } from "next/navigation"
 import { Loader2, CheckCircle, XCircle, ArrowRight, RotateCcw } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { Sidebar } from "../components/sidebar"
-
-interface QuizQuestion {
-  text: string
-  options: Record<string, string>
-  correct_answer: string
-  difficulty: "easy" | "medium" | "hard"
-  concept_tags: string[]
-  type: "multiple" | "open"
-}
+import { useChat } from "@/app/contexts/chat-context"
+import { lariaAPI, QuizQuestion, QuizAttemptQuestion } from "@/lib/laria-api"
 
 interface QuizResult {
   question: QuizQuestion
   userAnswer: string
   isCorrect: boolean
+  correctAnswer: string
 }
 
 export default function QuizPage() {
   const router = useRouter()
+  const { activeChatId } = useChat()
   const [step, setStep] = useState<"config" | "quiz" | "results">("config")
-  const [questionCount, setQuestionCount] = useState(10)
+  const [questionCount, setQuestionCount] = useState(5)
   const [questions, setQuestions] = useState<QuizQuestion[]>([])
   const [currentQuestion, setCurrentQuestion] = useState(0)
   const [answers, setAnswers] = useState<Record<number, string>>({})
   const [isLoading, setIsLoading] = useState(false)
   const [results, setResults] = useState<QuizResult[]>([])
-  const [chatHistory, setChatHistory] = useState("")
-
-  useEffect(() => {
-    const savedChats = JSON.parse(localStorage.getItem("laria_chats") || "[]")
-    if (savedChats.length > 0) {
-      const lastChat = savedChats[savedChats.length - 1]
-      if (lastChat.messages && lastChat.messages.length > 0) {
-        const history = lastChat.messages
-          .map((m: { role: string; content: string }) => `${m.role}: ${m.content}`)
-          .join("\n")
-        setChatHistory(history)
-      }
-    }
-  }, [])
+  const [error, setError] = useState<string | null>(null)
 
   const generateQuiz = async () => {
+    if (!activeChatId) {
+      setError("Abre o crea un chat con un documento vinculado antes de generar un quiz.")
+      return
+    }
     setIsLoading(true)
+    setError(null)
     try {
-      const res = await fetch("/api/quizzes", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          topic: chatHistory ? "based on chat history" : undefined,
-          count: questionCount,
-          chatHistory: chatHistory || undefined,
-          difficulty: "adaptive",
-        }),
-      })
-      const data = await res.json()
-      
-      if (res.ok && data.questions && data.questions.length > 0) {
+      const data = await lariaAPI.chats.generateQuiz(activeChatId, questionCount)
+      if (data.questions && data.questions.length > 0) {
         setQuestions(data.questions)
         setStep("quiz")
       }
-    } catch (error) {
-      console.error("Failed to generate quiz:", error)
+    } catch (err) {
+      console.error("Failed to generate quiz:", err)
+      setError(err instanceof Error ? err.message : "Error al generar el quiz")
     } finally {
       setIsLoading(false)
     }
@@ -90,31 +67,42 @@ export default function QuizPage() {
   }
 
   const submitQuiz = async () => {
+    if (!activeChatId) return
     setIsLoading(true)
     try {
-      const res = await fetch("/api/quizzes/attempt", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          quiz_id: crypto.randomUUID(),
-          student_id: "current_user",
-          answers,
-          questions,
-        }),
-      })
-      const data = await res.json()
-      
-      if (res.ok) {
-        const quizResults = questions.map((q, i) => ({
-          question: q,
-          userAnswer: answers[i] || "",
-          isCorrect: answers[i] === q.correct_answer,
-        }))
-        setResults(quizResults)
-        setStep("results")
+      const chat = await lariaAPI.chats.get(activeChatId)
+      const quizMsg = (chat.messages || []).find(
+        (m) => m.metadata?.type === "quiz"
+      )
+      const quizId = quizMsg?.metadata?.envelope?.quiz_id as string | undefined
+
+      if (!quizId) {
+        setError("No se encontró el quiz activo.")
+        setIsLoading(false)
+        return
       }
-    } catch (error) {
-      console.error("Failed to submit quiz:", error)
+
+      const answerRecord: Record<string, string> = {}
+      Object.entries(answers).forEach(([idx, ans]) => {
+        answerRecord[String(idx)] = ans
+      })
+
+      const data = await lariaAPI.quizzes.submitAttempt(quizId, answerRecord)
+
+      const quizResults: QuizResult[] = data.questions.map((q: QuizAttemptQuestion) => {
+        const original = questions.find((oq) => oq.index === q.index)
+        return {
+          question: original || { index: q.index, text: q.text, options: {}, difficulty: "medium" },
+          userAnswer: q.selected,
+          isCorrect: q.is_correct,
+          correctAnswer: q.correct_answer,
+        }
+      })
+      setResults(quizResults)
+      setStep("results")
+    } catch (err) {
+      console.error("Failed to submit quiz:", err)
+      setError(err instanceof Error ? err.message : "Error al enviar el intento")
     } finally {
       setIsLoading(false)
     }
@@ -126,6 +114,7 @@ export default function QuizPage() {
     setCurrentQuestion(0)
     setAnswers({})
     setResults([])
+    setError(null)
   }
 
   const score = results.filter((r) => r.isCorrect).length
@@ -142,14 +131,21 @@ export default function QuizPage() {
               <div>
                 <h1 className="text-2xl font-semibold mb-2">Quiz</h1>
                 <p className="text-muted-foreground">
-                  Genera un quiz basado en tu historial de chats con LARIA
+                  Genera un quiz basado en el material del chat activo
                 </p>
               </div>
 
-              {chatHistory && (
+              {error && (
+                <div className="p-4 bg-destructive/10 border border-destructive/20 rounded-lg text-sm text-destructive">
+                  {error}
+                </div>
+              )}
+
+              {!activeChatId && (
                 <div className="p-4 bg-muted rounded-lg">
-                  <p className="text-sm font-medium mb-1">Tema detectado del chat actual:</p>
-                  <p className="text-sm text-muted-foreground line-clamp-2">{chatHistory.slice(0, 200)}...</p>
+                  <p className="text-sm text-muted-foreground">
+                    Abre o crea un chat con un documento vinculado para generar un quiz.
+                  </p>
                 </div>
               )}
 
@@ -185,7 +181,7 @@ export default function QuizPage() {
 
               <Button
                 onClick={generateQuiz}
-                disabled={isLoading || questionCount < 1}
+                disabled={isLoading || questionCount < 1 || !activeChatId}
                 className="w-full h-12"
               >
                 {isLoading ? (
@@ -217,49 +213,35 @@ export default function QuizPage() {
               <div className="p-6 bg-card border border-border rounded-xl">
                 <div className="flex items-center gap-2 mb-4">
                   <span className={`text-xs px-2 py-0.5 rounded-full ${
-                    questions[currentQuestion].difficulty === "easy"
-                      ? "bg-green-100 text-green-700"
+                    questions[currentQuestion].difficulty === "hard"
+                      ? "bg-red-100 text-red-700"
                       : questions[currentQuestion].difficulty === "medium"
                       ? "bg-yellow-100 text-yellow-700"
-                      : "bg-red-100 text-red-700"
+                      : "bg-green-100 text-green-700"
                   }`}>
-                    {questions[currentQuestion].difficulty === "easy" ? "Fácil" :
-                     questions[currentQuestion].difficulty === "medium" ? "Medio" : "Difícil"}
+                    {questions[currentQuestion].difficulty === "hard" ? "Difícil" :
+                     questions[currentQuestion].difficulty === "medium" ? "Medio" : "Fácil"}
                   </span>
-                  {questions[currentQuestion].concept_tags.map((tag) => (
-                    <span key={tag} className="text-xs px-2 py-0.5 rounded-full bg-muted text-muted-foreground">
-                      {tag}
-                    </span>
-                  ))}
                 </div>
 
                 <h2 className="text-lg font-medium mb-4">{questions[currentQuestion].text}</h2>
 
-                {questions[currentQuestion].type === "multiple" ? (
-                  <div className="space-y-3">
-                    {Object.entries(questions[currentQuestion].options).map(([key, value]) => (
-                      <button
-                        key={key}
-                        onClick={() => handleAnswer(currentQuestion, key)}
-                        className={`w-full text-left p-4 rounded-lg border transition-all ${
-                          answers[currentQuestion] === key
-                            ? "border-primary bg-primary/5"
-                            : "border-border hover:border-primary/50"
-                        }`}
-                      >
-                        <span className="font-medium mr-2">{key}.</span>
-                        {value}
-                      </button>
-                    ))}
-                  </div>
-                ) : (
-                  <textarea
-                    value={answers[currentQuestion] || ""}
-                    onChange={(e) => handleAnswer(currentQuestion, e.target.value)}
-                    placeholder="Escribe tu respuesta..."
-                    className="w-full h-32 px-4 py-3 border border-border rounded-lg bg-background resize-none focus:outline-none focus:ring-2 focus:ring-primary/50"
-                  />
-                )}
+                <div className="space-y-3">
+                  {Object.entries(questions[currentQuestion].options).map(([key, value]) => (
+                    <button
+                      key={key}
+                      onClick={() => handleAnswer(currentQuestion, key)}
+                      className={`w-full text-left p-4 rounded-lg border transition-all ${
+                        answers[currentQuestion] === key
+                          ? "border-primary bg-primary/5"
+                          : "border-border hover:border-primary/50"
+                      }`}
+                    >
+                      <span className="font-medium mr-2">{key}.</span>
+                      {value}
+                    </button>
+                  ))}
+                </div>
               </div>
 
               <div className="flex gap-3">
@@ -314,7 +296,7 @@ export default function QuizPage() {
                         </p>
                         {!result.isCorrect && (
                           <p className="text-sm text-green-600">
-                            Respuesta correcta: <span className="font-medium">{result.question.correct_answer}</span>
+                            Respuesta correcta: <span className="font-medium">{result.correctAnswer}</span>
                           </p>
                         )}
                       </div>

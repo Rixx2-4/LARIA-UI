@@ -24,29 +24,6 @@ export function SearchBar() {
 
   const { messages, setMessages, loadChats } = useChat()
 
-  const generateTitle = async (chatId: string, history: { role: string; content: string }[]) => {
-    try {
-      const titlePrompt = [
-        ...history,
-        { role: "user", content: "Genera un título muy corto (máximo 5 palabras) que resuma el tema de esta conversación. Responde SOLO con el título, sin comillas ni puntuación extra." },
-      ]
-
-      const res = await fetch("/api/chat", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ messages: titlePrompt }),
-      })
-
-      const data = await res.json()
-      if (res.ok && data.response) {
-        const title = data.response.replace(/["']/g, "").trim().slice(0, 50)
-        await lariaAPI.chats.update(chatId, title)
-        await loadChats()
-      }
-    } catch {
-    }
-  }
-
   const handleFileUpload = async (file: File) => {
     if (isUploading) return
 
@@ -58,36 +35,22 @@ export function SearchBar() {
 
     setIsUploading(true)
     try {
+      const doc = await lariaAPI.documents.upload(file, "General")
+
       let currentChatId = chatId
-      const isNewChat = !currentChatId
       if (!currentChatId) {
-        const chat = await lariaAPI.chats.create()
+        const chat = await lariaAPI.chats.create(`Dudas de ${file.name}`, doc.id)
         currentChatId = chat.id
         setChatId(currentChatId)
         await loadChats()
+      } else {
+        await lariaAPI.chats.update(currentChatId, { document_id: doc.id })
       }
 
-      const doc = await lariaAPI.documents.upload(file, "General")
       await lariaAPI.chats.addMessage(currentChatId, "user", `📎 Subí el archivo: ${file.name}`)
 
-      const analysis = await lariaAPI.documents.analyze(doc.id)
-
-      const summary = `📄 **${file.name}**\n\n**Resumen:**\n${analysis.summary}\n\n**Conceptos clave:**\n${analysis.key_concepts.map((c: string) => `• ${c}`).join("\n")}\n\n**Preguntas sugeridas:**\n${analysis.suggested_questions.map((q: string) => `• ${q}`).join("\n")}`
-
-      await lariaAPI.chats.addMessage(currentChatId, "assistant", summary)
-
       const chatFinal = await lariaAPI.chats.get(currentChatId)
-      const finalMessages = (chatFinal.messages || []).filter(
-        (m: { metadata?: { source?: string } }) => m.metadata?.source !== "tutor"
-      )
-      setMessages(finalMessages)
-
-      if (isNewChat) {
-        const history = finalMessages.map(
-          (m: { role: string; content: string }) => ({ role: m.role, content: m.content })
-        )
-        generateTitle(currentChatId, history)
-      }
+      setMessages(chatFinal.messages || [])
     } catch (error) {
       console.error("Upload error:", error)
       alert(error instanceof Error ? error.message : "Error al subir el archivo")
@@ -101,13 +64,11 @@ export function SearchBar() {
     const userMessage = query.trim()
     if (!userMessage || isLoading) return
 
-
     setQuery("")
     setIsLoading(true)
 
     try {
       let currentChatId = chatId
-      const isNewChat = !currentChatId
       if (!currentChatId) {
         const chat = await lariaAPI.chats.create()
         currentChatId = chat.id
@@ -116,43 +77,10 @@ export function SearchBar() {
       }
 
       const newUserMsg = { role: "user" as const, content: userMessage }
-      const updatedLocal = [...messages, newUserMsg]
-      setMessages(updatedLocal)
+      setMessages([...messages, newUserMsg])
 
-      await lariaAPI.chats.addMessage(currentChatId, "user", userMessage)
-
-      const chatAfterUser = await lariaAPI.chats.get(currentChatId)
-      const realMessages = (chatAfterUser.messages || []).filter(
-        (m: { metadata?: { source?: string } }) => m.metadata?.source !== "tutor"
-      )
-
-      const history = realMessages.map(
-        (m: { role: string; content: string }) => ({ role: m.role, content: m.content })
-      )
-
-      const res = await fetch("/api/chat", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ messages: history }),
-      })
-
-      const data = await res.json()
-
-      if (!res.ok) {
-        throw new Error(data.error || "Failed to get response")
-      }
-
-      await lariaAPI.chats.addMessage(currentChatId, "assistant", data.response)
-
-      const chatFinal = await lariaAPI.chats.get(currentChatId)
-      const finalMessages = (chatFinal.messages || []).filter(
-        (m: { metadata?: { source?: string } }) => m.metadata?.source !== "tutor"
-      )
-      setMessages(finalMessages)
-
-      if (isNewChat) {
-        generateTitle(currentChatId, history)
-      }
+      const chatAfterSend = await lariaAPI.chats.addMessage(currentChatId, "user", userMessage)
+      setMessages(chatAfterSend.messages || [])
     } catch (error) {
       console.error("Chat error:", error)
     } finally {

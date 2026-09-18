@@ -10,7 +10,7 @@ interface ChatContextType {
   messages: ChatMessage[]
   isLoading: boolean
   loadChats: () => Promise<void>
-  createChat: (title?: string) => Promise<Chat>
+  createChat: (title?: string, documentId?: string) => Promise<Chat>
   selectChat: (chatId: string) => Promise<void>
   deleteChat: (chatId: string) => Promise<void>
   addMessage: (chatId: string, role: "user" | "assistant", content: string) => Promise<void>
@@ -48,10 +48,7 @@ export function ChatProvider({ children }: { children: ReactNode }) {
     }
     try {
       const chat = await lariaAPI.chats.get(chatId)
-      const realMessages = (chat.messages || []).filter(
-        (m: { metadata?: { source?: string } }) => m.metadata?.source !== "tutor"
-      )
-      setMessages(realMessages)
+      setMessages(chat.messages || [])
     } catch (error) {
       console.error("Error loading chat messages:", error)
       setMessages([])
@@ -76,8 +73,8 @@ export function ChatProvider({ children }: { children: ReactNode }) {
     }
   }, [activeChatId, loadChatMessages])
 
-  const createChat = useCallback(async (title?: string): Promise<Chat> => {
-    const chat = await lariaAPI.chats.create(title)
+  const createChat = useCallback(async (title?: string, documentId?: string): Promise<Chat> => {
+    const chat = await lariaAPI.chats.create(title, documentId)
     await loadChats()
     setActiveChatId(chat.id)
     setMessages([])
@@ -100,10 +97,7 @@ export function ChatProvider({ children }: { children: ReactNode }) {
 
   const addMessage = useCallback(async (chatId: string, role: "user" | "assistant", content: string) => {
     const chat = await lariaAPI.chats.addMessage(chatId, role, content)
-    const realMessages = (chat.messages || []).filter(
-      (m: { metadata?: { source?: string } }) => m.metadata?.source !== "tutor"
-    )
-    setMessages(realMessages)
+    setMessages(chat.messages || [])
   }, [])
 
   const clearActiveChat = useCallback(() => {

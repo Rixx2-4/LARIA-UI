@@ -4,7 +4,13 @@ interface ChatMessage {
   role: "user" | "assistant"
   content: string
   timestamp?: string
-  metadata?: Record<string, unknown>
+  metadata?: {
+    source?: string
+    type?: string
+    emotion?: string
+    envelope?: Record<string, unknown>
+    [key: string]: unknown
+  }
 }
 
 interface Chat {
@@ -131,6 +137,45 @@ interface QuestionResponse {
   answer: string
 }
 
+interface QuizQuestion {
+  index: number
+  text: string
+  options: Record<string, string>
+  difficulty: string
+}
+
+interface QuizResponse {
+  id: string
+  document_id: string
+  questions: QuizQuestion[]
+  total_points: number
+  created_at: string
+}
+
+interface QuizAttemptQuestion {
+  index: number
+  text: string
+  selected: string
+  correct_answer: string
+  is_correct: boolean
+}
+
+interface QuizAttemptResponse {
+  attempt_id: string
+  quiz_id: string
+  score: number
+  total_points: number
+  questions: QuizAttemptQuestion[]
+  completed_at: string
+}
+
+interface StreamCallbacks {
+  onToken?: (token: string) => void
+  onEnvelope?: (envelope: Record<string, unknown>) => void
+  onDone?: () => void
+  onError?: (error: Error) => void
+}
+
 let authToken: string | null = null
 
 export function setAuthToken(token: string | null) {
@@ -218,30 +263,105 @@ export const lariaAPI = {
 
   chats: {
     list: () => fetchAPI<ChatListResponse>("/chats/"),
-    
+
     get: (chatId: string) => fetchAPI<Chat>(`/chats/${chatId}`),
-    
-    create: (title?: string) =>
+
+    create: (title?: string, documentId?: string) =>
       fetchAPI<Chat>("/chats/", {
         method: "POST",
-        body: JSON.stringify({ title }),
+        body: JSON.stringify({ title, document_id: documentId }),
       }),
-    
-    update: (chatId: string, title: string) =>
+
+    update: (chatId: string, data: { title?: string; document_id?: string }) =>
       fetchAPI<Chat>(`/chats/${chatId}`, {
         method: "PUT",
-        body: JSON.stringify({ title }),
+        body: JSON.stringify(data),
       }),
-    
+
     delete: (chatId: string) =>
       fetchAPI<void>(`/chats/${chatId}`, {
         method: "DELETE",
       }),
-    
+
     addMessage: (chatId: string, role: "user" | "assistant", content: string) =>
       fetchAPI<Chat>(`/chats/${chatId}/messages`, {
         method: "POST",
         body: JSON.stringify({ role, content }),
+      }),
+
+    stream: async (
+      chatId: string,
+      role: "user" | "assistant",
+      content: string,
+      callbacks: StreamCallbacks
+    ): Promise<void> => {
+      const url = `${API_BASE_URL}/chats/${chatId}/stream`
+      const token = getAuthToken()
+
+      const headers: Record<string, string> = {
+        "Content-Type": "application/json",
+      }
+      if (token) {
+        headers["Authorization"] = `Bearer ${token}`
+      }
+
+      const response = await fetch(url, {
+        method: "POST",
+        headers,
+        body: JSON.stringify({ role, content }),
+      })
+
+      if (!response.ok) {
+        const error = await response.json().catch(() => ({ detail: "Error de streaming" }))
+        throw new Error(error.detail || `Error ${response.status}`)
+      }
+
+      const reader = response.body?.getReader()
+      if (!reader) throw new Error("No se pudo leer el stream")
+
+      const decoder = new TextDecoder()
+      let buffer = ""
+
+      while (true) {
+        const { done, value } = await reader.read()
+        if (done) break
+
+        buffer += decoder.decode(value, { stream: true })
+        const lines = buffer.split("\n")
+        buffer = lines.pop() || ""
+
+        for (const line of lines) {
+          if (line.startsWith("data: ")) {
+            const data = line.slice(6)
+            if (data === "[DONE]") {
+              callbacks.onDone?.()
+              return
+            }
+            try {
+              const parsed = JSON.parse(data)
+              if (parsed.type === "token") {
+                callbacks.onToken?.(parsed.content || "")
+              } else if (parsed.type === "envelope") {
+                callbacks.onEnvelope?.(parsed)
+              }
+            } catch {
+              callbacks.onToken?.(data)
+            }
+          }
+        }
+      }
+      callbacks.onDone?.()
+    },
+
+    generateQuiz: (chatId: string, numQuestions: number = 5) =>
+      fetchAPI<QuizResponse>(`/chats/${chatId}/quiz?num_questions=${numQuestions}`),
+  },
+
+  quizzes: {
+    submitAttempt: (quizId: string, answers: Record<string, string>) =>
+      fetchAPI<QuizAttemptResponse>(`/quizzes/${quizId}/attempts`, {
+        method: "POST",
+        body: JSON.stringify({ answers }),
       }),
   },
 
@@ -298,4 +418,6 @@ export type {
   LearningHistory, StudentProfile, Document, AnalysisResponse, QuestionResponse,
   QuizAttemptSummary, TutorInteraction, LearningRecommendation,
   PedagogicalMemory, DocumentMastery, ConceptMastery,
+  QuizResponse, QuizQuestion, QuizAttemptResponse, QuizAttemptQuestion,
+  StreamCallbacks,
 }
