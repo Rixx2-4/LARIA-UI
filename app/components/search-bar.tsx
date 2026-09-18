@@ -21,7 +21,7 @@ export function SearchBar() {
   const [isUploading, setIsUploading] = useState(false)
   const fileInputRef = useRef<HTMLInputElement>(null)
 
-  const { messages, setMessages, loadChats, activeChatId } = useChat()
+  const { messages, setMessages, loadChats, activeChatId, createChat: ctxCreateChat } = useChat()
   const chatId = activeChatId
 
   const handleFileUpload = async (file: File) => {
@@ -39,9 +39,8 @@ export function SearchBar() {
 
       let currentChatId = chatId
       if (!currentChatId) {
-        const chat = await lariaAPI.chats.create(`Dudas de ${file.name}`, doc.id)
+        const chat = await ctxCreateChat(`Dudas de ${file.name}`, doc.id)
         currentChatId = chat.id
-        await loadChats()
       } else {
         await lariaAPI.chats.update(currentChatId, { document_id: doc.id })
       }
@@ -69,9 +68,8 @@ export function SearchBar() {
     try {
       let currentChatId = chatId
       if (!currentChatId) {
-        const chat = await lariaAPI.chats.create()
+        const chat = await ctxCreateChat()
         currentChatId = chat.id
-        await loadChats()
       }
 
       const newUserMsg = { role: "user" as const, content: userMessage }
