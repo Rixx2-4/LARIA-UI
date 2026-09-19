@@ -121,7 +121,10 @@ export function SearchBar() {
     try {
       let currentChatId = chatId
       if (!currentChatId) {
-        const chat = await ctxCreateChat()
+        const title = userMessage.length > 50
+          ? userMessage.substring(0, 50).trim() + "..."
+          : userMessage.trim()
+        const chat = await ctxCreateChat(title)
         currentChatId = chat.id
       }
 
