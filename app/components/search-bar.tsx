@@ -38,7 +38,7 @@ export function SearchBar() {
   } | null>(null)
   const fileInputRef = useRef<HTMLInputElement>(null)
 
-  const { messages, setMessages, loadChats, activeChatId, createChat: ctxCreateChat } = useChat()
+  const { messages, setMessages, loadChats, activeChatId, createChat: ctxCreateChat, generateTitle } = useChat()
   const chatId = activeChatId
 
   const generatePreview = (file: File): Promise<string | undefined> => {
@@ -87,9 +87,11 @@ export function SearchBar() {
       ])
 
       let currentChatId = chatId
+      let isNewChat = false
       if (!currentChatId) {
-        const chat = await ctxCreateChat(`Dudas de ${file.name}`, doc.id)
+        const chat = await ctxCreateChat(undefined, doc.id)
         currentChatId = chat.id
+        isNewChat = true
       } else {
         await lariaAPI.chats.update(currentChatId, { document_id: doc.id })
       }
@@ -98,6 +100,10 @@ export function SearchBar() {
 
       const chatFinal = await lariaAPI.chats.get(currentChatId)
       setMessages(chatFinal.messages || [])
+
+      if (isNewChat) {
+        generateTitle(currentChatId, [{ role: "user", content: `Archivo: ${file.name}` }])
+      }
     } catch (error) {
       console.error("Upload error:", error)
       alert(error instanceof Error ? error.message : "Error al subir el archivo")
@@ -120,12 +126,11 @@ export function SearchBar() {
 
     try {
       let currentChatId = chatId
+      let isNewChat = false
       if (!currentChatId) {
-        const title = userMessage.length > 50
-          ? userMessage.substring(0, 50).trim() + "..."
-          : userMessage.trim()
-        const chat = await ctxCreateChat(title)
+        const chat = await ctxCreateChat()
         currentChatId = chat.id
+        isNewChat = true
       }
 
       const newUserMsg = { role: "user" as const, content: userMessage }
@@ -133,6 +138,10 @@ export function SearchBar() {
 
       const chatAfterSend = await lariaAPI.chats.addMessage(currentChatId, "user", userMessage)
       setMessages(chatAfterSend.messages || [])
+
+      if (isNewChat) {
+        generateTitle(currentChatId, [{ role: "user", content: userMessage }])
+      }
     } catch (error) {
       console.error("Chat error:", error)
     } finally {

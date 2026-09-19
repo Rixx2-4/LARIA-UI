@@ -357,6 +357,12 @@ export const lariaAPI = {
 
     generateQuiz: (chatId: string, numQuestions: number = 5) =>
       fetchAPI<QuizResponse>(`/chats/${chatId}/quiz?num_questions=${numQuestions}`),
+
+    generateTitle: (messages: { role: string; content: string }[]) =>
+      fetchAPI<{ title: string }>("/chats/generate-title", {
+        method: "POST",
+        body: JSON.stringify({ messages }),
+      }),
   },
 
   quizzes: {

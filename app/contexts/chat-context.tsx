@@ -16,6 +16,7 @@ interface ChatContextType {
   addMessage: (chatId: string, role: "user" | "assistant", content: string) => Promise<void>
   setMessages: (msgs: ChatMessage[]) => void
   clearActiveChat: () => void
+  generateTitle: (chatId: string, messages: { role: string; content: string }[]) => Promise<void>
 }
 
 const ChatContext = createContext<ChatContextType | undefined>(undefined)
@@ -105,6 +106,16 @@ export function ChatProvider({ children }: { children: ReactNode }) {
     setMessages([])
   }, [])
 
+  const generateTitle = useCallback(async (chatId: string, msgs: { role: string; content: string }[]) => {
+    try {
+      const response = await lariaAPI.chats.generateTitle(msgs)
+      await lariaAPI.chats.update(chatId, { title: response.title })
+      await loadChats()
+    } catch (error) {
+      console.error("Error generating title:", error)
+    }
+  }, [loadChats])
+
   return (
     <ChatContext.Provider
       value={{
@@ -119,6 +130,7 @@ export function ChatProvider({ children }: { children: ReactNode }) {
         addMessage,
         setMessages,
         clearActiveChat,
+        generateTitle,
       }}
     >
       {children}
