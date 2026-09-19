@@ -136,8 +136,34 @@ export function SearchBar() {
       const newUserMsg = { role: "user" as const, content: userMessage }
       setMessages([...messages, newUserMsg])
 
-      const chatAfterSend = await lariaAPI.chats.addMessage(currentChatId, "user", userMessage)
-      setMessages(chatAfterSend.messages || [])
+      let assistantContent = ""
+      setMessages([...messages, newUserMsg, { role: "assistant", content: "" }])
+
+      await lariaAPI.chats.stream(currentChatId, "user", userMessage, {
+        onToken: (token) => {
+          assistantContent += token
+          setMessages([...messages, newUserMsg, { role: "assistant", content: assistantContent }])
+        },
+        onEnvelope: (envelope) => {
+          const finalMessages = [...messages, newUserMsg, {
+            role: "assistant",
+            content: assistantContent,
+            metadata: { envelope }
+          }]
+          setMessages(finalMessages)
+        },
+        onDone: async () => {
+          const chatAfter = await lariaAPI.chats.get(currentChatId)
+          setMessages(chatAfter.messages || [])
+        },
+        onError: (error) => {
+          console.error("Stream error:", error)
+          setMessages([...messages, newUserMsg, {
+            role: "assistant",
+            content: "Lo siento, hubo un error al generar la respuesta."
+          }])
+        }
+      })
 
       if (isNewChat) {
         generateTitle(currentChatId, [{ role: "user", content: userMessage }])
@@ -203,6 +229,25 @@ export function SearchBar() {
                 }`}
               >
                 <p className="text-[14px] whitespace-pre-wrap">{msg.content}</p>
+                {msg.role === "assistant" && msg.metadata?.envelope && (
+                  <div className="mt-2 pt-2 border-t border-border/30 flex items-center gap-2 text-[11px] text-muted-foreground">
+                    {msg.metadata.envelope.type && (
+                      <span className="px-1.5 py-0.5 rounded bg-secondary/50">
+                        {msg.metadata.envelope.type}
+                      </span>
+                    )}
+                    {msg.metadata.envelope.emotion && (
+                      <span className="px-1.5 py-0.5 rounded bg-secondary/50">
+                        {msg.metadata.envelope.emotion}
+                      </span>
+                    )}
+                    {msg.metadata.envelope.grounded !== undefined && (
+                      <span className={`px-1.5 py-0.5 rounded ${msg.metadata.envelope.grounded ? "bg-green-500/20 text-green-700" : "bg-yellow-500/20 text-yellow-700"}`}>
+                        {msg.metadata.envelope.grounded ? "Tutoría" : "Chat libre"}
+                      </span>
+                    )}
+                  </div>
+                )}
               </div>
             </div>
           ))}
