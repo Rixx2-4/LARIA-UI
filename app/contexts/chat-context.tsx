@@ -113,6 +113,17 @@ export function ChatProvider({ children }: { children: ReactNode }) {
       await loadChats()
     } catch (error) {
       console.error("Error generating title:", error)
+      if (msgs.length > 0 && msgs[0].content) {
+        const fallbackTitle = msgs[0].content.length > 50
+          ? msgs[0].content.substring(0, 50).trim() + "..."
+          : msgs[0].content.trim()
+        try {
+          await lariaAPI.chats.update(chatId, { title: fallbackTitle })
+          await loadChats()
+        } catch (updateError) {
+          console.error("Error updating fallback title:", updateError)
+        }
+      }
     }
   }, [loadChats])
 

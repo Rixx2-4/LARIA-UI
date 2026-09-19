@@ -110,8 +110,9 @@ export function useStreamingChat({
     }
   }, [processDisplayQueue])
 
-  const startStreaming = useCallback(async (content: string) => {
-    if (!chatId) return
+  const startStreaming = useCallback(async (content: string, targetChatId?: string) => {
+    const activeId = targetChatId || chatId
+    if (!activeId) return
 
     abortControllerRef.current = new AbortController()
 
@@ -131,7 +132,7 @@ export function useStreamingChat({
     setMessages([...messages, userMsg])
 
     try {
-      await lariaAPI.chats.stream(chatId, "user", content, {
+      await lariaAPI.chats.stream(activeId, "user", content, {
         onToken: (token: string) => {
           setState((prev) => ({
             ...prev,
@@ -169,7 +170,7 @@ export function useStreamingChat({
 
           setTimeout(flushQueue, 100)
 
-          lariaAPI.chats.get(chatId).then((chat) => {
+          lariaAPI.chats.get(activeId).then((chat) => {
             setMessages(chat.messages || [])
           }).catch(console.error)
         },

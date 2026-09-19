@@ -202,7 +202,7 @@ export function SearchBar() {
         isNewChat = true
       }
 
-      await startStreaming(userMessage)
+      await startStreaming(userMessage, currentChatId)
 
       if (isNewChat) {
         generateTitle(currentChatId, [{ role: "user", content: userMessage }])
