@@ -60,7 +60,7 @@ export function LoginScreen() {
             </label>
             <label className="flex flex-col gap-2 text-sm font-medium">
               Contraseña
-              <Input type="password" value={password} onChange={(event) => setPassword(event.target.value)} placeholder="Mínimo 12 caracteres" minLength={12} required className="h-11 rounded-xl border-0 bg-muted/50 shadow-none" />
+              <Input type="password" value={password} onChange={(event) => setPassword(event.target.value)} placeholder="Mínimo 8 caracteres" minLength={8} required className="h-11 rounded-xl border-0 bg-muted/50 shadow-none" />
             </label>
             {error && <p role="alert" className="text-sm text-destructive">{error}</p>}
             <Button type="submit" disabled={isLoading} className="h-11 rounded-full transition-all duration-200">
