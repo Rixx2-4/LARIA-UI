@@ -1,12 +1,13 @@
 "use client"
 
-import { useState, useRef } from "react"
+import { useState, useRef, useEffect, useCallback } from "react"
 import { Button } from "@/components/ui/button"
-import { Search, Paperclip, Mic, Send, Loader2 } from "lucide-react"
+import { Search, Paperclip, Mic, Send, Loader2, Square } from "lucide-react"
 import { useChat } from "@/app/contexts/chat-context"
 import { lariaAPI, Document } from "@/lib/laria-api"
 import { FileCard } from "./file-card"
 import { FileViewer } from "./file-viewer"
+import { useStreamingChat } from "@/hooks/use-streaming-chat"
 
 const ALLOWED_EXTENSIONS = [
   ".pdf", ".docx", ".doc", ".txt", ".md", ".rtf", ".odt", ".epub",
@@ -14,8 +15,6 @@ const ALLOWED_EXTENSIONS = [
   ".py", ".java", ".c", ".cpp", ".cs", ".js", ".ts", ".html",
   ".css", ".sql", ".json", ".xml", ".php", ".rb",
 ]
-
-
 
 interface UploadedFile {
   file: File
@@ -27,7 +26,6 @@ export function SearchBar() {
   const [query, setQuery] = useState("")
   const [showSuggestions, setShowSuggestions] = useState(false)
   const [isFocused, setIsFocused] = useState(false)
-  const [isLoading, setIsLoading] = useState(false)
   const [isUploading, setIsUploading] = useState(false)
   const [uploadedFiles, setUploadedFiles] = useState<UploadedFile[]>([])
   const [viewerFile, setViewerFile] = useState<{
@@ -37,9 +35,81 @@ export function SearchBar() {
     dataUrl?: string
   } | null>(null)
   const fileInputRef = useRef<HTMLInputElement>(null)
+  const messagesContainerRef = useRef<HTMLDivElement>(null)
+  const isUserScrolledRef = useRef(false)
+  const lastScrollHeightRef = useRef(0)
 
   const { messages, setMessages, loadChats, activeChatId, createChat: ctxCreateChat, generateTitle } = useChat()
   const chatId = activeChatId
+
+  const {
+    isStreaming,
+    displayedContent,
+    fullContent,
+    envelope,
+    error: streamError,
+    isDone,
+    startStreaming,
+    cancelStreaming,
+    resetStreaming,
+  } = useStreamingChat({
+    messages,
+    setMessages,
+    chatId,
+  })
+
+  const isAtBottom = useCallback(() => {
+    const container = messagesContainerRef.current
+    if (!container) return true
+    const threshold = 100
+    return container.scrollHeight - container.scrollTop - container.clientHeight < threshold
+  }, [])
+
+  const scrollToBottom = useCallback((smooth = true) => {
+    const container = messagesContainerRef.current
+    if (!container) return
+    container.scrollTo({
+      top: container.scrollHeight,
+      behavior: smooth ? "smooth" : "instant",
+    })
+  }, [])
+
+  useEffect(() => {
+    const container = messagesContainerRef.current
+    if (!container) return
+
+    const handleScroll = () => {
+      isUserScrolledRef.current = !isAtBottom()
+    }
+
+    container.addEventListener("scroll", handleScroll, { passive: true })
+    return () => container.removeEventListener("scroll", handleScroll)
+  }, [isAtBottom])
+
+  useEffect(() => {
+    if (isStreaming && !isUserScrolledRef.current) {
+      scrollToBottom()
+    }
+  }, [displayedContent, isStreaming, scrollToBottom])
+
+  useEffect(() => {
+    if (isDone && !isUserScrolledRef.current) {
+      setTimeout(() => scrollToBottom(), 100)
+    }
+  }, [isDone, scrollToBottom])
+
+  useEffect(() => {
+    const container = messagesContainerRef.current
+    if (!container) return
+
+    const newHeight = container.scrollHeight
+    if (lastScrollHeightRef.current !== newHeight) {
+      lastScrollHeightRef.current = newHeight
+      if (!isUserScrolledRef.current && isStreaming) {
+        scrollToBottom(false)
+      }
+    }
+  }, [displayedContent, isStreaming, scrollToBottom])
 
   const generatePreview = (file: File): Promise<string | undefined> => {
     return new Promise((resolve) => {
@@ -78,7 +148,6 @@ export function SearchBar() {
     setIsUploading(true)
     try {
       const doc = await lariaAPI.documents.upload(file)
-
       const dataUrl = await generatePreview(file)
 
       setUploadedFiles((prev) => [
@@ -119,10 +188,10 @@ export function SearchBar() {
 
   const handleSend = async () => {
     const userMessage = query.trim()
-    if (!userMessage || isLoading) return
+    if (!userMessage || isStreaming) return
 
     setQuery("")
-    setIsLoading(true)
+    resetStreaming()
 
     try {
       let currentChatId = chatId
@@ -133,46 +202,41 @@ export function SearchBar() {
         isNewChat = true
       }
 
-      const newUserMsg = { role: "user" as const, content: userMessage }
-      setMessages([...messages, newUserMsg])
-
-      let assistantContent = ""
-      setMessages([...messages, newUserMsg, { role: "assistant", content: "" }])
-
-      await lariaAPI.chats.stream(currentChatId, "user", userMessage, {
-        onToken: (token) => {
-          assistantContent += token
-          setMessages([...messages, newUserMsg, { role: "assistant", content: assistantContent }])
-        },
-        onEnvelope: (envelope) => {
-          const finalMessages = [...messages, newUserMsg, {
-            role: "assistant",
-            content: assistantContent,
-            metadata: { envelope }
-          }]
-          setMessages(finalMessages)
-        },
-        onDone: async () => {
-          const chatAfter = await lariaAPI.chats.get(currentChatId)
-          setMessages(chatAfter.messages || [])
-        },
-        onError: (error) => {
-          console.error("Stream error:", error)
-          setMessages([...messages, newUserMsg, {
-            role: "assistant",
-            content: "Lo siento, hubo un error al generar la respuesta."
-          }])
-        }
-      })
+      await startStreaming(userMessage)
 
       if (isNewChat) {
         generateTitle(currentChatId, [{ role: "user", content: userMessage }])
       }
     } catch (error) {
       console.error("Chat error:", error)
-    } finally {
-      setIsLoading(false)
     }
+  }
+
+  const handleStopGeneration = () => {
+    cancelStreaming()
+  }
+
+  const renderMessageContent = (msg: typeof messages[0], isCurrentStreaming: boolean) => {
+    if (isCurrentStreaming && isStreaming) {
+      return (
+        <div className="text-[14px] whitespace-pre-wrap">
+          {displayedContent}
+          <span className="inline-block w-2 h-4 ml-0.5 bg-foreground/70 animate-pulse" />
+        </div>
+      )
+    }
+
+    if (isCurrentStreaming && isDone && displayedContent) {
+      return (
+        <div className="text-[14px] whitespace-pre-wrap">
+          {displayedContent}
+        </div>
+      )
+    }
+
+    return (
+      <p className="text-[14px] whitespace-pre-wrap">{msg.content}</p>
+    )
   }
 
   return (
@@ -215,49 +279,54 @@ export function SearchBar() {
 
       {/* Chat Messages */}
       {messages.length > 0 && (
-        <div className="mb-6 space-y-4 max-h-[400px] overflow-y-auto">
-          {messages.map((msg, index) => (
-            <div
-              key={`${msg.role}-${index}-${msg.content.substring(0, 20)}`}
-              className={`flex ${msg.role === "user" ? "justify-end" : "justify-start"}`}
-            >
+        <div
+          ref={messagesContainerRef}
+          className="mb-6 space-y-4 max-h-[400px] overflow-y-auto scroll-smooth"
+        >
+          {messages.map((msg, index) => {
+            const isCurrentStreaming = index === messages.length - 1 && msg.role === "assistant"
+            return (
               <div
-                className={`max-w-[80%] rounded-2xl px-4 py-3 ${
-                  msg.role === "user"
-                    ? "bg-primary text-primary-foreground"
-                    : "bg-muted text-foreground"
-                }`}
+                key={`${msg.role}-${index}-${msg.content.substring(0, 20)}`}
+                className={`flex ${msg.role === "user" ? "justify-end" : "justify-start"}`}
               >
-                <p className="text-[14px] whitespace-pre-wrap">{msg.content}</p>
-                {msg.role === "assistant" && msg.metadata?.envelope && (
-                  <div className="mt-2 pt-2 border-t border-border/30 flex items-center gap-2 text-[11px] text-muted-foreground">
-                    {msg.metadata.envelope.type && (
-                      <span className="px-1.5 py-0.5 rounded bg-secondary/50">
-                        {msg.metadata.envelope.type}
-                      </span>
-                    )}
-                    {msg.metadata.envelope.emotion && (
-                      <span className="px-1.5 py-0.5 rounded bg-secondary/50">
-                        {msg.metadata.envelope.emotion}
-                      </span>
-                    )}
-                    {msg.metadata.envelope.grounded !== undefined && (
-                      <span className={`px-1.5 py-0.5 rounded ${msg.metadata.envelope.grounded ? "bg-green-500/20 text-green-700" : "bg-yellow-500/20 text-yellow-700"}`}>
-                        {msg.metadata.envelope.grounded ? "Tutoría" : "Chat libre"}
-                      </span>
-                    )}
-                  </div>
-                )}
-              </div>
-            </div>
-          ))}
-          {isLoading && (
-            <div className="flex justify-start">
-              <div className="bg-muted rounded-2xl px-4 py-3">
-                <div className="flex items-center gap-2 text-muted-foreground">
-                  <Loader2 className="h-4 w-4 animate-spin" />
-                  <span className="text-sm">Pensando...</span>
+                <div
+                  className={`max-w-[80%] rounded-2xl px-4 py-3 ${
+                    msg.role === "user"
+                      ? "bg-primary text-primary-foreground"
+                      : "bg-muted text-foreground"
+                  }`}
+                >
+                  {renderMessageContent(msg, isCurrentStreaming)}
+
+                  {msg.role === "assistant" && msg.metadata?.envelope && (
+                    <div className="mt-2 pt-2 border-t border-border/30 flex items-center gap-2 text-[11px] text-muted-foreground">
+                      {msg.metadata.envelope.type && (
+                        <span className="px-1.5 py-0.5 rounded bg-secondary/50">
+                          {msg.metadata.envelope.type}
+                        </span>
+                      )}
+                      {msg.metadata.envelope.emotion && (
+                        <span className="px-1.5 py-0.5 rounded bg-secondary/50">
+                          {msg.metadata.envelope.emotion}
+                        </span>
+                      )}
+                      {msg.metadata.envelope.grounded !== undefined && (
+                        <span className={`px-1.5 py-0.5 rounded ${msg.metadata.envelope.grounded ? "bg-green-500/20 text-green-700" : "bg-yellow-500/20 text-yellow-700"}`}>
+                          {msg.metadata.envelope.grounded ? "Tutoría" : "Chat libre"}
+                        </span>
+                      )}
+                    </div>
+                  )}
                 </div>
+              </div>
+            )
+          })}
+
+          {streamError && (
+            <div className="flex justify-start">
+              <div className="bg-destructive/10 border border-destructive/20 rounded-2xl px-4 py-3 max-w-[80%]">
+                <p className="text-sm text-destructive">{streamError}</p>
               </div>
             </div>
           )}
@@ -286,13 +355,14 @@ export function SearchBar() {
               setTimeout(() => setShowSuggestions(false), 150)
             }}
             onKeyDown={(e) => {
-              if (e.key === "Enter" && query.trim()) {
+              if (e.key === "Enter" && query.trim() && !isStreaming) {
                 e.preventDefault()
                 handleSend()
               }
             }}
-            placeholder="Ask anything..."
-            className="w-full border-0 bg-transparent text-[14px] md:text-[15px] text-foreground placeholder:text-muted-foreground/60 focus:outline-none"
+            placeholder={isStreaming ? "Generando respuesta..." : "Ask anything..."}
+            disabled={isStreaming}
+            className="w-full border-0 bg-transparent text-[14px] md:text-[15px] text-foreground placeholder:text-muted-foreground/60 focus:outline-none disabled:opacity-50"
           />
         </div>
 
@@ -312,7 +382,7 @@ export function SearchBar() {
               variant="ghost"
               size="icon"
               onClick={() => fileInputRef.current?.click()}
-              disabled={isUploading}
+              disabled={isUploading || isStreaming}
               className="h-8 w-8 md:h-9 md:w-9 rounded-lg text-muted-foreground transition-all hover:bg-accent/60 hover:text-foreground"
             >
               {isUploading ? (
@@ -327,29 +397,35 @@ export function SearchBar() {
             <Button
               variant="ghost"
               size="icon"
+              disabled={isStreaming}
               className="h-8 w-8 md:h-9 md:w-9 rounded-lg text-muted-foreground transition-all hover:bg-accent/60 hover:text-foreground"
             >
               <Mic className="h-4 w-4 md:h-[17px] md:w-[17px]" />
             </Button>
-            {query.trim() && (
+
+            {isStreaming ? (
+              <Button
+                variant="ghost"
+                size="icon"
+                onClick={handleStopGeneration}
+                className="h-8 w-8 md:h-9 md:w-9 rounded-lg bg-destructive text-destructive-foreground hover:bg-destructive/90 transition-all"
+              >
+                <Square className="h-4 w-4" />
+              </Button>
+            ) : query.trim() ? (
               <Button
                 variant="ghost"
                 size="icon"
                 className="h-8 w-8 md:h-9 md:w-9 rounded-lg bg-primary text-primary-foreground hover:bg-primary/90 transition-all"
                 onClick={handleSend}
-                disabled={isLoading}
               >
-                {isLoading ? (
-                  <Loader2 className="h-4 w-4 animate-spin" />
-                ) : (
-                  <Send className="h-4 w-4" />
-                )}
+                <Send className="h-4 w-4" />
               </Button>
-            )}
+            ) : null}
           </div>
         </div>
 
-        {showSuggestions && query && (
+        {showSuggestions && query && !isStreaming && (
           <div className="animate-in fade-in slide-in-from-top-2 duration-200 border-t border-border/40">
             {["test", "test internet speed", "test my speed", "testament", "test my internet speed"]
               .filter((s) => s.toLowerCase().includes(query.toLowerCase()))
