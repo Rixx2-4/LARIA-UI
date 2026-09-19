@@ -15,43 +15,7 @@ const ALLOWED_EXTENSIONS = [
   ".css", ".sql", ".json", ".xml", ".php", ".rb",
 ]
 
-const VALID_SUBJECTS = [
-  "Artística", "Biología", "Ciencias", "Educación Física",
-  "Filosofía", "Física", "Geografía", "Historia",
-  "Inglés", "Lengua", "Literatura", "Matemática", "Química",
-]
 
-const SUBJECT_MAP: Record<string, string> = {
-  ".pdf": "Ciencias",
-  ".docx": "Ciencias",
-  ".doc": "Ciencias",
-  ".txt": "Lengua",
-  ".md": "Lengua",
-  ".rtf": "Ciencias",
-  ".odt": "Ciencias",
-  ".epub": "Lengua",
-  ".pptx": "Ciencias",
-  ".ppt": "Ciencias",
-  ".odp": "Ciencias",
-  ".xlsx": "Matemática",
-  ".xls": "Matemática",
-  ".csv": "Matemática",
-  ".ods": "Matemática",
-  ".py": "Ciencias",
-  ".java": "Ciencias",
-  ".c": "Ciencias",
-  ".cpp": "Ciencias",
-  ".cs": "Ciencias",
-  ".js": "Ciencias",
-  ".ts": "Ciencias",
-  ".html": "Ciencias",
-  ".css": "Ciencias",
-  ".sql": "Matemática",
-  ".json": "Matemática",
-  ".xml": "Ciencias",
-  ".php": "Ciencias",
-  ".rb": "Ciencias",
-}
 
 interface UploadedFile {
   file: File
@@ -113,8 +77,7 @@ export function SearchBar() {
 
     setIsUploading(true)
     try {
-      const subject = SUBJECT_MAP[ext] || "Ciencias"
-      const doc = await lariaAPI.documents.upload(file, subject)
+      const doc = await lariaAPI.documents.upload(file)
 
       const dataUrl = await generatePreview(file)
 

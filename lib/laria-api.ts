@@ -375,10 +375,10 @@ export const lariaAPI = {
   documents: {
     list: () => fetchAPI<Document[]>("/documents/"),
 
-    upload: async (file: File, subject: string): Promise<Document> => {
+    upload: async (file: File, subject?: string): Promise<Document> => {
       const formData = new FormData()
       formData.append("file", file)
-      formData.append("subject", subject)
+      if (subject) formData.append("subject", subject)
 
       const token = getAuthToken()
       const response = await fetch(`${API_BASE_URL}/documents/upload`, {
