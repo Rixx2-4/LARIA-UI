@@ -4,7 +4,9 @@ import { useState, useRef } from "react"
 import { Button } from "@/components/ui/button"
 import { Search, Paperclip, Mic, Send, Loader2 } from "lucide-react"
 import { useChat } from "@/app/contexts/chat-context"
-import { lariaAPI } from "@/lib/laria-api"
+import { lariaAPI, Document } from "@/lib/laria-api"
+import { FileCard } from "./file-card"
+import { FileViewer } from "./file-viewer"
 
 const ALLOWED_EXTENSIONS = [
   ".pdf", ".docx", ".doc", ".txt", ".md", ".rtf", ".odt", ".epub",
@@ -13,16 +15,86 @@ const ALLOWED_EXTENSIONS = [
   ".css", ".sql", ".json", ".xml", ".php", ".rb",
 ]
 
+const SUBJECT_MAP: Record<string, string> = {
+  ".pdf": "Documentos",
+  ".docx": "Documentos",
+  ".doc": "Documentos",
+  ".txt": "Textos",
+  ".md": "Textos",
+  ".rtf": "Documentos",
+  ".odt": "Documentos",
+  ".epub": "Documentos",
+  ".pptx": "Presentaciones",
+  ".ppt": "Presentaciones",
+  ".odp": "Presentaciones",
+  ".xlsx": "Datos",
+  ".xls": "Datos",
+  ".csv": "Datos",
+  ".ods": "Datos",
+  ".py": "Programación",
+  ".java": "Programación",
+  ".c": "Programación",
+  ".cpp": "Programación",
+  ".cs": "Programación",
+  ".js": "Programación",
+  ".ts": "Programación",
+  ".html": "Programación",
+  ".css": "Programación",
+  ".sql": "Datos",
+  ".json": "Datos",
+  ".xml": "Datos",
+  ".php": "Programación",
+  ".rb": "Programación",
+}
+
+interface UploadedFile {
+  file: File
+  document?: Document
+  dataUrl?: string
+}
+
 export function SearchBar() {
   const [query, setQuery] = useState("")
   const [showSuggestions, setShowSuggestions] = useState(false)
   const [isFocused, setIsFocused] = useState(false)
   const [isLoading, setIsLoading] = useState(false)
   const [isUploading, setIsUploading] = useState(false)
+  const [uploadedFiles, setUploadedFiles] = useState<UploadedFile[]>([])
+  const [viewerFile, setViewerFile] = useState<{
+    filename: string
+    mimeType: string
+    documentId?: string
+    dataUrl?: string
+  } | null>(null)
   const fileInputRef = useRef<HTMLInputElement>(null)
 
   const { messages, setMessages, loadChats, activeChatId, createChat: ctxCreateChat } = useChat()
   const chatId = activeChatId
+
+  const generatePreview = (file: File): Promise<string | undefined> => {
+    return new Promise((resolve) => {
+      if (file.type.startsWith("image/")) {
+        const reader = new FileReader()
+        reader.onload = (e) => resolve(e.target?.result as string)
+        reader.onerror = () => resolve(undefined)
+        reader.readAsDataURL(file)
+      } else if (
+        file.type.startsWith("text/") ||
+        file.type.includes("json") ||
+        file.type.includes("xml") ||
+        file.type.includes("javascript") ||
+        file.type.includes("typescript") ||
+        file.type.includes("python")
+      ) {
+        const reader = new FileReader()
+        reader.onload = (e) => resolve(e.target?.result as string)
+        reader.onerror = () => resolve(undefined)
+        reader.readAsText(file)
+      } else {
+        resolve(undefined)
+      }
+    })
+  }
 
   const handleFileUpload = async (file: File) => {
     if (isUploading) return
@@ -35,7 +107,15 @@ export function SearchBar() {
 
     setIsUploading(true)
     try {
-      const doc = await lariaAPI.documents.upload(file, "Ciencias")
+      const subject = SUBJECT_MAP[ext] || "General"
+      const doc = await lariaAPI.documents.upload(file, subject)
+
+      const dataUrl = await generatePreview(file)
+
+      setUploadedFiles((prev) => [
+        ...prev,
+        { file, document: doc, dataUrl },
+      ])
 
       let currentChatId = chatId
       if (!currentChatId) {
@@ -56,6 +136,10 @@ export function SearchBar() {
       setIsUploading(false)
       if (fileInputRef.current) fileInputRef.current.value = ""
     }
+  }
+
+  const removeFile = (index: number) => {
+    setUploadedFiles((prev) => prev.filter((_, i) => i !== index))
   }
 
   const handleSend = async () => {
@@ -86,6 +170,42 @@ export function SearchBar() {
 
   return (
     <div className="relative">
+      {/* Uploaded Files */}
+      {uploadedFiles.length > 0 && (
+        <div className="mb-4 flex flex-wrap gap-2">
+          {uploadedFiles.map((uf, index) => (
+            <FileCard
+              key={`${uf.document?.id || index}`}
+              filename={uf.file.name}
+              size={uf.file.size}
+              mimeType={uf.file.type}
+              documentId={uf.document?.id}
+              previewDataUrl={uf.dataUrl}
+              onClick={() =>
+                setViewerFile({
+                  filename: uf.file.name,
+                  mimeType: uf.file.type,
+                  documentId: uf.document?.id,
+                  dataUrl: uf.dataUrl,
+                })
+              }
+              onRemove={() => removeFile(index)}
+            />
+          ))}
+        </div>
+      )}
+
+      {/* File Viewer Modal */}
+      {viewerFile && (
+        <FileViewer
+          filename={viewerFile.filename}
+          mimeType={viewerFile.mimeType}
+          documentId={viewerFile.documentId}
+          previewDataUrl={viewerFile.dataUrl}
+          onClose={() => setViewerFile(null)}
+        />
+      )}
+
       {/* Chat Messages */}
       {messages.length > 0 && (
         <div className="mb-6 space-y-4 max-h-[400px] overflow-y-auto">
