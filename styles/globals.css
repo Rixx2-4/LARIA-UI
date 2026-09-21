@@ -124,22 +124,140 @@
   }
 }
 
-@keyframes thinking-bounce {
-  0%, 60%, 100% {
-    transform: translateY(0);
-    opacity: 0.4;
+@keyframes thinking-dot-pulse {
+  0%, 100% {
+    opacity: 0.3;
+    transform: scale(0.8);
   }
-  30% {
-    transform: translateY(-4px);
+  50% {
     opacity: 1;
+    transform: scale(1);
   }
 }
 
-.thinking-dot {
-  display: inline-block;
-  width: 6px;
-  height: 6px;
+@keyframes thinking-text-fade {
+  0%, 18% {
+    opacity: 1;
+  }
+  20%, 100% {
+    opacity: 0;
+  }
+}
+
+@keyframes thinking-text-enter {
+  0%, 18% {
+    opacity: 0;
+    transform: translateY(4px);
+  }
+  20%, 38% {
+    opacity: 1;
+    transform: translateY(0);
+  }
+  40%, 100% {
+    opacity: 0;
+    transform: translateY(-4px);
+  }
+}
+
+@keyframes thinking-text-enter2 {
+  0%, 28% {
+    opacity: 0;
+    transform: translateY(4px);
+  }
+  30%, 48% {
+    opacity: 1;
+    transform: translateY(0);
+  }
+  50%, 100% {
+    opacity: 0;
+    transform: translateY(-4px);
+  }
+}
+
+@keyframes thinking-text-enter3 {
+  0%, 38% {
+    opacity: 0;
+    transform: translateY(4px);
+  }
+  40%, 58% {
+    opacity: 1;
+    transform: translateY(0);
+  }
+  60%, 100% {
+    opacity: 0;
+    transform: translateY(-4px);
+  }
+}
+
+@keyframes thinking-text-enter4 {
+  0%, 48% {
+    opacity: 0;
+    transform: translateY(4px);
+  }
+  50%, 68% {
+    opacity: 1;
+    transform: translateY(0);
+  }
+  70%, 100% {
+    opacity: 0;
+    transform: translateY(-4px);
+  }
+}
+
+.thinking-container {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  min-height: 20px;
+  position: relative;
+}
+
+.thinking-shimmer {
+  display: inline-flex;
+  gap: 5px;
+}
+
+.thinking-shimmer::before,
+.thinking-shimmer::after {
+  content: "";
+  display: block;
+  width: 7px;
+  height: 7px;
   border-radius: 50%;
-  background-color: oklch(0.556 0 0);
-  animation: thinking-bounce 1.2s ease-in-out infinite;
+  background: oklch(0.556 0 0);
+}
+
+.thinking-shimmer::before {
+  animation: thinking-dot-pulse 1.4s ease-in-out infinite;
+}
+
+.thinking-shimmer::after {
+  animation: thinking-dot-pulse 1.4s ease-in-out infinite;
+  animation-delay: 200ms;
+}
+
+.thinking-text {
+  font-size: 14px;
+  color: oklch(0.556 0 0);
+  position: relative;
+  height: 20px;
+  min-width: 90px;
+}
+
+.thinking-text::before,
+.thinking-text::after {
+  content: "";
+  position: absolute;
+  left: 0;
+  white-space: nowrap;
+}
+
+.thinking-text::before {
+  content: "Pensando";
+  animation: thinking-text-enter 4s ease-in-out infinite;
+}
+
+.thinking-text::after {
+  content: "Analizando";
+  animation: thinking-text-enter2 4s ease-in-out infinite;
 }
