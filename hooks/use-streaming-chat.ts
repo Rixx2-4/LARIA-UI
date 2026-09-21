@@ -5,6 +5,7 @@ import { lariaAPI, ChatMessage, StreamCallbacks } from "@/lib/laria-api"
 
 interface StreamingState {
   isStreaming: boolean
+  isThinking: boolean
   displayedContent: string
   fullContent: string
   envelope: Record<string, unknown> | null
@@ -31,6 +32,7 @@ export function useStreamingChat({
 }: UseStreamingChatOptions): UseStreamingChatReturn {
   const [state, setState] = useState<StreamingState>({
     isStreaming: false,
+    isThinking: false,
     displayedContent: "",
     fullContent: "",
     envelope: null,
@@ -118,6 +120,7 @@ export function useStreamingChat({
 
     setState({
       isStreaming: true,
+      isThinking: true,
       displayedContent: "",
       fullContent: "",
       envelope: null,
@@ -136,6 +139,7 @@ export function useStreamingChat({
         onToken: (token: string) => {
           setState((prev) => ({
             ...prev,
+            isThinking: false,
             fullContent: prev.fullContent + token,
           }))
           queueDisplay(token)
@@ -178,6 +182,7 @@ export function useStreamingChat({
           setState((prev) => ({
             ...prev,
             isStreaming: false,
+            isThinking: false,
             error: error.message,
           }))
         },
@@ -208,6 +213,7 @@ export function useStreamingChat({
     setState((prev) => ({
       ...prev,
       isStreaming: false,
+      isThinking: false,
       isDone: true,
     }))
   }, [])
@@ -216,6 +222,7 @@ export function useStreamingChat({
     cancelStreaming()
     setState({
       isStreaming: false,
+      isThinking: false,
       displayedContent: "",
       fullContent: "",
       envelope: null,

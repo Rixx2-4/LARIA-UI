@@ -44,6 +44,7 @@ export function SearchBar() {
 
   const {
     isStreaming,
+    isThinking,
     displayedContent,
     fullContent,
     envelope,
@@ -322,6 +323,21 @@ export function SearchBar() {
               </div>
             )
           })}
+
+          {isStreaming && isThinking && !displayedContent && (
+            <div className="flex justify-start">
+              <div className="bg-muted text-foreground rounded-2xl px-4 py-3 max-w-[80%]">
+                <div className="flex items-center gap-2">
+                  <div className="flex items-center gap-1">
+                    <span className="thinking-dot" style={{ animationDelay: "0ms" }} />
+                    <span className="thinking-dot" style={{ animationDelay: "200ms" }} />
+                    <span className="thinking-dot" style={{ animationDelay: "400ms" }} />
+                  </div>
+                  <span className="text-[14px] text-muted-foreground">Pensando...</span>
+                </div>
+              </div>
+            </div>
+          )}
 
           {streamError && (
             <div className="flex justify-start">

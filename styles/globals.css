@@ -123,3 +123,23 @@
     @apply bg-background text-foreground;
   }
 }
+
+@keyframes thinking-bounce {
+  0%, 60%, 100% {
+    transform: translateY(0);
+    opacity: 0.4;
+  }
+  30% {
+    transform: translateY(-4px);
+    opacity: 1;
+  }
+}
+
+.thinking-dot {
+  display: inline-block;
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background-color: oklch(0.556 0 0);
+  animation: thinking-bounce 1.2s ease-in-out infinite;
+}
