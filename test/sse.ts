@@ -23,7 +23,11 @@ export function controllableSSE() {
 
   return {
     fetchMock,
-    push: (text: string) => controller.enqueue(encoder.encode(text)),
+    // Si el cliente ya cortó, lo que siga mandando el servidor se pierde
+    push: (text: string) => {
+      if (signal?.aborted) return
+      controller.enqueue(encoder.encode(text))
+    },
     close: () => controller.close(),
     fail: (err: Error) => controller.error(err),
     get signal() {

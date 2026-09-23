@@ -327,35 +327,41 @@ export const lariaAPI = {
         const decoder = new TextDecoder()
         let buffer = ""
 
+        // Devuelve true cuando llega el [DONE]
+        const handleLine = (line: string): boolean => {
+          if (!line.startsWith("data:")) return false
+          const data = line.slice(5).replace(/^ /, "")
+          if (data === "[DONE]") return true
+          try {
+            const parsed = JSON.parse(data)
+            if (parsed.type === "token") {
+              callbacks.onToken?.(parsed.content || "")
+            } else if (parsed.type === "envelope") {
+              callbacks.onEnvelope?.(parsed)
+            }
+          } catch {
+            callbacks.onToken?.(data)
+          }
+          return false
+        }
+
         while (true) {
           const { done, value } = await reader.read()
-          if (done) break
+          if (done) {
+            buffer += decoder.decode()
+            handleLine(buffer)
+            break
+          }
 
           buffer += decoder.decode(value, { stream: true })
           const lines = buffer.split(/\r?\n/)
           buffer = lines.pop() || ""
 
-          for (const line of lines) {
-            if (line.startsWith("data:")) {
-              const data = line.slice(5).replace(/^ /, "")
-              if (data === "[DONE]") {
-                callbacks.onDone?.()
-                return
-              }
-              try {
-                const parsed = JSON.parse(data)
-                if (parsed.type === "token") {
-                  callbacks.onToken?.(parsed.content || "")
-                } else if (parsed.type === "envelope") {
-                  callbacks.onEnvelope?.(parsed)
-                }
-              } catch {
-                callbacks.onToken?.(data)
-              }
-            }
+          if (lines.some(handleLine)) {
+            reader.cancel().catch(() => {})
+            break
           }
         }
-        callbacks.onDone?.()
       } catch (error) {
         if (options.signal?.aborted) return
         // fetch y reader.read() fallan con TypeError cuando la red se cae
@@ -363,7 +369,9 @@ export const lariaAPI = {
           ? "Se perdió la conexión con LARIA"
           : error.message
         callbacks.onError?.(new Error(message))
+        return
       }
+      callbacks.onDone?.()
     },
 
     generateQuiz: (chatId: string, numQuestions: number = 5) =>

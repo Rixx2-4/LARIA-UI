@@ -48,13 +48,22 @@ export function useStreamingChat({
   const pendingContentRef = useRef<string>("")
   const displayedRef = useRef<string>("")
   const baseMessagesRef = useRef<ChatMessage[]>([])
-  const setMessagesRef = useRef(setMessages)
-  setMessagesRef.current = setMessages
+  const flushTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
+  // Cada stream tiene su generación: lo que llegue de uno anterior se descarta
+  const streamGenRef = useRef(0)
+  const streamChatIdRef = useRef<string | null>(null)
 
   // La respuesta en curso vive como último mensaje de la conversación
   const showAssistantText = useCallback((text: string) => {
     displayedRef.current = text
-    setMessagesRef.current([...baseMessagesRef.current, { role: "assistant", content: text }])
+    setMessages([...baseMessagesRef.current, { role: "assistant", content: text }])
+  }, [setMessages])
+
+  const stopAnimation = useCallback(() => {
+    if (animationFrameRef.current) {
+      cancelAnimationFrame(animationFrameRef.current)
+      animationFrameRef.current = null
+    }
   }, [])
 
   const calculateRenderSpeed = useCallback(() => {
@@ -94,6 +103,7 @@ export function useStreamingChat({
       showAssistantText(displayedRef.current + chunk)
       setState((prev) => ({
         ...prev,
+        isThinking: false,
         displayedContent: displayedRef.current,
       }))
 
@@ -127,6 +137,9 @@ export function useStreamingChat({
     const activeId = targetChatId || chatId
     if (!activeId) return
 
+    const gen = ++streamGenRef.current
+    const isCurrent = () => gen === streamGenRef.current
+    streamChatIdRef.current = activeId
     abortControllerRef.current = new AbortController()
 
     setState({
@@ -147,77 +160,76 @@ export function useStreamingChat({
     baseMessagesRef.current = [...messages, userMsg]
     setMessages(baseMessagesRef.current)
 
-    try {
-      const signal = abortControllerRef.current.signal
-      await lariaAPI.chats.stream(activeId, "user", content, {
-        onToken: (token: string) => {
+    await lariaAPI.chats.stream(activeId, "user", content, {
+      onToken: (token: string) => {
+        if (!isCurrent()) return
+        setState((prev) => ({
+          ...prev,
+          fullContent: prev.fullContent + token,
+        }))
+        queueDisplay(token)
+      },
+      onEnvelope: (envelope: Record<string, unknown>) => {
+        if (!isCurrent()) return
+        setState((prev) => ({
+          ...prev,
+          envelope,
+        }))
+      },
+      onDone: () => {
+        if (!isCurrent()) return
+        const flushQueue = () => {
+          flushTimerRef.current = null
+          if (!isCurrent()) return
+          stopAnimation()
+          const allPending = displayQueueRef.current.join("")
+          displayQueueRef.current = []
+          pendingContentRef.current = ""
+          if (allPending) showAssistantText(displayedRef.current + allPending)
+
           setState((prev) => ({
             ...prev,
-            isThinking: false,
-            fullContent: prev.fullContent + token,
-          }))
-          queueDisplay(token)
-        },
-        onEnvelope: (envelope: Record<string, unknown>) => {
-          setState((prev) => ({
-            ...prev,
-            envelope,
-          }))
-        },
-        onDone: () => {
-          const flushQueue = () => {
-            if (animationFrameRef.current) {
-              cancelAnimationFrame(animationFrameRef.current)
-              animationFrameRef.current = null
-            }
-            const allPending = displayQueueRef.current.join("")
-            displayQueueRef.current = []
-            pendingContentRef.current = ""
-            if (allPending) showAssistantText(displayedRef.current + allPending)
-
-            setState((prev) => ({
-              ...prev,
-              displayedContent: displayedRef.current,
-              isStreaming: false,
-              isDone: true,
-            }))
-
-            // Después del vaciado, para que la copia local no pise la guardada
-            lariaAPI.chats.get(activeId).then((chat) => {
-              setMessages(chat.messages || [])
-            }).catch(console.error)
-          }
-
-          setTimeout(flushQueue, 100)
-        },
-        onError: (error: Error) => {
-          setState((prev) => ({
-            ...prev,
+            displayedContent: displayedRef.current,
             isStreaming: false,
             isThinking: false,
-            error: error.message,
+            isDone: true,
           }))
-        },
-      }, { signal })
-    } catch (error) {
-      setState((prev) => ({
-        ...prev,
-        isStreaming: false,
-        error: error instanceof Error ? error.message : "Error de conexión",
-      }))
-    }
-  }, [chatId, messages, setMessages, queueDisplay, showAssistantText])
+
+          // Después del vaciado, para que la copia local no pise la guardada
+          lariaAPI.chats.get(activeId).then((chat) => {
+            if (!isCurrent()) return
+            streamChatIdRef.current = null
+            setMessages(chat.messages || [])
+          }).catch(console.error)
+        }
+
+        flushTimerRef.current = setTimeout(flushQueue, 100)
+      },
+      onError: (error: Error) => {
+        if (!isCurrent()) return
+        setState((prev) => ({
+          ...prev,
+          isStreaming: false,
+          isThinking: false,
+          error: error.message,
+        }))
+      },
+    }, { signal: abortControllerRef.current.signal })
+  }, [chatId, messages, setMessages, queueDisplay, showAssistantText, stopAnimation])
 
   const cancelStreaming = useCallback(() => {
+    streamGenRef.current++
+    streamChatIdRef.current = null
+
     if (abortControllerRef.current) {
       abortControllerRef.current.abort()
       abortControllerRef.current = null
     }
-
-    if (animationFrameRef.current) {
-      cancelAnimationFrame(animationFrameRef.current)
-      animationFrameRef.current = null
+    if (flushTimerRef.current) {
+      clearTimeout(flushTimerRef.current)
+      flushTimerRef.current = null
     }
+    stopAnimation()
 
     displayQueueRef.current = []
     pendingContentRef.current = ""
@@ -228,7 +240,14 @@ export function useStreamingChat({
       isThinking: false,
       isDone: true,
     }))
-  }, [])
+  }, [stopAnimation])
+
+  // Cambiar de chat corta la respuesta del anterior para que no escriba en el nuevo
+  useEffect(() => {
+    if (streamChatIdRef.current && chatId !== streamChatIdRef.current) {
+      cancelStreaming()
+    }
+  }, [chatId, cancelStreaming])
 
   const resetStreaming = useCallback(() => {
     cancelStreaming()
@@ -245,14 +264,12 @@ export function useStreamingChat({
 
   useEffect(() => {
     return () => {
-      if (animationFrameRef.current) {
-        cancelAnimationFrame(animationFrameRef.current)
-      }
-      if (abortControllerRef.current) {
-        abortControllerRef.current.abort()
-      }
+      streamGenRef.current++
+      stopAnimation()
+      if (flushTimerRef.current) clearTimeout(flushTimerRef.current)
+      abortControllerRef.current?.abort()
     }
-  }, [])
+  }, [stopAnimation])
 
   return {
     ...state,

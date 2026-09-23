@@ -88,4 +88,17 @@ describe("lariaAPI.chats.stream", () => {
 
     expect(events).toEqual(["error:Chat no encontrado"])
   })
+
+  it("no pierde el último evento si el stream se cierra sin salto de línea", async () => {
+    const sse = controllableSSE()
+    vi.stubGlobal("fetch", sse.fetchMock)
+    const { events, callbacks } = recorder()
+
+    const done = lariaAPI.chats.stream("c1", "user", "hola", callbacks)
+    sse.push('data: {"type":"token","content":"fin"}')
+    sse.close()
+    await done
+
+    expect(events).toEqual(["token:fin", "done"])
+  })
 })

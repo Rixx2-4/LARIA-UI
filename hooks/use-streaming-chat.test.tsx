@@ -9,23 +9,34 @@ afterEach(() => {
   vi.unstubAllGlobals()
 })
 
-// La red: POST /chats/c1/stream responde SSE; GET /chats/c1 devuelve el chat guardado.
-function network(savedMessages: ChatMessage[] = []) {
-  const sse = controllableSSE()
+// Simula el servidor de chats: cada POST /stream abre el siguiente SSE de la lista;
+// GET /chats/c1 devuelve el chat guardado.
+function stubChatServer(savedMessages: ChatMessage[] = [], streams = 1) {
+  const sses = Array.from({ length: streams }, () => controllableSSE())
+  let opened = 0
   vi.stubGlobal("fetch", async (url: string, init?: RequestInit) => {
-    if (url.endsWith("/stream")) return sse.fetchMock(url, init)
+    if (url.endsWith("/stream")) return sses[opened++].fetchMock(url, init)
     return new Response(JSON.stringify({ id: "c1", title: "t", messages: savedMessages }), { status: 200 })
   })
-  return sse
+  return sses
 }
+const network = (savedMessages: ChatMessage[] = []) => stubChatServer(savedMessages)[0]
 
+// Imita al ChatProvider: el chat activo y sus mensajes, que se pueden cambiar
 function renderChat(initial: ChatMessage[] = []) {
   return renderHook(() => {
     const [messages, setMessages] = useState<ChatMessage[]>(initial)
-    const streaming = useStreamingChat({ messages, setMessages, chatId: "c1" })
-    return { messages, ...streaming }
+    const [chatId, setChatId] = useState("c1")
+    const streaming = useStreamingChat({ messages, setMessages, chatId })
+    const openChat = (id: string, msgs: ChatMessage[]) => {
+      setChatId(id)
+      setMessages(msgs)
+    }
+    return { messages, openChat, ...streaming }
   })
 }
+
+const sleep = (ms: number) => act(() => new Promise<void>((r) => setTimeout(r, ms)))
 
 const last = (msgs: ChatMessage[]) => msgs[msgs.length - 1]
 
@@ -102,5 +113,47 @@ describe("useStreamingChat", () => {
     await waitFor(() => expect(result.current.isDone).toBe(true))
     await act(() => new Promise((r) => setTimeout(r, 200)))
     expect(result.current.messages).toEqual(saved)
+  })
+
+  it("cambiar de chat a mitad de respuesta no escribe en el chat nuevo", async () => {
+    const sse = network()
+    const { result } = renderChat()
+    const otherChat: ChatMessage[] = [{ role: "user", content: "Otro tema" }]
+
+    act(() => {
+      result.current.startStreaming("hola")
+    })
+    sse.push(tokenEvent("Hola"))
+    await waitFor(() => expect(last(result.current.messages).content).toBe("Hola"))
+
+    act(() => result.current.openChat("c2", otherChat))
+    sse.push(tokenEvent(", ¿qué tal?"))
+    await sleep(100)
+
+    expect(result.current.messages).toEqual(otherChat)
+    expect(sse.signal?.aborted).toBe(true)
+  })
+
+  it("parar justo al terminar y volver a enviar no rompe la respuesta nueva", async () => {
+    const [first, second] = stubChatServer([], 2)
+    const { result } = renderChat()
+
+    act(() => {
+      result.current.startStreaming("primera")
+    })
+    first.push(tokenEvent("Uno"))
+    first.push("data: [DONE]\n\n")
+    first.close()
+    await sleep(20) // ya llegó el [DONE], el vaciado final está pendiente
+    act(() => result.current.cancelStreaming())
+
+    act(() => {
+      result.current.startStreaming("segunda")
+    })
+    second.push(tokenEvent("Dos"))
+    await sleep(200)
+
+    expect(result.current.isStreaming).toBe(true)
+    expect(last(result.current.messages)).toMatchObject({ role: "assistant", content: "Dos" })
   })
 })
