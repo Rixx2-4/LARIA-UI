@@ -20,7 +20,7 @@ interface UseStreamingChatOptions {
 }
 
 interface UseStreamingChatReturn extends StreamingState {
-  startStreaming: (content: string) => Promise<void>
+  startStreaming: (content: string, targetChatId?: string) => Promise<void>
   cancelStreaming: () => void
   resetStreaming: () => void
 }
@@ -46,6 +46,16 @@ export function useStreamingChat({
   const lastDisplayTimeRef = useRef<number>(0)
   const renderSpeedRef = useRef<number>(16)
   const pendingContentRef = useRef<string>("")
+  const displayedRef = useRef<string>("")
+  const baseMessagesRef = useRef<ChatMessage[]>([])
+  const setMessagesRef = useRef(setMessages)
+  setMessagesRef.current = setMessages
+
+  // La respuesta en curso vive como último mensaje de la conversación
+  const showAssistantText = useCallback((text: string) => {
+    displayedRef.current = text
+    setMessagesRef.current([...baseMessagesRef.current, { role: "assistant", content: text }])
+  }, [])
 
   const calculateRenderSpeed = useCallback(() => {
     const pending = pendingContentRef.current.length
@@ -81,9 +91,10 @@ export function useStreamingChat({
     if (chunk) {
       pendingContentRef.current = pendingContentRef.current.slice(chunk.length)
 
+      showAssistantText(displayedRef.current + chunk)
       setState((prev) => ({
         ...prev,
-        displayedContent: prev.displayedContent + chunk,
+        displayedContent: displayedRef.current,
       }))
 
       lastDisplayTimeRef.current = now
@@ -94,7 +105,7 @@ export function useStreamingChat({
     } else {
       animationFrameRef.current = null
     }
-  }, [calculateRenderSpeed])
+  }, [calculateRenderSpeed, showAssistantText])
 
   const queueDisplay = useCallback((content: string) => {
     const chunkSize = pendingContentRef.current.length > 200 ? 10 : 
@@ -130,11 +141,14 @@ export function useStreamingChat({
 
     displayQueueRef.current = []
     pendingContentRef.current = ""
+    displayedRef.current = ""
 
     const userMsg: ChatMessage = { role: "user", content }
-    setMessages([...messages, userMsg])
+    baseMessagesRef.current = [...messages, userMsg]
+    setMessages(baseMessagesRef.current)
 
     try {
+      const signal = abortControllerRef.current.signal
       await lariaAPI.chats.stream(activeId, "user", content, {
         onToken: (token: string) => {
           setState((prev) => ({
@@ -152,31 +166,29 @@ export function useStreamingChat({
         },
         onDone: () => {
           const flushQueue = () => {
-            if (displayQueueRef.current.length > 0) {
-              const allPending = displayQueueRef.current.join("")
-              displayQueueRef.current = []
-              pendingContentRef.current = ""
-
-              setState((prev) => ({
-                ...prev,
-                displayedContent: prev.displayedContent + allPending,
-                isStreaming: false,
-                isDone: true,
-              }))
-            } else {
-              setState((prev) => ({
-                ...prev,
-                isStreaming: false,
-                isDone: true,
-              }))
+            if (animationFrameRef.current) {
+              cancelAnimationFrame(animationFrameRef.current)
+              animationFrameRef.current = null
             }
+            const allPending = displayQueueRef.current.join("")
+            displayQueueRef.current = []
+            pendingContentRef.current = ""
+            if (allPending) showAssistantText(displayedRef.current + allPending)
+
+            setState((prev) => ({
+              ...prev,
+              displayedContent: displayedRef.current,
+              isStreaming: false,
+              isDone: true,
+            }))
+
+            // Después del vaciado, para que la copia local no pise la guardada
+            lariaAPI.chats.get(activeId).then((chat) => {
+              setMessages(chat.messages || [])
+            }).catch(console.error)
           }
 
           setTimeout(flushQueue, 100)
-
-          lariaAPI.chats.get(activeId).then((chat) => {
-            setMessages(chat.messages || [])
-          }).catch(console.error)
         },
         onError: (error: Error) => {
           setState((prev) => ({
@@ -186,7 +198,7 @@ export function useStreamingChat({
             error: error.message,
           }))
         },
-      })
+      }, { signal })
     } catch (error) {
       setState((prev) => ({
         ...prev,
@@ -194,7 +206,7 @@ export function useStreamingChat({
         error: error instanceof Error ? error.message : "Error de conexión",
       }))
     }
-  }, [chatId, messages, setMessages, queueDisplay])
+  }, [chatId, messages, setMessages, queueDisplay, showAssistantText])
 
   const cancelStreaming = useCallback(() => {
     if (abortControllerRef.current) {

@@ -295,7 +295,8 @@ export const lariaAPI = {
       chatId: string,
       role: "user" | "assistant",
       content: string,
-      callbacks: StreamCallbacks
+      callbacks: StreamCallbacks,
+      options: { signal?: AbortSignal } = {}
     ): Promise<void> => {
       const url = `${API_BASE_URL}/chats/${chatId}/stream`
       const token = getAuthToken()
@@ -307,52 +308,62 @@ export const lariaAPI = {
         headers["Authorization"] = `Bearer ${token}`
       }
 
-      const response = await fetch(url, {
-        method: "POST",
-        headers,
-        body: JSON.stringify({ role, content }),
-      })
+      try {
+        const response = await fetch(url, {
+          method: "POST",
+          headers,
+          body: JSON.stringify({ role, content }),
+          signal: options.signal,
+        })
 
-      if (!response.ok) {
-        const error = await response.json().catch(() => ({ detail: "Error de streaming" }))
-        throw new Error(error.detail || `Error ${response.status}`)
-      }
+        if (!response.ok) {
+          const error = await response.json().catch(() => ({ detail: "Error de streaming" }))
+          throw new Error(error.detail || `Error ${response.status}`)
+        }
 
-      const reader = response.body?.getReader()
-      if (!reader) throw new Error("No se pudo leer el stream")
+        const reader = response.body?.getReader()
+        if (!reader) throw new Error("No se pudo leer el stream")
 
-      const decoder = new TextDecoder()
-      let buffer = ""
+        const decoder = new TextDecoder()
+        let buffer = ""
 
-      while (true) {
-        const { done, value } = await reader.read()
-        if (done) break
+        while (true) {
+          const { done, value } = await reader.read()
+          if (done) break
 
-        buffer += decoder.decode(value, { stream: true })
-        const lines = buffer.split("\n")
-        buffer = lines.pop() || ""
+          buffer += decoder.decode(value, { stream: true })
+          const lines = buffer.split(/\r?\n/)
+          buffer = lines.pop() || ""
 
-        for (const line of lines) {
-          if (line.startsWith("data: ")) {
-            const data = line.slice(6)
-            if (data === "[DONE]") {
-              callbacks.onDone?.()
-              return
-            }
-            try {
-              const parsed = JSON.parse(data)
-              if (parsed.type === "token") {
-                callbacks.onToken?.(parsed.content || "")
-              } else if (parsed.type === "envelope") {
-                callbacks.onEnvelope?.(parsed)
+          for (const line of lines) {
+            if (line.startsWith("data:")) {
+              const data = line.slice(5).replace(/^ /, "")
+              if (data === "[DONE]") {
+                callbacks.onDone?.()
+                return
               }
-            } catch {
-              callbacks.onToken?.(data)
+              try {
+                const parsed = JSON.parse(data)
+                if (parsed.type === "token") {
+                  callbacks.onToken?.(parsed.content || "")
+                } else if (parsed.type === "envelope") {
+                  callbacks.onEnvelope?.(parsed)
+                }
+              } catch {
+                callbacks.onToken?.(data)
+              }
             }
           }
         }
+        callbacks.onDone?.()
+      } catch (error) {
+        if (options.signal?.aborted) return
+        // fetch y reader.read() fallan con TypeError cuando la red se cae
+        const message = error instanceof TypeError || !(error instanceof Error)
+          ? "Se perdió la conexión con LARIA"
+          : error.message
+        callbacks.onError?.(new Error(message))
       }
-      callbacks.onDone?.()
     },
 
     generateQuiz: (chatId: string, numQuestions: number = 5) =>
