@@ -204,6 +204,33 @@ export function getAuthToken(): string | null {
   return authToken
 }
 
+function authHeaders(): Record<string, string> {
+  const token = getAuthToken()
+  return token ? { Authorization: `Bearer ${token}` } : {}
+}
+
+// Quien necesite enterarse de que la sesión caducó (el AuthProvider) se suscribe aquí
+const unauthorizedListeners = new Set<() => void>()
+
+export function onUnauthorized(listener: () => void): () => void {
+  unauthorizedListeners.add(listener)
+  return () => {
+    unauthorizedListeners.delete(listener)
+  }
+}
+
+// Convierte una respuesta fallida en Error; un 401 además cierra la sesión
+async function responseError(response: Response, fallback: string): Promise<Error> {
+  const error = await response.json().catch(() => ({ detail: fallback }))
+  const err = new Error(error.detail || `Error ${response.status}`)
+  ;(err as Error & { status?: number }).status = response.status
+  if (response.status === 401) {
+    setAuthToken(null)
+    unauthorizedListeners.forEach((listener) => listener())
+  }
+  return err
+}
+
 async function fetchAPI<T>(endpoint: string, options?: RequestInit): Promise<T> {
   const url = `${API_BASE_URL}${endpoint}`
   const token = getAuthToken()
@@ -223,10 +250,7 @@ async function fetchAPI<T>(endpoint: string, options?: RequestInit): Promise<T> 
   })
 
   if (!response.ok) {
-    const error = await response.json().catch(() => ({ detail: "Error desconocido" }))
-    const err = new Error(error.detail || `Error ${response.status}`)
-    ;(err as Error & { status?: number }).status = response.status
-    throw err
+    throw await responseError(response, "Error desconocido")
   }
 
   if (response.status === 204) {
@@ -326,8 +350,7 @@ export const lariaAPI = {
         })
 
         if (!response.ok) {
-          const error = await response.json().catch(() => ({ detail: "Error de streaming" }))
-          throw new Error(error.detail || `Error ${response.status}`)
+          throw await responseError(response, "Error de streaming")
         }
 
         const reader = response.body?.getReader()
@@ -414,21 +437,28 @@ export const lariaAPI = {
       formData.append("file", file)
       if (subject) formData.append("subject", subject)
 
-      const token = getAuthToken()
       const response = await fetch(`${API_BASE_URL}/documents/upload`, {
         method: "POST",
-        headers: {
-          Authorization: `Bearer ${token}`,
-        },
+        headers: authHeaders(),
         body: formData,
       })
 
       if (!response.ok) {
-        const error = await response.json().catch(() => ({ detail: "Error de subida" }))
-        throw new Error(error.detail || `Error ${response.status}`)
+        throw await responseError(response, "Error de subida")
       }
 
       return response.json()
+    },
+
+    // El archivo original, para previsualizarlo o descargarlo
+    content: async (documentId: string): Promise<Blob> => {
+      const response = await fetch(`${API_BASE_URL}/documents/${documentId}/content`, {
+        headers: authHeaders(),
+      })
+      if (!response.ok) {
+        throw await responseError(response, "Error al cargar el archivo")
+      }
+      return response.blob()
     },
 
     analyze: (documentId: string) =>

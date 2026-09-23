@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, afterEach } from "vitest"
-import { lariaAPI } from "./laria-api"
+import { lariaAPI, getAuthToken, onUnauthorized, setAuthToken } from "./laria-api"
 import { controllableSSE, tokenEvent } from "@/test/sse"
 
 afterEach(() => {
@@ -100,5 +100,62 @@ describe("lariaAPI.chats.stream", () => {
     await done
 
     expect(events).toEqual(["token:fin", "done"])
+  })
+})
+
+describe("sesión caducada", () => {
+  afterEach(() => setAuthToken(null))
+
+  it("un 401 en cualquier petición borra el token y avisa", async () => {
+    setAuthToken("caducado")
+    vi.stubGlobal("fetch", async () =>
+      new Response(JSON.stringify({ detail: "Token inválido o expirado" }), { status: 401 }),
+    )
+    const listener = vi.fn()
+    const unsubscribe = onUnauthorized(listener)
+
+    await expect(lariaAPI.chats.list()).rejects.toThrow("Token inválido o expirado")
+
+    expect(getAuthToken()).toBeNull()
+    expect(listener).toHaveBeenCalledOnce()
+    unsubscribe()
+  })
+
+  it.each([
+    ["el stream del chat", () => lariaAPI.chats.stream("c1", "user", "hola", { onError: () => {} })],
+    ["la subida de un archivo", () => lariaAPI.documents.upload(new File(["x"], "apuntes.txt")).catch(() => {})],
+  ])("%s también cierra la sesión con un 401", async (_name, call) => {
+    setAuthToken("caducado")
+    vi.stubGlobal("fetch", async () => new Response("{}", { status: 401 }))
+    const listener = vi.fn()
+    const unsubscribe = onUnauthorized(listener)
+
+    await call()
+
+    expect(getAuthToken()).toBeNull()
+    expect(listener).toHaveBeenCalledOnce()
+    unsubscribe()
+  })
+})
+
+describe("lariaAPI.documents.content", () => {
+  afterEach(() => setAuthToken(null))
+
+  it("descarga el archivo autenticando por cabecera, nunca por la URL", async () => {
+    setAuthToken("secreto")
+    let requested: { url: string; auth: string | null } | null = null
+    vi.stubGlobal("fetch", async (url: string, init?: RequestInit) => {
+      requested = { url, auth: new Headers(init?.headers).get("Authorization") }
+      return new Response("%PDF-1.7", { status: 200, headers: { "Content-Type": "application/pdf" } })
+    })
+
+    const blob = await lariaAPI.documents.content("d1")
+
+    expect(await blob.text()).toBe("%PDF-1.7")
+    expect(blob.type).toBe("application/pdf")
+    expect(requested).toEqual({
+      url: expect.stringMatching(/\/documents\/d1\/content$/),
+      auth: "Bearer secreto",
+    })
   })
 })
