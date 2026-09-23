@@ -1,7 +1,7 @@
 "use client"
 
 import { useState, useCallback, useRef, useEffect } from "react"
-import { lariaAPI, ChatMessage, StreamCallbacks } from "@/lib/laria-api"
+import { lariaAPI, ChatMessage } from "@/lib/laria-api"
 
 interface StreamingState {
   isStreaming: boolean
@@ -44,7 +44,6 @@ export function useStreamingChat({
   const displayQueueRef = useRef<string[]>([])
   const animationFrameRef = useRef<number | null>(null)
   const lastDisplayTimeRef = useRef<number>(0)
-  const renderSpeedRef = useRef<number>(16)
   const pendingContentRef = useRef<string>("")
   const displayedRef = useRef<string>("")
   const baseMessagesRef = useRef<ChatMessage[]>([])
@@ -81,7 +80,7 @@ export function useStreamingChat({
     }
   }, [])
 
-  const processDisplayQueue = useCallback(() => {
+  const processDisplayQueue = useCallback(function tick() {
     if (displayQueueRef.current.length === 0) {
       animationFrameRef.current = null
       return
@@ -92,7 +91,7 @@ export function useStreamingChat({
     const targetInterval = calculateRenderSpeed()
 
     if (timeSinceLastDisplay < targetInterval) {
-      animationFrameRef.current = requestAnimationFrame(processDisplayQueue)
+      animationFrameRef.current = requestAnimationFrame(tick)
       return
     }
 
@@ -111,7 +110,7 @@ export function useStreamingChat({
     }
 
     if (displayQueueRef.current.length > 0) {
-      animationFrameRef.current = requestAnimationFrame(processDisplayQueue)
+      animationFrameRef.current = requestAnimationFrame(tick)
     } else {
       animationFrameRef.current = null
     }
@@ -264,6 +263,8 @@ export function useStreamingChat({
 
   useEffect(() => {
     return () => {
+      // Es un contador, no un nodo del DOM: se quiere justo el valor actual
+      // eslint-disable-next-line react-hooks/exhaustive-deps
       streamGenRef.current++
       stopAnimation()
       if (flushTimerRef.current) clearTimeout(flushTimerRef.current)

@@ -5,9 +5,7 @@ import {
   ToggleLeft,
   Bell,
   Settings,
-  Settings2,
   Check,
-  CircleUserRound,
 } from "lucide-react"
 import Image from "next/image"
 

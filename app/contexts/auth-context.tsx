@@ -45,6 +45,9 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   }, [])
 
   useEffect(() => {
+    // El token vive en localStorage, que solo existe en el cliente: leerlo en el
+    // estado inicial rompería la hidratación, así que se lee al montar
+    // eslint-disable-next-line react-hooks/set-state-in-effect
     loadUser()
   }, [loadUser])
 

@@ -1,5 +1,14 @@
 const API_BASE_URL = process.env.NEXT_PUBLIC_LARIA_API_URL || "http://localhost:8000/api/v1"
 
+// Metadatos que el tutor adjunta a cada respuesta
+interface TutorEnvelope {
+  type?: string
+  emotion?: string
+  grounded?: boolean
+  quiz_id?: string
+  [key: string]: unknown
+}
+
 interface ChatMessage {
   role: "user" | "assistant"
   content: string
@@ -8,7 +17,7 @@ interface ChatMessage {
     source?: string
     type?: string
     emotion?: string
-    envelope?: Record<string, unknown>
+    envelope?: TutorEnvelope
     [key: string]: unknown
   }
 }
@@ -446,5 +455,5 @@ export type {
   QuizAttemptSummary, TutorInteraction, LearningRecommendation,
   PedagogicalMemory, DocumentMastery, ConceptMastery,
   QuizResponse, QuizQuestion, QuizAttemptResponse, QuizAttemptQuestion,
-  StreamCallbacks,
+  StreamCallbacks, TutorEnvelope,
 }
