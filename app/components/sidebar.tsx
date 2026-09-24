@@ -107,7 +107,7 @@ export function Sidebar({ onNavigate }: { onNavigate?: () => void } = {}) {
         </Button>
 
         <nav className="flex flex-1 flex-col gap-1">
-          <div className="relative mb-2">
+          <div className="relative mb-2 flex flex-col items-center">
             <Button
               variant="ghost"
               onClick={() => handlePanelChange("history")}
@@ -123,7 +123,7 @@ export function Sidebar({ onNavigate }: { onNavigate?: () => void } = {}) {
             <div className="text-[9px] text-muted-foreground text-center mt-1 font-medium">Historial</div>
           </div>
 
-          <div className="relative mb-2">
+          <div className="relative mb-2 flex flex-col items-center">
             <Button
               variant="ghost"
               onClick={() => navigate(quizHref(activeChatId))}
@@ -135,7 +135,7 @@ export function Sidebar({ onNavigate }: { onNavigate?: () => void } = {}) {
             <div className="text-[9px] text-muted-foreground text-center mt-1 font-medium">Quiz</div>
           </div>
 
-          <div className="relative mb-2">
+          <div className="relative mb-2 flex flex-col items-center">
             <Button
               variant="ghost"
               onClick={() => navigate("/perfil")}
@@ -147,7 +147,7 @@ export function Sidebar({ onNavigate }: { onNavigate?: () => void } = {}) {
             <div className="text-[9px] text-muted-foreground text-center mt-1 font-medium">Perfil</div>
           </div>
 
-          <div className="relative mb-2">
+          <div className="relative mb-2 flex flex-col items-center">
             <Button
               variant="ghost"
               onClick={() => handlePanelChange("documents")}
@@ -162,23 +162,25 @@ export function Sidebar({ onNavigate }: { onNavigate?: () => void } = {}) {
             </Button>
             <div className="text-[9px] text-muted-foreground text-center mt-1 font-medium">Documentos</div>
           </div>
-        </nav>
 
-        <div className="flex flex-col gap-1 pt-4 items-center">
-          <Button
-            variant="ghost"
-            onClick={() => setShowAccountMenu(!showAccountMenu)}
-            aria-haspopup="dialog"
-            aria-expanded={showAccountMenu}
-            aria-label="Cuenta"
-            className="h-10 w-10 shrink-0 text-muted-foreground hover:text-foreground hover:bg-accent p-0"
-          >
-            <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-primary/10 text-sm font-semibold text-primary">
-              {user?.username?.charAt(0).toUpperCase() ?? "?"}
-            </span>
-          </Button>
-          <div className="text-[9px] text-muted-foreground text-center font-medium">Cuenta</div>
-        </div>
+          {/* El menú de cuenta se despliega al lado de este botón */}
+          <div className="relative mb-2 flex flex-col items-center">
+            <Button
+              variant="ghost"
+              onClick={() => setShowAccountMenu(!showAccountMenu)}
+              aria-haspopup="dialog"
+              aria-expanded={showAccountMenu}
+              aria-label="Cuenta"
+              className="h-10 w-10 shrink-0 mx-auto text-muted-foreground hover:text-foreground hover:bg-accent p-0"
+            >
+              <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-primary/10 text-sm font-semibold text-primary">
+                {user?.username?.charAt(0).toUpperCase() ?? "?"}
+              </span>
+            </Button>
+            <div className="text-[9px] text-muted-foreground text-center mt-1 font-medium">Cuenta</div>
+            <AccountMenu isOpen={showAccountMenu} onClose={() => setShowAccountMenu(false)} onNavigate={onNavigate} />
+          </div>
+        </nav>
       </div>
 
       {openPanel && (
@@ -276,12 +278,7 @@ export function Sidebar({ onNavigate }: { onNavigate?: () => void } = {}) {
     </div>
   )
 
-  return (
-    <>
-      {sidebarContent}
-      <AccountMenu isOpen={showAccountMenu} onClose={() => setShowAccountMenu(false)} onNavigate={onNavigate} />
-    </>
-  )
+  return sidebarContent
 }
 
 type RowMode = "view" | "rename" | "confirm-delete"

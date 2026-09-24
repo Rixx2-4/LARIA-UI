@@ -34,7 +34,7 @@ export function AccountMenu({ isOpen, onClose, onNavigate }: AccountMenuProps) {
       <div
         role="dialog"
         aria-label="Menú de cuenta"
-        className="fixed bottom-20 left-4 z-[70] w-72 rounded-lg border border-border bg-background shadow-2xl animate-in fade-in slide-in-from-bottom-2 duration-200"
+        className="absolute left-full top-0 z-[70] ml-2 w-72 rounded-lg border border-border bg-background shadow-2xl animate-in fade-in slide-in-from-bottom-2 duration-200"
       >
         <div className="border-b border-border px-4 py-3">
           <p className="truncate text-sm font-medium">{user?.username}</p>
