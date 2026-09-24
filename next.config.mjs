@@ -4,6 +4,10 @@ const nextConfig = {
   turbopack: {
     root: import.meta.dirname,
   },
+  // En desarrollo, el indicador de Next tapaba el botón "Cuenta" de la barra lateral
+  devIndicators: {
+    position: "bottom-right",
+  },
   images: {
     unoptimized: true,
   },

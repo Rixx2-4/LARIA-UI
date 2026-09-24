@@ -256,14 +256,18 @@ export function SearchBar() {
     setUploadsByChat((prev) => ({ ...prev, [chatId]: (prev[chatId] ?? []).filter((_, i) => i !== index) }))
   }
 
-  // Lo dictado se añade a lo que ya se hubiera escrito
-  const dictation = useDictation(
-    (text) => setQuery((current) => (current.trim() ? `${current.trimEnd()} ${text}` : text)),
-    (message) => toast.error(message),
-  )
+  // Lo dictado se añade a lo que ya se hubiera escrito; mientras la frase no termina
+  // se muestra detrás, sin fijarla en el mensaje
+  const [interimText, setInterimText] = useState("")
+  const dictation = useDictation({
+    onFinal: (text) => setQuery((current) => (current.trim() ? `${current.trimEnd()} ${text}` : text)),
+    onInterim: setInterimText,
+    onError: (message) => toast.error(message),
+  })
+  const shownQuery = interimText ? (query.trim() ? `${query.trimEnd()} ${interimText}` : interimText) : query
 
   const handleSend = async () => {
-    const userMessage = query.trim()
+    const userMessage = shownQuery.trim()
     if (!userMessage || isStreaming) return
 
     setQuery("")
@@ -438,12 +442,15 @@ export function SearchBar() {
         >
           <div className="flex items-center px-4 md:px-5 py-3 md:py-3.5">
             <input
-              value={query}
-              onChange={(e) => setQuery(e.target.value)}
+              value={shownQuery}
+              onChange={(e) => {
+                setQuery(e.target.value)
+                setInterimText("")
+              }}
               onFocus={() => setIsFocused(true)}
               onBlur={() => setIsFocused(false)}
               onKeyDown={(e) => {
-                if (e.key === "Enter" && query.trim() && !isStreaming) {
+                if (e.key === "Enter" && shownQuery.trim() && !isStreaming) {
                   e.preventDefault()
                   handleSend()
                 }
@@ -510,7 +517,7 @@ export function SearchBar() {
                 >
                   <Square className="h-4 w-4" />
                 </Button>
-              ) : query.trim() ? (
+              ) : shownQuery.trim() ? (
                 <Button
                   aria-label="Enviar"
                   variant="ghost"

@@ -22,17 +22,22 @@ function getRecognitionCtor(): SpeechRecognitionCtor | null {
   return w.SpeechRecognition ?? w.webkitSpeechRecognition ?? null
 }
 
-// Dictado con el reconocimiento de voz del navegador (Chrome, Edge, Safari; no Firefox).
-// onText recibe cada frase ya reconocida.
-export function useDictation(onText: (text: string) => void, onError?: (message: string) => void) {
+interface DictationCallbacks {
+  // Una frase ya reconocida y definitiva
+  onFinal: (text: string) => void
+  // Lo que se va entendiendo de la frase en curso ("" cuando no hay nada pendiente)
+  onInterim?: (text: string) => void
+  onError?: (message: string) => void
+}
+
+// Dictado con el reconocimiento de voz del navegador (Chrome, Edge, Safari; no Firefox)
+export function useDictation(callbacks: DictationCallbacks) {
   const [isSupported] = useState(() => getRecognitionCtor() !== null)
   const [isListening, setIsListening] = useState(false)
   const recognitionRef = useRef<SpeechRecognitionLike | null>(null)
-  const onTextRef = useRef(onText)
-  const onErrorRef = useRef(onError)
+  const callbacksRef = useRef(callbacks)
   useEffect(() => {
-    onTextRef.current = onText
-    onErrorRef.current = onError
+    callbacksRef.current = callbacks
   })
 
   // Termina de escuchar pero entrega la frase que estuviera a medias
@@ -50,6 +55,7 @@ export function useDictation(onText: (text: string) => void, onError?: (message:
     recognition.abort()
     recognitionRef.current = null
     setIsListening(false)
+    callbacksRef.current.onInterim?.("")
   }, [])
 
   const start = useCallback(() => {
@@ -58,30 +64,35 @@ export function useDictation(onText: (text: string) => void, onError?: (message:
     const recognition = new Ctor()
     recognition.lang = "es-ES"
     recognition.continuous = true
-    recognition.interimResults = false
+    recognition.interimResults = true
     recognition.onresult = (event) => {
+      let interim = ""
       for (let i = event.resultIndex; i < event.results.length; i++) {
         const result = event.results[i]
-        if (result.isFinal) onTextRef.current(result[0].transcript.trim())
+        if (result.isFinal) callbacksRef.current.onFinal(result[0].transcript.trim())
+        else interim += result[0].transcript
       }
+      callbacksRef.current.onInterim?.(interim.trim())
     }
     recognition.onerror = (event) => {
       if (event.error === "not-allowed" || event.error === "service-not-allowed") {
-        onErrorRef.current?.("Permite el acceso al micrófono para dictar")
+        callbacksRef.current.onError?.("Permite el acceso al micrófono para dictar")
       } else if (event.error === "audio-capture") {
-        onErrorRef.current?.("No se encontró ningún micrófono")
+        callbacksRef.current.onError?.("No se encontró ningún micrófono")
       } else if (event.error !== "aborted" && event.error !== "no-speech") {
-        onErrorRef.current?.("No se pudo usar el dictado")
+        callbacksRef.current.onError?.("No se pudo usar el dictado")
       }
     }
     recognition.onend = () => {
       recognitionRef.current = null
       setIsListening(false)
+      // Lo que no llegó a ser definitivo se descarta
+      callbacksRef.current.onInterim?.("")
     }
     try {
       recognition.start()
     } catch {
-      onErrorRef.current?.("No se pudo usar el dictado")
+      callbacksRef.current.onError?.("No se pudo usar el dictado")
       return
     }
     recognitionRef.current = recognition

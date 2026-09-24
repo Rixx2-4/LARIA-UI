@@ -32,4 +32,8 @@ export class FakeSpeechRecognition {
   say(transcript: string) {
     this.onresult?.({ resultIndex: 0, results: [{ 0: { transcript }, isFinal: true }] })
   }
+  // Lo que el navegador va entendiendo mientras la frase no ha terminado
+  sayInterim(transcript: string) {
+    this.onresult?.({ resultIndex: 0, results: [{ 0: { transcript }, isFinal: false }] })
+  }
 }
