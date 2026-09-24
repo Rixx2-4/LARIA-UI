@@ -1,7 +1,7 @@
 "use client"
 
 import { createContext, useContext, useState, useEffect, useCallback, ReactNode } from "react"
-import { lariaAPI, User, getAuthToken, onUnauthorized } from "@/lib/laria-api"
+import { lariaAPI, ApiError, User, getAuthToken, onUnauthorized } from "@/lib/laria-api"
 
 interface AuthContextType {
   user: User | null
@@ -24,6 +24,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
   const loadUser = useCallback(async () => {
     if (!getAuthToken()) {
+      setConnectionError(null)
       setIsLoading(false)
       return
     }
@@ -34,8 +35,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       setConnectionError(null)
     } catch (error) {
       // Un 401 ya borró el token y avisó por onUnauthorized
-      const status = (error as Error & { status?: number }).status
-      if (status !== 401) setConnectionError("No se pudo conectar con LARIA")
+      const expired = error instanceof ApiError && error.status === 401
+      if (!expired) setConnectionError("No se pudo conectar con LARIA")
     } finally {
       setIsLoading(false)
     }

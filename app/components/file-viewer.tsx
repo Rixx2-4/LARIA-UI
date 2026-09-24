@@ -123,6 +123,22 @@ function GenericViewer({ filename, mimeType }: { filename: string; mimeType: str
   )
 }
 
+// Qué vista previa admite cada tipo de archivo; null si ninguna
+function previewKind(mimeType: string): "image" | "pdf" | "text" | null {
+  if (mimeType.startsWith("image/")) return "image"
+  if (mimeType === "application/pdf") return "pdf"
+  if (
+    mimeType.startsWith("text/") ||
+    mimeType.includes("json") ||
+    mimeType.includes("xml") ||
+    mimeType.includes("javascript") ||
+    mimeType.includes("typescript") ||
+    mimeType.includes("python")
+  )
+    return "text"
+  return null
+}
+
 export function FileViewer({ filename, mimeType, documentId, previewDataUrl, onClose }: FileViewerProps) {
   const [content, setContent] = useState<string | null>(null)
   const [isLoading, setIsLoading] = useState(false)
@@ -138,19 +154,10 @@ export function FileViewer({ filename, mimeType, documentId, previewDataUrl, onC
   }, [onClose])
 
   const [blobUrl, setBlobUrl] = useState<string | null>(null)
+  const kind = previewKind(mimeType)
 
   useEffect(() => {
-    if (!documentId || previewDataUrl) return
-
-    const isTextFile =
-      mimeType.startsWith("text/") ||
-      mimeType.includes("json") ||
-      mimeType.includes("xml") ||
-      mimeType.includes("javascript") ||
-      mimeType.includes("typescript") ||
-      mimeType.includes("python")
-    const isViewable = isTextFile || mimeType.startsWith("image/") || mimeType === "application/pdf"
-    if (!isViewable) return
+    if (!documentId || previewDataUrl || !kind) return
 
     // Se descarga con la cabecera Authorization: el token nunca va en la URL
     let cancelled = false
@@ -162,7 +169,7 @@ export function FileViewer({ filename, mimeType, documentId, previewDataUrl, onC
       try {
         const blob = await lariaAPI.documents.content(documentId)
         if (cancelled) return
-        if (isTextFile) {
+        if (kind === "text") {
           setContent(await blob.text())
         } else {
           objectUrl = URL.createObjectURL(blob)
@@ -179,14 +186,19 @@ export function FileViewer({ filename, mimeType, documentId, previewDataUrl, onC
     return () => {
       cancelled = true
       if (objectUrl) URL.revokeObjectURL(objectUrl)
+      setBlobUrl(null)
+      setContent(null)
     }
-  }, [documentId, mimeType, previewDataUrl])
+  }, [documentId, kind, previewDataUrl])
 
-  const getSourceUrl = () => previewDataUrl || blobUrl || ""
+  // Un archivo recién adjuntado se previsualiza con lo que leyó el navegador
+  // (data URL si es imagen, el texto tal cual si es texto); si no, con lo descargado
+  const sourceUrl = previewDataUrl || blobUrl || ""
+  const text = kind === "text" ? (previewDataUrl ?? content) : null
 
   const renderContent = () => {
-    const needsSource = mimeType.startsWith("image/") || mimeType === "application/pdf"
-    if (isLoading || (needsSource && documentId && !getSourceUrl() && !error)) {
+    const needsSource = kind === "image" || kind === "pdf"
+    if (isLoading || (needsSource && documentId && !sourceUrl && !error)) {
       return (
         <div className="flex items-center justify-center h-full text-muted-foreground">
           Cargando...
@@ -205,16 +217,16 @@ export function FileViewer({ filename, mimeType, documentId, previewDataUrl, onC
       )
     }
 
-    if (mimeType.startsWith("image/")) {
-      return <ImageViewer src={getSourceUrl()} filename={filename} />
+    if (kind === "image") {
+      return <ImageViewer src={sourceUrl} filename={filename} />
     }
 
-    if (mimeType === "application/pdf") {
-      return <PdfViewer src={getSourceUrl()} />
+    if (kind === "pdf") {
+      return <PdfViewer src={sourceUrl} />
     }
 
-    if (content !== null) {
-      return <TextViewer content={content} filename={filename} />
+    if (text !== null) {
+      return <TextViewer content={text} filename={filename} />
     }
 
     return <GenericViewer filename={filename} mimeType={mimeType} />

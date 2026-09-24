@@ -47,4 +47,18 @@ describe("AuthProvider", () => {
     expect(result.current.isAuthenticated).toBe(true)
     expect(result.current.connectionError).toBeNull()
   })
+
+  it("reintentar cuando la sesión ya no existe lleva al login, no se queda atascado", async () => {
+    vi.stubGlobal("fetch", async () => {
+      throw new TypeError("Failed to fetch")
+    })
+    const { result } = renderHook(() => useAuth(), { wrapper })
+    await waitFor(() => expect(result.current.connectionError).not.toBeNull())
+
+    setAuthToken(null) // p. ej. cerró sesión en otra pestaña
+    await act(() => result.current.retry())
+
+    expect(result.current.connectionError).toBeNull()
+    expect(result.current.isAuthenticated).toBe(false)
+  })
 })

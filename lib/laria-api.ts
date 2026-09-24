@@ -204,9 +204,14 @@ export function getAuthToken(): string | null {
   return authToken
 }
 
-function authHeaders(): Record<string, string> {
-  const token = getAuthToken()
+function authHeaders(token: string | null): Record<string, string> {
   return token ? { Authorization: `Bearer ${token}` } : {}
+}
+
+export class ApiError extends Error {
+  constructor(message: string, readonly status: number) {
+    super(message)
+  }
 }
 
 // Quien necesite enterarse de que la sesión caducó (el AuthProvider) se suscribe aquí
@@ -219,29 +224,24 @@ export function onUnauthorized(listener: () => void): () => void {
   }
 }
 
-// Convierte una respuesta fallida en Error; un 401 además cierra la sesión
-async function responseError(response: Response, fallback: string): Promise<Error> {
-  const error = await response.json().catch(() => ({ detail: fallback }))
-  const err = new Error(error.detail || `Error ${response.status}`)
-  ;(err as Error & { status?: number }).status = response.status
-  if (response.status === 401) {
+// Convierte una respuesta fallida en ApiError; un 401 además cierra la sesión,
+// salvo que la petición se hiciera con un token que ya no es el actual
+async function responseError(response: Response, fallback: string, sentToken: string | null): Promise<ApiError> {
+  const body = await response.json().catch(() => ({ detail: fallback }))
+  if (response.status === 401 && sentToken && sentToken === getAuthToken()) {
     setAuthToken(null)
     unauthorizedListeners.forEach((listener) => listener())
   }
-  return err
+  return new ApiError(body.detail || `Error ${response.status}`, response.status)
 }
 
 async function fetchAPI<T>(endpoint: string, options?: RequestInit): Promise<T> {
   const url = `${API_BASE_URL}${endpoint}`
   const token = getAuthToken()
-  
   const headers: Record<string, string> = {
     "Content-Type": "application/json",
     ...((options?.headers as Record<string, string>) || {}),
-  }
-  
-  if (token) {
-    headers["Authorization"] = `Bearer ${token}`
+    ...authHeaders(token),
   }
 
   const response = await fetch(url, {
@@ -250,7 +250,7 @@ async function fetchAPI<T>(endpoint: string, options?: RequestInit): Promise<T> 
   })
 
   if (!response.ok) {
-    throw await responseError(response, "Error desconocido")
+    throw await responseError(response, "Error desconocido", token)
   }
 
   if (response.status === 204) {
@@ -333,13 +333,7 @@ export const lariaAPI = {
     ): Promise<void> => {
       const url = `${API_BASE_URL}/chats/${chatId}/stream`
       const token = getAuthToken()
-
-      const headers: Record<string, string> = {
-        "Content-Type": "application/json",
-      }
-      if (token) {
-        headers["Authorization"] = `Bearer ${token}`
-      }
+      const headers = { "Content-Type": "application/json", ...authHeaders(token) }
 
       try {
         const response = await fetch(url, {
@@ -350,7 +344,7 @@ export const lariaAPI = {
         })
 
         if (!response.ok) {
-          throw await responseError(response, "Error de streaming")
+          throw await responseError(response, "Error de streaming", token)
         }
 
         const reader = response.body?.getReader()
@@ -437,14 +431,15 @@ export const lariaAPI = {
       formData.append("file", file)
       if (subject) formData.append("subject", subject)
 
+      const token = getAuthToken()
       const response = await fetch(`${API_BASE_URL}/documents/upload`, {
         method: "POST",
-        headers: authHeaders(),
+        headers: authHeaders(token),
         body: formData,
       })
 
       if (!response.ok) {
-        throw await responseError(response, "Error de subida")
+        throw await responseError(response, "Error de subida", token)
       }
 
       return response.json()
@@ -452,11 +447,12 @@ export const lariaAPI = {
 
     // El archivo original, para previsualizarlo o descargarlo
     content: async (documentId: string): Promise<Blob> => {
+      const token = getAuthToken()
       const response = await fetch(`${API_BASE_URL}/documents/${documentId}/content`, {
-        headers: authHeaders(),
+        headers: authHeaders(token),
       })
       if (!response.ok) {
-        throw await responseError(response, "Error al cargar el archivo")
+        throw await responseError(response, "Error al cargar el archivo", token)
       }
       return response.blob()
     },

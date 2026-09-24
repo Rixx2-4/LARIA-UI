@@ -121,6 +121,23 @@ describe("sesión caducada", () => {
     unsubscribe()
   })
 
+  it("un 401 tardío de la sesión anterior no cierra una sesión nueva", async () => {
+    setAuthToken("viejo")
+    let answer!: (r: Response) => void
+    vi.stubGlobal("fetch", () => new Promise<Response>((r) => (answer = r)))
+    const listener = vi.fn()
+    const unsubscribe = onUnauthorized(listener)
+
+    const oldRequest = lariaAPI.chats.list().catch(() => {})
+    setAuthToken("nuevo") // el usuario vuelve a iniciar sesión mientras tanto
+    answer(new Response("{}", { status: 401 }))
+    await oldRequest
+
+    expect(getAuthToken()).toBe("nuevo")
+    expect(listener).not.toHaveBeenCalled()
+    unsubscribe()
+  })
+
   it.each([
     ["el stream del chat", () => lariaAPI.chats.stream("c1", "user", "hola", { onError: () => {} })],
     ["la subida de un archivo", () => lariaAPI.documents.upload(new File(["x"], "apuntes.txt")).catch(() => {})],
