@@ -25,9 +25,10 @@ import { useAuth } from "@/app/contexts/auth-context"
 import { lariaAPI, Document } from "@/lib/laria-api"
 import { useEffect } from "react"
 
-export function Sidebar() {
+// onNavigate avisa de que el usuario eligió un destino (el cajón móvil se cierra)
+export function Sidebar({ onNavigate }: { onNavigate?: () => void } = {}) {
   const router = useRouter()
-  const { chats, activeChatId, createChat, selectChat, deleteChat } = useChat()
+  const { chats, activeChatId, deleteChat } = useChat()
   const { isAuthenticated } = useAuth()
   const [openPanel, setOpenPanel] = useState<string | null>(null)
   const [pinnedPanel, setPinnedPanel] = useState<string | null>(null)
@@ -43,19 +44,20 @@ export function Sidebar() {
     }
   }, [openPanel, isAuthenticated])
 
-  const handleNewChat = async () => {
-    await createChat()
-    router.push("/")
+  // El chat nuevo se crea al enviar el primer mensaje
+  const navigate = (path: string) => {
+    router.push(path)
+    onNavigate?.()
   }
 
-  const handleSelectChat = async (chatId: string) => {
-    await selectChat(chatId)
-    router.push("/")
-  }
+  const handleNewChat = () => navigate("/")
+
+  const handleSelectChat = (chatId: string) => navigate(`/chat/${chatId}`)
 
   const handleDeleteChat = async (chatId: string, e: React.MouseEvent) => {
     e.stopPropagation()
     await deleteChat(chatId)
+    if (chatId === activeChatId) router.push("/")
   }
 
   const handlePanelChange = (panel: string) => {
@@ -132,7 +134,7 @@ export function Sidebar() {
           <div className="relative mb-2">
             <Button
               variant="ghost"
-              onClick={() => router.push("/quiz")}
+              onClick={() => navigate("/quiz")}
               className="h-10 w-10 shrink-0 mx-auto text-muted-foreground hover:text-foreground hover:bg-accent"
             >
               <ClipboardList className="h-5 w-5" />
@@ -143,7 +145,7 @@ export function Sidebar() {
           <div className="relative mb-2">
             <Button
               variant="ghost"
-              onClick={() => router.push("/perfil")}
+              onClick={() => navigate("/perfil")}
               className="h-10 w-10 shrink-0 mx-auto text-muted-foreground hover:text-foreground hover:bg-accent"
             >
               <Brain className="h-5 w-5" />
