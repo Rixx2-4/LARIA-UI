@@ -1,13 +1,15 @@
 "use client"
 
-import { createContext, useContext, useState, useEffect, useCallback, ReactNode } from "react"
-import { lariaAPI, Chat, ChatMessage, getAuthToken } from "@/lib/laria-api"
+import { createContext, useContext, useState, useEffect, useCallback, useRef, ReactNode } from "react"
+import { lariaAPI, ApiError, Chat, ChatMessage, getAuthToken } from "@/lib/laria-api"
 import { useAuth } from "./auth-context"
 
 interface ChatContextType {
   chats: Chat[]
   activeChatId: string | null
   messages: ChatMessage[]
+  // Por qué no se pudo abrir el chat activo (p. ej. no existe)
+  chatError: string | null
   loadChats: () => Promise<void>
   createChat: (title?: string, documentId?: string) => Promise<Chat>
   selectChat: (chatId: string) => Promise<void>
@@ -25,6 +27,9 @@ export function ChatProvider({ children }: { children: ReactNode }) {
   const [chats, setChats] = useState<Chat[]>([])
   const [activeChatId, setActiveChatId] = useState<string | null>(null)
   const [messages, setMessages] = useState<ChatMessage[]>([])
+  const [chatError, setChatError] = useState<string | null>(null)
+  const requestedChatIdRef = useRef<string | null>(null)
+
   // Al cerrar sesión se vacía todo durante el render, sin esperar a un efecto
   const [wasAuthenticated, setWasAuthenticated] = useState(isAuthenticated)
   if (wasAuthenticated !== isAuthenticated) {
@@ -32,6 +37,7 @@ export function ChatProvider({ children }: { children: ReactNode }) {
     if (!isAuthenticated) {
       setChats([])
       setActiveChatId(null)
+      setChatError(null)
       setMessages([])
     }
   }
@@ -47,20 +53,6 @@ export function ChatProvider({ children }: { children: ReactNode }) {
     }
   }, [])
 
-  const loadChatMessages = useCallback(async (chatId: string) => {
-    if (!getAuthToken()) {
-      setMessages([])
-      return
-    }
-    try {
-      const chat = await lariaAPI.chats.get(chatId)
-      setMessages(chat.messages || [])
-    } catch (error) {
-      console.error("Error loading chat messages:", error)
-      setMessages([])
-    }
-  }, [])
-
   useEffect(() => {
     // Carga de datos al iniciar sesión; el estado se actualiza tras el await
     // eslint-disable-next-line react-hooks/set-state-in-effect
@@ -70,15 +62,28 @@ export function ChatProvider({ children }: { children: ReactNode }) {
   const createChat = useCallback(async (title?: string, documentId?: string): Promise<Chat> => {
     const chat = await lariaAPI.chats.create(title, documentId)
     await loadChats()
+    requestedChatIdRef.current = chat.id
     setActiveChatId(chat.id)
+    setChatError(null)
     setMessages([])
     return chat
   }, [loadChats])
 
   const selectChat = useCallback(async (chatId: string) => {
+    requestedChatIdRef.current = chatId
     setActiveChatId(chatId)
-    await loadChatMessages(chatId)
-  }, [loadChatMessages])
+    setChatError(null)
+    setMessages([])
+    try {
+      const chat = await lariaAPI.chats.get(chatId)
+      // Si mientras tanto se abrió otro chat, esta respuesta ya no interesa
+      if (requestedChatIdRef.current === chatId) setMessages(chat.messages || [])
+    } catch (error) {
+      if (requestedChatIdRef.current !== chatId) return
+      const notFound = error instanceof ApiError && (error.status === 404 || error.status === 403)
+      setChatError(notFound ? "Este chat no existe" : "No se pudo cargar el chat")
+    }
+  }, [])
 
   const deleteChat = useCallback(async (chatId: string) => {
     await lariaAPI.chats.delete(chatId)
@@ -95,7 +100,9 @@ export function ChatProvider({ children }: { children: ReactNode }) {
   }, [])
 
   const clearActiveChat = useCallback(() => {
+    requestedChatIdRef.current = null
     setActiveChatId(null)
+    setChatError(null)
     setMessages([])
   }, [])
 
@@ -126,6 +133,7 @@ export function ChatProvider({ children }: { children: ReactNode }) {
         chats,
         activeChatId,
         messages,
+        chatError,
         loadChats,
         createChat,
         selectChat,

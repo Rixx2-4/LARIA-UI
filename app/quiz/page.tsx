@@ -4,7 +4,7 @@ import { useState } from "react"
 import { useRouter } from "next/navigation"
 import { Loader2, CheckCircle, XCircle, ArrowRight, RotateCcw } from "lucide-react"
 import { Button } from "@/components/ui/button"
-import { Sidebar } from "../components/sidebar"
+import { AppShell } from "../components/app-shell"
 import { RequireAuth } from "../components/require-auth"
 import { useChat } from "@/app/contexts/chat-context"
 import { lariaAPI, QuizQuestion, QuizAttemptQuestion } from "@/lib/laria-api"
@@ -131,9 +131,8 @@ function Quiz() {
   const percentage = total > 0 ? Math.round((score / total) * 100) : 0
 
   return (
-    <div className="flex h-screen w-full">
-      <Sidebar />
-      <div className="flex-1 overflow-auto bg-background">
+    <AppShell>
+      <div className="h-full overflow-auto">
         <div className="max-w-3xl mx-auto py-8 px-6">
           {step === "config" && (
             <div className="space-y-6">
@@ -327,6 +326,6 @@ function Quiz() {
           )}
         </div>
       </div>
-    </div>
+    </AppShell>
   )
 }

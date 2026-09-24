@@ -1,6 +1,7 @@
 "use client"
 
 import { useState, useRef, useEffect, useCallback } from "react"
+import { useRouter } from "next/navigation"
 import { Button } from "@/components/ui/button"
 import { Search, Paperclip, Mic, Send, Loader2, Square } from "lucide-react"
 import { useChat } from "@/app/contexts/chat-context"
@@ -39,6 +40,7 @@ export function SearchBar() {
   const isUserScrolledRef = useRef(false)
   const lastScrollHeightRef = useRef(0)
 
+  const router = useRouter()
   const { messages, setMessages, activeChatId, createChat: ctxCreateChat, generateTitle } = useChat()
   const chatId = activeChatId
 
@@ -160,6 +162,7 @@ export function SearchBar() {
         const chat = await ctxCreateChat(undefined, doc.id)
         currentChatId = chat.id
         isNewChat = true
+        router.replace(`/chat/${chat.id}`)
       } else {
         await lariaAPI.chats.update(currentChatId, { document_id: doc.id })
       }
@@ -199,6 +202,7 @@ export function SearchBar() {
         const chat = await ctxCreateChat()
         currentChatId = chat.id
         isNewChat = true
+        router.replace(`/chat/${chat.id}`)
       }
 
       await startStreaming(userMessage, currentChatId)
@@ -225,32 +229,7 @@ export function SearchBar() {
   )
 
   return (
-    <div className="relative">
-      {/* Uploaded Files */}
-      {uploadedFiles.length > 0 && (
-        <div className="mb-4 flex flex-wrap gap-2">
-          {uploadedFiles.map((uf, index) => (
-            <FileCard
-              key={`${uf.document?.id || index}`}
-              filename={uf.file.name}
-              size={uf.file.size}
-              mimeType={uf.file.type}
-              documentId={uf.document?.id}
-              previewDataUrl={uf.dataUrl}
-              onClick={() =>
-                setViewerFile({
-                  filename: uf.file.name,
-                  mimeType: uf.file.type,
-                  documentId: uf.document?.id,
-                  dataUrl: uf.dataUrl,
-                })
-              }
-              onRemove={() => removeFile(index)}
-            />
-          ))}
-        </div>
-      )}
-
+    <div className="relative flex h-full flex-col">
       {/* File Viewer Modal */}
       {viewerFile && (
         <FileViewer
@@ -262,185 +241,217 @@ export function SearchBar() {
         />
       )}
 
-      {/* Chat Messages */}
-      {messages.length > 0 && (
-        <div
-          ref={messagesContainerRef}
-          className="mb-6 space-y-4 max-h-[400px] overflow-y-auto scroll-smooth"
-        >
-          {messages.map((msg, index) => {
-            const isCurrentStreaming = index === messages.length - 1 && msg.role === "assistant"
-            return (
-              <div
-                key={`${index}-${msg.role}`}
-                className={`flex ${msg.role === "user" ? "justify-end" : "justify-start"}`}
-              >
+      {/* Chat Messages: siempre montado para que el scroll tenga a quién escuchar */}
+      <div ref={messagesContainerRef} className="min-h-0 flex-1 overflow-y-auto scroll-smooth">
+        {messages.length === 0 ? (
+          <div className="flex h-full items-center justify-center px-4">
+            <h1 className="text-center text-2xl md:text-3xl font-semibold tracking-tight text-foreground">
+              ¿Qué quieres aprender hoy?
+            </h1>
+          </div>
+        ) : (
+          <div className="mx-auto w-full max-w-3xl space-y-4 px-4 py-6 md:px-6">
+            {messages.map((msg, index) => {
+              const isCurrentStreaming = index === messages.length - 1 && msg.role === "assistant"
+              return (
                 <div
-                  className={`max-w-[80%] rounded-2xl px-4 py-3 ${
-                    msg.role === "user"
-                      ? "bg-primary text-primary-foreground"
-                      : "bg-muted text-foreground"
-                  }`}
+                  key={`${index}-${msg.role}`}
+                  className={`flex ${msg.role === "user" ? "justify-end" : "justify-start"}`}
                 >
-                  {renderMessageContent(msg, isCurrentStreaming)}
+                  <div
+                    className={`max-w-[80%] rounded-2xl px-4 py-3 ${
+                      msg.role === "user"
+                        ? "bg-primary text-primary-foreground"
+                        : "bg-muted text-foreground"
+                    }`}
+                  >
+                    {renderMessageContent(msg, isCurrentStreaming)}
 
-                  {msg.role === "assistant" && msg.metadata?.envelope && (
-                    <div className="mt-2 pt-2 border-t border-border/30 flex items-center gap-2 text-[11px] text-muted-foreground">
-                      {msg.metadata.envelope.type && (
-                        <span className="px-1.5 py-0.5 rounded bg-secondary/50">
-                          {msg.metadata.envelope.type}
-                        </span>
-                      )}
-                      {msg.metadata.envelope.emotion && (
-                        <span className="px-1.5 py-0.5 rounded bg-secondary/50">
-                          {msg.metadata.envelope.emotion}
-                        </span>
-                      )}
-                      {msg.metadata.envelope.grounded !== undefined && (
-                        <span className={`px-1.5 py-0.5 rounded ${msg.metadata.envelope.grounded ? "bg-green-500/20 text-green-700" : "bg-yellow-500/20 text-yellow-700"}`}>
-                          {msg.metadata.envelope.grounded ? "Tutoría" : "Chat libre"}
-                        </span>
-                      )}
-                    </div>
-                  )}
+                    {msg.role === "assistant" && msg.metadata?.envelope && (
+                      <div className="mt-2 pt-2 border-t border-border/30 flex items-center gap-2 text-[11px] text-muted-foreground">
+                        {msg.metadata.envelope.type && (
+                          <span className="px-1.5 py-0.5 rounded bg-secondary/50">
+                            {msg.metadata.envelope.type}
+                          </span>
+                        )}
+                        {msg.metadata.envelope.emotion && (
+                          <span className="px-1.5 py-0.5 rounded bg-secondary/50">
+                            {msg.metadata.envelope.emotion}
+                          </span>
+                        )}
+                        {msg.metadata.envelope.grounded !== undefined && (
+                          <span className={`px-1.5 py-0.5 rounded ${msg.metadata.envelope.grounded ? "bg-green-500/20 text-green-700" : "bg-yellow-500/20 text-yellow-700"}`}>
+                            {msg.metadata.envelope.grounded ? "Tutoría" : "Chat libre"}
+                          </span>
+                        )}
+                      </div>
+                    )}
+                  </div>
+                </div>
+              )
+            })}
+
+            {isStreaming && isThinking && !displayedContent && (
+              <div className="flex justify-start">
+                <div className="bg-muted text-foreground rounded-2xl px-4 py-3 max-w-[80%]">
+                  <div className="thinking-container">
+                    <span className="thinking-shimmer" />
+                    <span className="thinking-text" />
+                  </div>
                 </div>
               </div>
-            )
-          })}
+            )}
 
-          {isStreaming && isThinking && !displayedContent && (
-            <div className="flex justify-start">
-              <div className="bg-muted text-foreground rounded-2xl px-4 py-3 max-w-[80%]">
-                <div className="thinking-container">
-                  <span className="thinking-shimmer" />
-                  <span className="thinking-text" />
+            {streamError && (
+              <div className="flex justify-start">
+                <div className="bg-destructive/10 border border-destructive/20 rounded-2xl px-4 py-3 max-w-[80%]">
+                  <p className="text-sm text-destructive">{streamError}</p>
                 </div>
               </div>
-            </div>
-          )}
-
-          {streamError && (
-            <div className="flex justify-start">
-              <div className="bg-destructive/10 border border-destructive/20 rounded-2xl px-4 py-3 max-w-[80%]">
-                <p className="text-sm text-destructive">{streamError}</p>
-              </div>
-            </div>
-          )}
-        </div>
-      )}
-
-      {/* Input */}
-      <div
-        className={`animate-in fade-in slide-in-from-bottom-4 duration-500 rounded-2xl border-2 bg-card shadow-[0_4px_20px_rgb(0,0,0,0.03)] transition-all hover:shadow-[0_4px_30px_rgb(0,0,0,0.06)] ${
-          isFocused ? "border-ring/50 ring-1 ring-ring/20" : "border-border hover:border-ring/40"
-        }`}
-      >
-        <div className="flex items-center px-4 md:px-5 py-3 md:py-3.5">
-          <input
-            value={query}
-            onChange={(e) => {
-              setQuery(e.target.value)
-              setShowSuggestions(e.target.value.length > 0)
-            }}
-            onFocus={() => {
-              setIsFocused(true)
-              if (query.length > 0) setShowSuggestions(true)
-            }}
-            onBlur={() => {
-              setIsFocused(false)
-              setTimeout(() => setShowSuggestions(false), 150)
-            }}
-            onKeyDown={(e) => {
-              if (e.key === "Enter" && query.trim() && !isStreaming) {
-                e.preventDefault()
-                handleSend()
-              }
-            }}
-            placeholder={isStreaming ? "Generando respuesta..." : "Ask anything..."}
-            disabled={isStreaming}
-            className="w-full border-0 bg-transparent text-[14px] md:text-[15px] text-foreground placeholder:text-muted-foreground/60 focus:outline-none disabled:opacity-50"
-          />
-        </div>
-
-        <div className="flex items-center justify-between px-2 md:px-2.5 py-2 gap-2">
-          <div className="flex items-center gap-0.5">
-            <input
-              ref={fileInputRef}
-              type="file"
-              accept={ALLOWED_EXTENSIONS.join(",")}
-              className="hidden"
-              onChange={(e) => {
-                const file = e.target.files?.[0]
-                if (file) handleFileUpload(file)
-              }}
-            />
-            <Button
-              variant="ghost"
-              size="icon"
-              onClick={() => fileInputRef.current?.click()}
-              disabled={isUploading || isStreaming}
-              className="h-8 w-8 md:h-9 md:w-9 rounded-lg text-muted-foreground transition-all hover:bg-accent/60 hover:text-foreground"
-            >
-              {isUploading ? (
-                <Loader2 className="h-4 w-4 animate-spin" />
-              ) : (
-                <Paperclip className="h-4 w-4 md:h-[17px] md:w-[17px]" />
-              )}
-            </Button>
-          </div>
-
-          <div className="flex items-center gap-0.5">
-            <Button
-              variant="ghost"
-              size="icon"
-              disabled={isStreaming}
-              className="h-8 w-8 md:h-9 md:w-9 rounded-lg text-muted-foreground transition-all hover:bg-accent/60 hover:text-foreground"
-            >
-              <Mic className="h-4 w-4 md:h-[17px] md:w-[17px]" />
-            </Button>
-
-            {isStreaming ? (
-              <Button
-                variant="ghost"
-                size="icon"
-                onClick={handleStopGeneration}
-                className="h-8 w-8 md:h-9 md:w-9 rounded-lg bg-destructive text-destructive-foreground hover:bg-destructive/90 transition-all"
-              >
-                <Square className="h-4 w-4" />
-              </Button>
-            ) : query.trim() ? (
-              <Button
-                variant="ghost"
-                size="icon"
-                className="h-8 w-8 md:h-9 md:w-9 rounded-lg bg-primary text-primary-foreground hover:bg-primary/90 transition-all"
-                onClick={handleSend}
-              >
-                <Send className="h-4 w-4" />
-              </Button>
-            ) : null}
-          </div>
-        </div>
-
-        {showSuggestions && query && !isStreaming && (
-          <div className="animate-in fade-in slide-in-from-top-2 duration-200 border-t border-border/40">
-            {["test", "test internet speed", "test my speed", "testament", "test my internet speed"]
-              .filter((s) => s.toLowerCase().includes(query.toLowerCase()))
-              .map((suggestion, index) => (
-                <button
-                  key={index}
-                  onMouseDown={(e) => {
-                    e.preventDefault()
-                    setQuery(suggestion)
-                    setShowSuggestions(false)
-                  }}
-                  className="flex w-full items-center gap-3 px-5 py-2.5 text-left text-[13px] text-foreground transition-colors hover:bg-accent/50"
-                >
-                  <Search className="h-3.5 w-3.5 text-muted-foreground" />
-                  <span className="font-normal">{suggestion}</span>
-                </button>
-              ))}
+            )}
           </div>
         )}
+      </div>
+
+      <div className="mx-auto w-full max-w-3xl shrink-0 px-4 pb-4 md:px-6 md:pb-6">
+        {/* Uploaded Files */}
+        {uploadedFiles.length > 0 && (
+          <div className="mb-4 flex flex-wrap gap-2">
+            {uploadedFiles.map((uf, index) => (
+              <FileCard
+                key={`${uf.document?.id || index}`}
+                filename={uf.file.name}
+                size={uf.file.size}
+                mimeType={uf.file.type}
+                documentId={uf.document?.id}
+                previewDataUrl={uf.dataUrl}
+                onClick={() =>
+                  setViewerFile({
+                    filename: uf.file.name,
+                    mimeType: uf.file.type,
+                    documentId: uf.document?.id,
+                    dataUrl: uf.dataUrl,
+                  })
+                }
+                onRemove={() => removeFile(index)}
+              />
+            ))}
+          </div>
+        )}
+
+        {/* Input */}
+        <div
+          className={`animate-in fade-in slide-in-from-bottom-4 duration-500 rounded-2xl border-2 bg-card shadow-[0_4px_20px_rgb(0,0,0,0.03)] transition-all hover:shadow-[0_4px_30px_rgb(0,0,0,0.06)] ${
+            isFocused ? "border-ring/50 ring-1 ring-ring/20" : "border-border hover:border-ring/40"
+          }`}
+        >
+          <div className="flex items-center px-4 md:px-5 py-3 md:py-3.5">
+            <input
+              value={query}
+              onChange={(e) => {
+                setQuery(e.target.value)
+                setShowSuggestions(e.target.value.length > 0)
+              }}
+              onFocus={() => {
+                setIsFocused(true)
+                if (query.length > 0) setShowSuggestions(true)
+              }}
+              onBlur={() => {
+                setIsFocused(false)
+                setTimeout(() => setShowSuggestions(false), 150)
+              }}
+              onKeyDown={(e) => {
+                if (e.key === "Enter" && query.trim() && !isStreaming) {
+                  e.preventDefault()
+                  handleSend()
+                }
+              }}
+              placeholder={isStreaming ? "Generando respuesta..." : "Ask anything..."}
+              disabled={isStreaming}
+              className="w-full border-0 bg-transparent text-[14px] md:text-[15px] text-foreground placeholder:text-muted-foreground/60 focus:outline-none disabled:opacity-50"
+            />
+          </div>
+
+          <div className="flex items-center justify-between px-2 md:px-2.5 py-2 gap-2">
+            <div className="flex items-center gap-0.5">
+              <input
+                ref={fileInputRef}
+                type="file"
+                accept={ALLOWED_EXTENSIONS.join(",")}
+                className="hidden"
+                onChange={(e) => {
+                  const file = e.target.files?.[0]
+                  if (file) handleFileUpload(file)
+                }}
+              />
+              <Button
+                variant="ghost"
+                size="icon"
+                onClick={() => fileInputRef.current?.click()}
+                disabled={isUploading || isStreaming}
+                className="h-8 w-8 md:h-9 md:w-9 rounded-lg text-muted-foreground transition-all hover:bg-accent/60 hover:text-foreground"
+              >
+                {isUploading ? (
+                  <Loader2 className="h-4 w-4 animate-spin" />
+                ) : (
+                  <Paperclip className="h-4 w-4 md:h-[17px] md:w-[17px]" />
+                )}
+              </Button>
+            </div>
+
+            <div className="flex items-center gap-0.5">
+              <Button
+                variant="ghost"
+                size="icon"
+                disabled={isStreaming}
+                className="h-8 w-8 md:h-9 md:w-9 rounded-lg text-muted-foreground transition-all hover:bg-accent/60 hover:text-foreground"
+              >
+                <Mic className="h-4 w-4 md:h-[17px] md:w-[17px]" />
+              </Button>
+
+              {isStreaming ? (
+                <Button
+                  variant="ghost"
+                  size="icon"
+                  onClick={handleStopGeneration}
+                  className="h-8 w-8 md:h-9 md:w-9 rounded-lg bg-destructive text-destructive-foreground hover:bg-destructive/90 transition-all"
+                >
+                  <Square className="h-4 w-4" />
+                </Button>
+              ) : query.trim() ? (
+                <Button
+                  variant="ghost"
+                  size="icon"
+                  className="h-8 w-8 md:h-9 md:w-9 rounded-lg bg-primary text-primary-foreground hover:bg-primary/90 transition-all"
+                  onClick={handleSend}
+                >
+                  <Send className="h-4 w-4" />
+                </Button>
+              ) : null}
+            </div>
+          </div>
+
+          {showSuggestions && query && !isStreaming && (
+            <div className="animate-in fade-in slide-in-from-top-2 duration-200 border-t border-border/40">
+              {["test", "test internet speed", "test my speed", "testament", "test my internet speed"]
+                .filter((s) => s.toLowerCase().includes(query.toLowerCase()))
+                .map((suggestion, index) => (
+                  <button
+                    key={index}
+                    onMouseDown={(e) => {
+                      e.preventDefault()
+                      setQuery(suggestion)
+                      setShowSuggestions(false)
+                    }}
+                    className="flex w-full items-center gap-3 px-5 py-2.5 text-left text-[13px] text-foreground transition-colors hover:bg-accent/50"
+                  >
+                    <Search className="h-3.5 w-3.5 text-muted-foreground" />
+                    <span className="font-normal">{suggestion}</span>
+                  </button>
+                ))}
+            </div>
+          )}
+        </div>
       </div>
     </div>
   )

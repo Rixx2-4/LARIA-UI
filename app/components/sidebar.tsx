@@ -27,7 +27,7 @@ import { useEffect } from "react"
 
 export function Sidebar() {
   const router = useRouter()
-  const { chats, activeChatId, createChat, selectChat, deleteChat } = useChat()
+  const { chats, activeChatId, deleteChat } = useChat()
   const { isAuthenticated } = useAuth()
   const [openPanel, setOpenPanel] = useState<string | null>(null)
   const [pinnedPanel, setPinnedPanel] = useState<string | null>(null)
@@ -43,19 +43,19 @@ export function Sidebar() {
     }
   }, [openPanel, isAuthenticated])
 
-  const handleNewChat = async () => {
-    await createChat()
+  // El chat nuevo se crea al enviar el primer mensaje
+  const handleNewChat = () => {
     router.push("/")
   }
 
-  const handleSelectChat = async (chatId: string) => {
-    await selectChat(chatId)
-    router.push("/")
+  const handleSelectChat = (chatId: string) => {
+    router.push(`/chat/${chatId}`)
   }
 
   const handleDeleteChat = async (chatId: string, e: React.MouseEvent) => {
     e.stopPropagation()
     await deleteChat(chatId)
+    if (chatId === activeChatId) router.push("/")
   }
 
   const handlePanelChange = (panel: string) => {

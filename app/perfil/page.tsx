@@ -3,7 +3,7 @@
 import { useState, useEffect, useCallback } from "react"
 import { Loader2, RefreshCw } from "lucide-react"
 import { Button } from "@/components/ui/button"
-import { Sidebar } from "../components/sidebar"
+import { AppShell } from "../components/app-shell"
 import { RequireAuth } from "../components/require-auth"
 import { useAuth } from "@/app/contexts/auth-context"
 import { lariaAPI, User, StudentProfile, LearningHistory, Document } from "@/lib/laria-api"
@@ -173,12 +173,11 @@ function Perfil() {
 
   if (isLoading) {
     return (
-      <div className="flex h-screen w-full">
-        <Sidebar />
-        <div className="flex-1 flex items-center justify-center bg-background">
+      <AppShell>
+        <div className="flex h-full items-center justify-center">
           <Loader2 className="h-8 w-8 animate-spin text-muted-foreground" />
         </div>
-      </div>
+      </AppShell>
     )
   }
 
@@ -271,19 +270,8 @@ function Perfil() {
   const repeated = Object.entries(struggleSameConcept).find(([, n]) => n >= 2)
 
   return (
-    <div className="flex h-screen w-full">
-      <Sidebar />
-      <div className="flex-1 overflow-auto bg-background">
-        <header className="flex items-center justify-between px-6 py-4 border-b border-border">
-          <div className="flex items-center gap-3">
-            <div className="flex items-baseline gap-2">
-              <span className="text-xl font-semibold tracking-tight">LARIA</span>
-              <span className="rounded-full bg-primary px-2 py-0.5 text-[10px] font-semibold text-primary-foreground">IA</span>
-              <span className="text-sm text-muted-foreground pl-2 border-l border-border ml-1">Apartado — Perfil</span>
-            </div>
-          </div>
-        </header>
-
+    <AppShell>
+      <div className="h-full overflow-auto">
         <div className="max-w-[980px] mx-auto pb-16">
         <div className="flex items-center gap-4 px-6 py-5">
           <div className="w-[52px] h-[52px] rounded-full bg-primary/10 text-primary flex items-center justify-center font-semibold text-lg shrink-0">
@@ -315,7 +303,7 @@ function Perfil() {
           </div>
         )}
 
-        <div className="grid grid-cols-[230px_1fr] gap-4 px-6 mb-4">
+        <div className="grid grid-cols-1 md:grid-cols-[230px_1fr] gap-4 px-4 md:px-6 mb-4">
           <div className="bg-card border border-border rounded-xl p-[18px] flex flex-col items-center justify-center text-center">
             <h3 className="text-[13px] font-semibold mb-0.5">Progreso de dominio</h3>
             <div className="relative w-[132px] h-[132px] my-1">
@@ -351,7 +339,7 @@ function Perfil() {
           </div>
         </div>
 
-        <div className="grid grid-cols-2 gap-4 px-6 mb-4">
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-4 px-4 md:px-6 mb-4">
           <div className="bg-card border border-border rounded-xl p-[18px]">
             <h3 className="text-[13px] font-semibold mb-0.5">Señales de struggle</h3>
             <p className="text-xs text-muted-foreground mb-3.5">Patrones que indican dificultad reciente.</p>
@@ -465,7 +453,7 @@ function Perfil() {
           <h3 className="text-[13px] font-semibold mb-0.5">Memoria pedagógica</h3>
           <p className="text-xs text-muted-foreground mb-4">Lo que LARIA recuerda sobre cómo prefieres aprender.</p>
           {memory ? (
-            <div className="grid grid-cols-2 gap-[18px]">
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-[18px]">
               <div>
                 <h4 className="text-[11.5px] text-muted-foreground mb-2 font-semibold">Estilo de explicación preferido</h4>
                 <span className="inline-block text-sm px-3 py-1.5 rounded-lg bg-muted border border-border">
@@ -510,6 +498,6 @@ function Perfil() {
         </div>
       </div>
       </div>
-    </div>
+    </AppShell>
   )
 }
