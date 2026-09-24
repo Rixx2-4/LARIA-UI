@@ -217,28 +217,14 @@ export function SearchBar() {
     cancelStreaming()
   }
 
-  const renderMessageContent = (msg: typeof messages[0], isCurrentStreaming: boolean) => {
-    if (isCurrentStreaming && isStreaming) {
-      return (
-        <div className="text-[14px] whitespace-pre-wrap">
-          {displayedContent}
-          <span className="inline-block w-2 h-4 ml-0.5 bg-foreground/70 animate-pulse" />
-        </div>
-      )
-    }
-
-    if (isCurrentStreaming && isDone && displayedContent) {
-      return (
-        <div className="text-[14px] whitespace-pre-wrap">
-          {displayedContent}
-        </div>
-      )
-    }
-
-    return (
-      <p className="text-[14px] whitespace-pre-wrap">{msg.content}</p>
-    )
-  }
+  const renderMessageContent = (msg: typeof messages[0], isCurrentStreaming: boolean) => (
+    <div className="text-[14px] whitespace-pre-wrap">
+      {msg.content}
+      {isCurrentStreaming && isStreaming && (
+        <span className="inline-block w-2 h-4 ml-0.5 bg-foreground/70 animate-pulse" />
+      )}
+    </div>
+  )
 
   return (
     <div className="relative">
@@ -288,7 +274,7 @@ export function SearchBar() {
             const isCurrentStreaming = index === messages.length - 1 && msg.role === "assistant"
             return (
               <div
-                key={`${msg.role}-${index}-${msg.content.substring(0, 20)}`}
+                key={`${index}-${msg.role}`}
                 className={`flex ${msg.role === "user" ? "justify-end" : "justify-start"}`}
               >
                 <div

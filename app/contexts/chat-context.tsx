@@ -66,14 +66,6 @@ export function ChatProvider({ children }: { children: ReactNode }) {
     }
   }, [isAuthenticated, loadChats])
 
-  useEffect(() => {
-    if (activeChatId) {
-      loadChatMessages(activeChatId)
-    } else {
-      setMessages([])
-    }
-  }, [activeChatId, loadChatMessages])
-
   const createChat = useCallback(async (title?: string, documentId?: string): Promise<Chat> => {
     const chat = await lariaAPI.chats.create(title, documentId)
     await loadChats()
