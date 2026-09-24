@@ -4,12 +4,14 @@ import { createContext, useContext, useState, useEffect, useCallback, useRef, Re
 import { lariaAPI, ApiError, Chat, ChatMessage, getAuthToken } from "@/lib/laria-api"
 import { useAuth } from "./auth-context"
 
+export type ChatLoadError = "not-found" | "load-failed"
+
 interface ChatContextType {
   chats: Chat[]
   activeChatId: string | null
   messages: ChatMessage[]
-  // Por qué no se pudo abrir el chat activo (p. ej. no existe)
-  chatError: string | null
+  // Por qué no se pudo abrir el chat activo
+  chatError: ChatLoadError | null
   loadChats: () => Promise<void>
   createChat: (title?: string, documentId?: string) => Promise<Chat>
   selectChat: (chatId: string) => Promise<void>
@@ -27,7 +29,7 @@ export function ChatProvider({ children }: { children: ReactNode }) {
   const [chats, setChats] = useState<Chat[]>([])
   const [activeChatId, setActiveChatId] = useState<string | null>(null)
   const [messages, setMessages] = useState<ChatMessage[]>([])
-  const [chatError, setChatError] = useState<string | null>(null)
+  const [chatError, setChatError] = useState<ChatLoadError | null>(null)
   const requestedChatIdRef = useRef<string | null>(null)
 
   // Al cerrar sesión se vacía todo durante el render, sin esperar a un efecto
@@ -81,7 +83,7 @@ export function ChatProvider({ children }: { children: ReactNode }) {
     } catch (error) {
       if (requestedChatIdRef.current !== chatId) return
       const notFound = error instanceof ApiError && (error.status === 404 || error.status === 403)
-      setChatError(notFound ? "Este chat no existe" : "No se pudo cargar el chat")
+      setChatError(notFound ? "not-found" : "load-failed")
     }
   }, [])
 

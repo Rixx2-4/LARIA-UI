@@ -1,5 +1,5 @@
 "use client"
-import { useEffect } from "react"
+import { useEffect, useRef } from "react"
 import { useParams, useRouter } from "next/navigation"
 import { AppShell } from "./app-shell"
 import { SearchBar } from "./search-bar"
@@ -11,21 +11,33 @@ export function ChatScreen() {
   const router = useRouter()
   const { id: urlChatId } = useParams<{ id?: string }>()
   const { activeChatId, chatError, selectChat, clearActiveChat } = useChat()
+  const hasSyncedRef = useRef(false)
 
   useEffect(() => {
+    // Al montarse siempre se recarga: si se volvió desde otra página, lo que
+    // había en memoria puede estar a medias
+    const firstSync = !hasSyncedRef.current
+    hasSyncedRef.current = true
     if (!urlChatId) clearActiveChat()
-    else if (urlChatId !== activeChatId) selectChat(urlChatId)
+    else if (firstSync || urlChatId !== activeChatId) selectChat(urlChatId)
     // Solo reacciona a cambios de URL: al crear un chat, el contexto se adelanta a ella
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [urlChatId])
 
   return (
     <AppShell>
-      {chatError ? (
+      {chatError === "not-found" ? (
         <div className="flex h-full flex-col items-center justify-center gap-4 px-4 text-center">
-          <p className="text-muted-foreground">{chatError}</p>
+          <p className="text-muted-foreground">Este chat no existe</p>
           <Button variant="outline" onClick={() => router.push("/")}>
             Empezar un chat nuevo
+          </Button>
+        </div>
+      ) : chatError === "load-failed" && urlChatId ? (
+        <div className="flex h-full flex-col items-center justify-center gap-4 px-4 text-center">
+          <p className="text-muted-foreground">No se pudo cargar el chat</p>
+          <Button variant="outline" onClick={() => selectChat(urlChatId)}>
+            Reintentar
           </Button>
         </div>
       ) : (

@@ -108,4 +108,49 @@ describe("ChatScreen", () => {
     fireEvent.click(screen.getByRole("button", { name: "Empezar un chat nuevo" }))
     expect(nav.push).toHaveBeenCalledWith("/")
   })
+
+  it("al volver a un chat desde otra página, lo recarga del servidor", async () => {
+    let saved = "Respuesta a medias"
+    vi.stubGlobal("fetch", async (url: string) => {
+      if (url.endsWith("/users/me")) return json({ id: "u1", username: "ana", email: "a@a.a" })
+      if (url.endsWith("/chats/")) return json({ chats: [{ id: "c1", title: "Átomos" }] })
+      if (url.endsWith("/chats/c1"))
+        return json({ id: "c1", title: "Átomos", messages: [{ role: "assistant", content: saved }] })
+      throw new Error(`Petición inesperada: ${url}`)
+    })
+    const page = (showChat: boolean) => (
+      <AuthProvider>
+        <ChatProvider>{showChat ? <ChatScreen /> : <p>Quiz</p>}</ChatProvider>
+      </AuthProvider>
+    )
+    nav.params = { id: "c1" }
+    const { rerender } = render(page(true))
+    expect(await screen.findByText("Respuesta a medias")).toBeTruthy()
+
+    rerender(page(false)) // se va a /quiz: la pantalla de chat se desmonta
+    saved = "Respuesta completa"
+    rerender(page(true)) // vuelve a /chat/c1
+
+    expect(await screen.findByText("Respuesta completa")).toBeTruthy()
+  })
+
+  it("si el chat no se pudo cargar, se puede reintentar", async () => {
+    let online = false
+    vi.stubGlobal("fetch", async (url: string) => {
+      if (url.endsWith("/users/me")) return json({ id: "u1", username: "ana", email: "a@a.a" })
+      if (url.endsWith("/chats/")) return json({ chats: [] })
+      if (url.endsWith("/chats/c1")) {
+        if (!online) return json({ detail: "Error interno" }, 500)
+        return json({ id: "c1", title: "Átomos", messages: [{ role: "assistant", content: "Hola de nuevo" }] })
+      }
+      throw new Error(`Petición inesperada: ${url}`)
+    })
+    renderAt("c1")
+
+    expect(await screen.findByText("No se pudo cargar el chat")).toBeTruthy()
+    online = true
+    fireEvent.click(screen.getByRole("button", { name: "Reintentar" }))
+
+    expect(await screen.findByText("Hola de nuevo")).toBeTruthy()
+  })
 })

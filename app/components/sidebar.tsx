@@ -25,7 +25,8 @@ import { useAuth } from "@/app/contexts/auth-context"
 import { lariaAPI, Document } from "@/lib/laria-api"
 import { useEffect } from "react"
 
-export function Sidebar() {
+// onNavigate avisa de que el usuario eligió un destino (el cajón móvil se cierra)
+export function Sidebar({ onNavigate }: { onNavigate?: () => void } = {}) {
   const router = useRouter()
   const { chats, activeChatId, deleteChat } = useChat()
   const { isAuthenticated } = useAuth()
@@ -44,13 +45,14 @@ export function Sidebar() {
   }, [openPanel, isAuthenticated])
 
   // El chat nuevo se crea al enviar el primer mensaje
-  const handleNewChat = () => {
-    router.push("/")
+  const navigate = (path: string) => {
+    router.push(path)
+    onNavigate?.()
   }
 
-  const handleSelectChat = (chatId: string) => {
-    router.push(`/chat/${chatId}`)
-  }
+  const handleNewChat = () => navigate("/")
+
+  const handleSelectChat = (chatId: string) => navigate(`/chat/${chatId}`)
 
   const handleDeleteChat = async (chatId: string, e: React.MouseEvent) => {
     e.stopPropagation()
@@ -132,7 +134,7 @@ export function Sidebar() {
           <div className="relative mb-2">
             <Button
               variant="ghost"
-              onClick={() => router.push("/quiz")}
+              onClick={() => navigate("/quiz")}
               className="h-10 w-10 shrink-0 mx-auto text-muted-foreground hover:text-foreground hover:bg-accent"
             >
               <ClipboardList className="h-5 w-5" />
@@ -143,7 +145,7 @@ export function Sidebar() {
           <div className="relative mb-2">
             <Button
               variant="ghost"
-              onClick={() => router.push("/perfil")}
+              onClick={() => navigate("/perfil")}
               className="h-10 w-10 shrink-0 mx-auto text-muted-foreground hover:text-foreground hover:bg-accent"
             >
               <Brain className="h-5 w-5" />

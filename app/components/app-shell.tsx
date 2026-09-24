@@ -1,6 +1,6 @@
 "use client"
 
-import { useState, type ReactNode } from "react"
+import { useEffect, useState, type ReactNode } from "react"
 import { usePathname } from "next/navigation"
 import { LogOut, Menu } from "lucide-react"
 import { Button } from "@/components/ui/button"
@@ -13,6 +13,15 @@ export function AppShell({ children }: { children: ReactNode }) {
   const pathname = usePathname()
   const [drawerOpen, setDrawerOpen] = useState(false)
 
+  useEffect(() => {
+    if (!drawerOpen) return
+    const closeOnEscape = (e: KeyboardEvent) => {
+      if (e.key === "Escape") setDrawerOpen(false)
+    }
+    document.addEventListener("keydown", closeOnEscape)
+    return () => document.removeEventListener("keydown", closeOnEscape)
+  }, [drawerOpen])
+
   // Al navegar desde el cajón, se cierra solo
   const [drawerPath, setDrawerPath] = useState(pathname)
   if (drawerPath !== pathname) {
@@ -22,18 +31,19 @@ export function AppShell({ children }: { children: ReactNode }) {
 
   return (
     <div className="flex h-dvh w-full overflow-hidden bg-background">
-      <div className="hidden md:flex">
-        <Sidebar />
-      </div>
-
+      {/* Una sola barra lateral: fija en escritorio, cajón en móvil */}
       {drawerOpen && (
-        <div className="fixed inset-0 z-50 flex md:hidden">
-          <div className="absolute inset-0 bg-black/40" onClick={() => setDrawerOpen(false)} />
-          <div className="relative h-full animate-in slide-in-from-left duration-200">
-            <Sidebar />
-          </div>
-        </div>
+        <div className="fixed inset-0 z-40 bg-black/40 md:hidden" aria-hidden onClick={() => setDrawerOpen(false)} />
       )}
+      <div
+        className={
+          drawerOpen
+            ? "fixed inset-y-0 left-0 z-50 flex animate-in slide-in-from-left duration-200 md:static md:animate-none"
+            : "hidden md:flex"
+        }
+      >
+        <Sidebar onNavigate={() => setDrawerOpen(false)} />
+      </div>
 
       <div className="flex min-w-0 flex-1 flex-col">
         <header className="flex shrink-0 items-center justify-between gap-2 border-b border-border/60 px-3 py-2 md:px-6 md:py-3">

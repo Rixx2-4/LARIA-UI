@@ -112,6 +112,23 @@ export function SearchBar() {
     }
   }, [displayedContent, isStreaming, scrollToBottom])
 
+  // Al abrir otro chat, o cuando llegan sus mensajes, se muestra el final
+  useEffect(() => {
+    isUserScrolledRef.current = false
+  }, [activeChatId])
+
+  useEffect(() => {
+    if (!isUserScrolledRef.current) scrollToBottom(false)
+  }, [activeChatId, messages.length, scrollToBottom])
+
+  // El chat activo, o uno nuevo si no hay (y la URL pasa a apuntar a él)
+  const ensureChat = async (documentId?: string) => {
+    if (chatId) return { id: chatId, isNew: false }
+    const chat = await ctxCreateChat(undefined, documentId)
+    router.replace(`/chat/${chat.id}`)
+    return { id: chat.id, isNew: true }
+  }
+
   const generatePreview = (file: File): Promise<string | undefined> => {
     return new Promise((resolve) => {
       if (file.type.startsWith("image/")) {
@@ -156,14 +173,8 @@ export function SearchBar() {
         { file, document: doc, dataUrl },
       ])
 
-      let currentChatId = chatId
-      let isNewChat = false
-      if (!currentChatId) {
-        const chat = await ctxCreateChat(undefined, doc.id)
-        currentChatId = chat.id
-        isNewChat = true
-        router.replace(`/chat/${chat.id}`)
-      } else {
+      const { id: currentChatId, isNew: isNewChat } = await ensureChat(doc.id)
+      if (!isNewChat) {
         await lariaAPI.chats.update(currentChatId, { document_id: doc.id })
       }
 
@@ -194,16 +205,10 @@ export function SearchBar() {
 
     setQuery("")
     resetStreaming()
+    isUserScrolledRef.current = false
 
     try {
-      let currentChatId = chatId
-      let isNewChat = false
-      if (!currentChatId) {
-        const chat = await ctxCreateChat()
-        currentChatId = chat.id
-        isNewChat = true
-        router.replace(`/chat/${chat.id}`)
-      }
+      const { id: currentChatId, isNew: isNewChat } = await ensureChat()
 
       await startStreaming(userMessage, currentChatId)
 
