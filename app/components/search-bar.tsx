@@ -256,12 +256,18 @@ export function SearchBar() {
     setUploadsByChat((prev) => ({ ...prev, [chatId]: (prev[chatId] ?? []).filter((_, i) => i !== index) }))
   }
 
+  // Lo dictado se añade a lo que ya se hubiera escrito
+  const dictation = useDictation(
+    (text) => setQuery((current) => (current.trim() ? `${current.trimEnd()} ${text}` : text)),
+    (message) => toast.error(message),
+  )
+
   const handleSend = async () => {
     const userMessage = query.trim()
     if (!userMessage || isStreaming) return
 
     setQuery("")
-    dictation.stop()
+    dictation.cancel()
     resetStreaming()
     isUserScrolledRef.current = false
 
@@ -278,12 +284,6 @@ export function SearchBar() {
       toast.error("No se pudo enviar el mensaje")
     }
   }
-
-  // Lo dictado se añade a lo que ya se hubiera escrito
-  const dictation = useDictation(
-    (text) => setQuery((current) => (current.trim() ? `${current.trimEnd()} ${text}` : text)),
-    (message) => toast.error(message),
-  )
 
   const copyToClipboard = async (text: string) => {
     try {
@@ -468,6 +468,7 @@ export function SearchBar() {
                 }}
               />
               <Button
+                aria-label="Adjuntar archivo"
                 variant="ghost"
                 size="icon"
                 onClick={() => fileInputRef.current?.click()}
@@ -501,6 +502,7 @@ export function SearchBar() {
 
               {isStreaming ? (
                 <Button
+                  aria-label="Detener respuesta"
                   variant="ghost"
                   size="icon"
                   onClick={handleStopGeneration}
@@ -510,6 +512,7 @@ export function SearchBar() {
                 </Button>
               ) : query.trim() ? (
                 <Button
+                  aria-label="Enviar"
                   variant="ghost"
                   size="icon"
                   className="h-8 w-8 md:h-9 md:w-9 rounded-lg bg-primary text-primary-foreground hover:bg-primary/90 transition-all"

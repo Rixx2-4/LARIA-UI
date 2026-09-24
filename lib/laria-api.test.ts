@@ -176,3 +176,15 @@ describe("lariaAPI.documents.content", () => {
     })
   })
 })
+
+describe("lariaAPI.auth.login", () => {
+  it("con credenciales incorrectas avisa en español y no cierra ninguna sesión", async () => {
+    vi.stubGlobal("fetch", async () => new Response(JSON.stringify({ detail: "Incorrect username or password" }), { status: 401 }))
+    const listener = vi.fn()
+    const unsubscribe = onUnauthorized(listener)
+
+    await expect(lariaAPI.auth.login("ana@example.com", "mal")).rejects.toThrow("Email o contraseña incorrectos")
+    expect(listener).not.toHaveBeenCalled()
+    unsubscribe()
+  })
+})

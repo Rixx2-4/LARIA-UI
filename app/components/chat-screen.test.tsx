@@ -231,6 +231,7 @@ describe("ChatScreen", () => {
 
       fireEvent.click(screen.getByRole("button", { name: "Parar dictado" }))
       expect(recognition.listening).toBe(false)
+      act(() => recognition.end())
       expect(screen.getByRole("button", { name: "Dictar" })).toBeTruthy()
     })
 
@@ -240,6 +241,28 @@ describe("ChatScreen", () => {
 
       await screen.findByRole("textbox")
       expect(screen.queryByRole("button", { name: "Dictar" })).toBeNull()
+    })
+
+    it("al enviar, una frase que llegue tarde no reaparece en el campo vacío", async () => {
+      ;(window as { SpeechRecognition?: unknown }).SpeechRecognition = FakeSpeechRecognition
+      vi.stubGlobal("fetch", async (url: string, init?: RequestInit) => {
+        const method = init?.method ?? "GET"
+        if (url.endsWith("/users/me")) return json({ id: "u1", username: "ana", email: "a@a.a" })
+        if (url.endsWith("/chats/") && method === "GET") return json({ chats: [] })
+        if (url.endsWith("/chats/") && method === "POST") return json({ id: "c2", title: "Nuevo" })
+        if (url.endsWith("/stream")) return new Response("data: [DONE]\n\n", { status: 200 })
+        return json({ id: "c2", title: "t", messages: [] })
+      })
+      renderAt()
+
+      const input = (await screen.findByRole("textbox")) as HTMLInputElement
+      fireEvent.click(screen.getByRole("button", { name: "Dictar" }))
+      const recognition = FakeSpeechRecognition.instances[0]
+      act(() => recognition.say("hola"))
+      fireEvent.keyDown(input, { key: "Enter" })
+      act(() => recognition.say("frase tardía"))
+
+      expect(input.value).toBe("")
     })
   })
 })

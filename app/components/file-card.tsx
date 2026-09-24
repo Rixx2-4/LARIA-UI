@@ -85,6 +85,7 @@ export function FileCard({ filename, size, mimeType, previewDataUrl, onClick, on
       </button>
       {onRemove && (
         <button
+          aria-label="Quitar archivo"
           onClick={(e) => {
             e.stopPropagation()
             onRemove()

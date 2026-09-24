@@ -15,8 +15,17 @@ export class FakeSpeechRecognition {
   start() {
     this.listening = true
   }
+  // Como en Chrome: stop() aún entrega lo que estuviera pendiente y avisa del final después
   stop() {
     this.listening = false
+  }
+  abort() {
+    this.listening = false
+    this.aborted = true
+  }
+  aborted = false
+  // El navegador termina la sesión (tras stop(), abort() o un silencio)
+  end() {
     this.onend?.()
   }
   // El usuario dice algo y el navegador lo da por definitivo

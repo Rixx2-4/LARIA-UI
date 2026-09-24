@@ -7,8 +7,14 @@ import { AuthProvider } from "./contexts/auth-context"
 import { Toaster } from "sonner"
 
 export const metadata: Metadata = {
-  title: "LARIA",
+  title: { default: "LARIA", template: "%s · LARIA" },
   description: "LARIA, tu tutor con IA: pregunta, sube tus apuntes y practica con quizzes.",
+  openGraph: {
+    title: "LARIA",
+    description: "Tu tutor con IA: pregunta, sube tus apuntes y practica con quizzes.",
+    locale: "es_ES",
+    type: "website",
+  },
 
   icons: {
     icon: [

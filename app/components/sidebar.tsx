@@ -93,11 +93,9 @@ export function Sidebar({ onNavigate }: { onNavigate?: () => void } = {}) {
     >
       <div className="flex flex-col h-full w-[72px] shrink-0 items-center">
         {/* Logo */}
-        <Button variant="ghost" size="icon" className="mb-6 h-10 w-10 shrink-0" onClick={handleNewChat} aria-label="Inicio">
-          <div className="flex h-8 w-8 items-center justify-center">
-            <Image src="/images/robot.png" alt="" width={32} height={32} className="object-contain" />
-          </div>
-        </Button>
+        <div className="mb-6 flex h-10 w-10 shrink-0 items-center justify-center">
+          <Image src="/images/robot.png" alt="LARIA" width={32} height={32} className="object-contain" />
+        </div>
 
         <Button
           variant="ghost"
@@ -162,7 +160,7 @@ export function Sidebar({ onNavigate }: { onNavigate?: () => void } = {}) {
             >
               <FileText className="h-5 w-5" />
             </Button>
-            <div className="text-[9px] text-muted-foreground text-center mt-1 font-medium">Docs</div>
+            <div className="text-[9px] text-muted-foreground text-center mt-1 font-medium">Documentos</div>
           </div>
         </nav>
 
@@ -170,6 +168,8 @@ export function Sidebar({ onNavigate }: { onNavigate?: () => void } = {}) {
           <Button
             variant="ghost"
             onClick={() => setShowAccountMenu(!showAccountMenu)}
+            aria-haspopup="dialog"
+            aria-expanded={showAccountMenu}
             aria-label="Cuenta"
             className="h-10 w-10 shrink-0 text-muted-foreground hover:text-foreground hover:bg-accent p-0"
           >
@@ -188,6 +188,7 @@ export function Sidebar({ onNavigate }: { onNavigate?: () => void } = {}) {
               <div className="flex items-center justify-between px-3 py-2.5">
                 <h2 className="text-sm font-semibold">Historial</h2>
                 <Button
+                  aria-label="Fijar panel"
                   variant="ghost"
                   size="icon"
                   className={`h-6 w-6 transition-colors ${pinnedPanel === "history" ? "text-primary" : ""}`}
@@ -231,6 +232,7 @@ export function Sidebar({ onNavigate }: { onNavigate?: () => void } = {}) {
               <div className="flex items-center justify-between px-3 py-2.5">
                 <h2 className="text-sm font-semibold">Mis Documentos</h2>
                 <Button
+                  aria-label="Fijar panel"
                   variant="ghost"
                   size="icon"
                   className={`h-6 w-6 transition-colors ${pinnedPanel === "documents" ? "text-primary" : ""}`}
@@ -277,7 +279,7 @@ export function Sidebar({ onNavigate }: { onNavigate?: () => void } = {}) {
   return (
     <>
       {sidebarContent}
-      <AccountMenu isOpen={showAccountMenu} onClose={() => setShowAccountMenu(false)} />
+      <AccountMenu isOpen={showAccountMenu} onClose={() => setShowAccountMenu(false)} onNavigate={onNavigate} />
     </>
   )
 }
