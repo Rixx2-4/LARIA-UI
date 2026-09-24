@@ -153,4 +153,50 @@ describe("ChatScreen", () => {
 
     expect(await screen.findByText("Hola de nuevo")).toBeTruthy()
   })
+
+  it("los archivos adjuntos se quedan en su chat", async () => {
+    vi.stubGlobal("fetch", async (url: string, init?: RequestInit) => {
+      const method = init?.method ?? "GET"
+      if (url.endsWith("/users/me")) return json({ id: "u1", username: "ana", email: "a@a.a" })
+      if (url.endsWith("/chats/")) return json({ chats: [] })
+      if (url.endsWith("/documents/upload"))
+        return json({ id: "d1", owner_id: "u1", filename: "tema1.txt", subject: "", status: "processing", uploaded_at: "", has_analysis: false, error_message: null })
+      if (url.endsWith("/messages") || method === "PUT") return json({ id: "c1", title: "t", messages: [] })
+      const id = url.match(/\/chats\/(c\d)$/)?.[1]
+      if (id) return json({ id, title: id, messages: [{ role: "user", content: `Hola desde ${id}` }] })
+      throw new Error(`Petición inesperada: ${method} ${url}`)
+    })
+    const { container, rerender } = renderAt("c1")
+    await screen.findByText("Hola desde c1")
+
+    const fileInput = container.querySelector<HTMLInputElement>('input[type="file"]')!
+    fireEvent.change(fileInput, { target: { files: [new File(["apuntes"], "tema1.txt", { type: "text/plain" })] } })
+    expect(await screen.findByText("tema1.txt")).toBeTruthy()
+
+    nav.params = { id: "c2" }
+    rerender(<AuthProvider><ChatProvider><ChatScreen /></ChatProvider></AuthProvider>)
+    await screen.findByText("Hola desde c2")
+    expect(screen.queryByText("tema1.txt")).toBeNull()
+
+    nav.params = { id: "c1" }
+    rerender(<AuthProvider><ChatProvider><ChatScreen /></ChatProvider></AuthProvider>)
+    await screen.findByText("Hola desde c1")
+    expect(screen.getByText("tema1.txt")).toBeTruthy()
+  })
+
+  it("al abrir un chat con documento vinculado (p. ej. tras recargar), muestra su archivo", async () => {
+    vi.stubGlobal("fetch", async (url: string) => {
+      if (url.endsWith("/users/me")) return json({ id: "u1", username: "ana", email: "a@a.a" })
+      if (url.endsWith("/chats/")) return json({ chats: [] })
+      if (url.endsWith("/documents/"))
+        return json([{ id: "d1", owner_id: "u1", filename: "tema1.pdf", subject: "", status: "analyzed", uploaded_at: "", has_analysis: true, error_message: null }])
+      if (url.endsWith("/chats/c1"))
+        return json({ id: "c1", title: "Tema 1", document_id: "d1", messages: [{ role: "user", content: "📎 Subí el archivo: tema1.pdf" }] })
+      throw new Error(`Petición inesperada: ${url}`)
+    })
+
+    renderAt("c1")
+
+    expect(await screen.findByText("tema1.pdf")).toBeTruthy()
+  })
 })

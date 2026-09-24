@@ -2,12 +2,14 @@
 
 import { useState, useRef, useEffect, useCallback } from "react"
 import { useRouter } from "next/navigation"
+import { toast } from "sonner"
 import { Button } from "@/components/ui/button"
-import { Search, Paperclip, Mic, Send, Loader2, Square } from "lucide-react"
+import { Search, Paperclip, Mic, Send, Loader2, Square, Copy } from "lucide-react"
 import { useChat } from "@/app/contexts/chat-context"
 import { lariaAPI, Document } from "@/lib/laria-api"
 import { FileCard } from "./file-card"
 import { FileViewer } from "./file-viewer"
+import { MessageContent } from "./message-content"
 import { useStreamingChat } from "@/hooks/use-streaming-chat"
 
 const ALLOWED_EXTENSIONS = [
@@ -17,10 +19,26 @@ const ALLOWED_EXTENSIONS = [
   ".css", ".sql", ".json", ".xml", ".php", ".rb",
 ]
 
+// Un adjunto del chat: recién subido (con tamaño y vista previa local) o
+// recuperado del servidor tras recargar (solo con sus datos básicos)
 interface UploadedFile {
-  file: File
+  filename: string
+  mimeType: string
+  size?: number
   document?: Document
   dataUrl?: string
+}
+
+const MIME_BY_EXTENSION: Record<string, string> = {
+  pdf: "application/pdf", txt: "text/plain", md: "text/markdown", csv: "text/csv",
+  json: "application/json", xml: "text/xml", html: "text/html", css: "text/css",
+  js: "text/javascript", ts: "text/typescript", py: "text/x-python",
+  png: "image/png", jpg: "image/jpeg", jpeg: "image/jpeg", gif: "image/gif", webp: "image/webp",
+}
+
+function mimeFromFilename(filename: string): string {
+  const ext = filename.split(".").pop()?.toLowerCase() ?? ""
+  return MIME_BY_EXTENSION[ext] ?? "application/octet-stream"
 }
 
 export function SearchBar() {
@@ -28,7 +46,8 @@ export function SearchBar() {
   const [showSuggestions, setShowSuggestions] = useState(false)
   const [isFocused, setIsFocused] = useState(false)
   const [isUploading, setIsUploading] = useState(false)
-  const [uploadedFiles, setUploadedFiles] = useState<UploadedFile[]>([])
+  // Los adjuntos de cada chat, para que no se vean en los demás
+  const [uploadsByChat, setUploadsByChat] = useState<Record<string, UploadedFile[]>>({})
   const [viewerFile, setViewerFile] = useState<{
     filename: string
     mimeType: string
@@ -41,7 +60,7 @@ export function SearchBar() {
   const lastScrollHeightRef = useRef(0)
 
   const router = useRouter()
-  const { messages, setMessages, activeChatId, createChat: ctxCreateChat, generateTitle } = useChat()
+  const { messages, setMessages, activeChatId, activeDocumentId, createChat: ctxCreateChat, generateTitle } = useChat()
   const chatId = activeChatId
 
   const {
@@ -159,7 +178,9 @@ export function SearchBar() {
 
     const ext = "." + (file.name.split(".").pop() || "").toLowerCase()
     if (!ALLOWED_EXTENSIONS.includes(ext)) {
-      alert(`Tipo de archivo no soportado: ${ext}\nFormatos admitidos: ${ALLOWED_EXTENSIONS.join(", ")}`)
+      toast.error(`Tipo de archivo no soportado: ${ext}`, {
+        description: `Formatos admitidos: ${ALLOWED_EXTENSIONS.join(", ")}`,
+      })
       return
     }
 
@@ -168,12 +189,11 @@ export function SearchBar() {
       const doc = await lariaAPI.documents.upload(file)
       const dataUrl = await generatePreview(file)
 
-      setUploadedFiles((prev) => [
-        ...prev,
-        { file, document: doc, dataUrl },
-      ])
-
       const { id: currentChatId, isNew: isNewChat } = await ensureChat(doc.id)
+      setUploadsByChat((prev) => ({
+        ...prev,
+        [currentChatId]: [...(prev[currentChatId] ?? []), { filename: file.name, mimeType: file.type, size: file.size, document: doc, dataUrl }],
+      }))
       if (!isNewChat) {
         await lariaAPI.chats.update(currentChatId, { document_id: doc.id })
       }
@@ -188,15 +208,41 @@ export function SearchBar() {
       }
     } catch (error) {
       console.error("Upload error:", error)
-      alert(error instanceof Error ? error.message : "Error al subir el archivo")
+      toast.error(error instanceof Error ? error.message : "Error al subir el archivo")
     } finally {
       setIsUploading(false)
       if (fileInputRef.current) fileInputRef.current.value = ""
     }
   }
 
+  // Tras recargar, los adjuntos locales se pierden: se muestra el documento que el
+  // servidor tiene vinculado al chat
+  const [fetchedDocument, setFetchedDocument] = useState<Document | null>(null)
+  const linkedDocument = fetchedDocument?.id === activeDocumentId ? fetchedDocument : null
+  useEffect(() => {
+    if (!activeDocumentId) return
+    let cancelled = false
+    lariaAPI.documents
+      .list()
+      .then((docs) => {
+        const doc = docs.find((d) => d.id === activeDocumentId)
+        if (!cancelled && doc) setFetchedDocument(doc)
+      })
+      .catch(() => {})
+    return () => {
+      cancelled = true
+    }
+  }, [activeDocumentId])
+
+  const localUploads = (chatId && uploadsByChat[chatId]) || []
+  const uploadedFiles: UploadedFile[] =
+    localUploads.length > 0 || !linkedDocument
+      ? localUploads
+      : [{ document: linkedDocument, filename: linkedDocument.filename, mimeType: mimeFromFilename(linkedDocument.filename) }]
+
   const removeFile = (index: number) => {
-    setUploadedFiles((prev) => prev.filter((_, i) => i !== index))
+    if (!chatId) return
+    setUploadsByChat((prev) => ({ ...prev, [chatId]: (prev[chatId] ?? []).filter((_, i) => i !== index) }))
   }
 
   const handleSend = async () => {
@@ -217,6 +263,16 @@ export function SearchBar() {
       }
     } catch (error) {
       console.error("Chat error:", error)
+      toast.error("No se pudo enviar el mensaje")
+    }
+  }
+
+  const copyToClipboard = async (text: string) => {
+    try {
+      await navigator.clipboard.writeText(text)
+      toast.success("Respuesta copiada")
+    } catch {
+      toast.error("No se pudo copiar")
     }
   }
 
@@ -224,14 +280,17 @@ export function SearchBar() {
     cancelStreaming()
   }
 
-  const renderMessageContent = (msg: typeof messages[0], isCurrentStreaming: boolean) => (
-    <div className="text-[14px] whitespace-pre-wrap">
-      {msg.content}
-      {isCurrentStreaming && isStreaming && (
-        <span className="inline-block w-2 h-4 ml-0.5 bg-foreground/70 animate-pulse" />
-      )}
-    </div>
-  )
+  const renderMessageContent = (msg: typeof messages[0], isLive: boolean) =>
+    msg.role === "user" ? (
+      <div className="text-[14px] whitespace-pre-wrap">{msg.content}</div>
+    ) : (
+      <div className="text-[14px] leading-relaxed">
+        <MessageContent content={msg.content} />
+        {isLive && (
+          <span className="inline-block w-2 h-4 ml-0.5 bg-foreground/70 animate-pulse" />
+        )}
+      </div>
+    )
 
   return (
     <div className="relative flex h-full flex-col">
@@ -257,7 +316,8 @@ export function SearchBar() {
         ) : (
           <div className="mx-auto w-full max-w-3xl space-y-4 px-4 py-6 md:px-6">
             {messages.map((msg, index) => {
-              const isCurrentStreaming = index === messages.length - 1 && msg.role === "assistant"
+              // La respuesta que se está escribiendo ahora mismo
+              const isLive = isStreaming && index === messages.length - 1 && msg.role === "assistant"
               return (
                 <div
                   key={`${index}-${msg.role}`}
@@ -270,21 +330,29 @@ export function SearchBar() {
                         : "bg-muted text-foreground"
                     }`}
                   >
-                    {renderMessageContent(msg, isCurrentStreaming)}
+                    {renderMessageContent(msg, isLive)}
 
-                    {msg.role === "assistant" && msg.metadata?.envelope && (
-                      <div className="mt-2 pt-2 border-t border-border/30 flex items-center gap-2 text-[11px] text-muted-foreground">
-                        {msg.metadata.envelope.type && (
+                    {msg.role === "assistant" && !isLive && (
+                      <div className="mt-2 pt-2 border-t border-border/30 flex flex-wrap items-center gap-2 text-[11px] text-muted-foreground">
+                        <button
+                          onClick={() => copyToClipboard(msg.content)}
+                          aria-label="Copiar respuesta"
+                          className="flex items-center gap-1 transition-colors hover:text-foreground"
+                        >
+                          <Copy className="h-3 w-3" />
+                          Copiar
+                        </button>
+                        {msg.metadata?.envelope?.type && (
                           <span className="px-1.5 py-0.5 rounded bg-secondary/50">
                             {msg.metadata.envelope.type}
                           </span>
                         )}
-                        {msg.metadata.envelope.emotion && (
+                        {msg.metadata?.envelope?.emotion && (
                           <span className="px-1.5 py-0.5 rounded bg-secondary/50">
                             {msg.metadata.envelope.emotion}
                           </span>
                         )}
-                        {msg.metadata.envelope.grounded !== undefined && (
+                        {msg.metadata?.envelope?.grounded !== undefined && (
                           <span className={`px-1.5 py-0.5 rounded ${msg.metadata.envelope.grounded ? "bg-green-500/20 text-green-700" : "bg-yellow-500/20 text-yellow-700"}`}>
                             {msg.metadata.envelope.grounded ? "Tutoría" : "Chat libre"}
                           </span>
@@ -325,15 +393,15 @@ export function SearchBar() {
             {uploadedFiles.map((uf, index) => (
               <FileCard
                 key={`${uf.document?.id || index}`}
-                filename={uf.file.name}
-                size={uf.file.size}
-                mimeType={uf.file.type}
+                filename={uf.filename}
+                size={uf.size}
+                mimeType={uf.mimeType}
                 documentId={uf.document?.id}
                 previewDataUrl={uf.dataUrl}
                 onClick={() =>
                   setViewerFile({
-                    filename: uf.file.name,
-                    mimeType: uf.file.type,
+                    filename: uf.filename,
+                    mimeType: uf.mimeType,
                     documentId: uf.document?.id,
                     dataUrl: uf.dataUrl,
                   })

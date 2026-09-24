@@ -1,7 +1,8 @@
 "use client"
 
-import { useState } from "react"
+import { useRef, useState } from "react"
 import { useRouter } from "next/navigation"
+import { toast } from "sonner"
 import { Button } from "@/components/ui/button"
 import {
   Clock,
@@ -15,6 +16,7 @@ import {
   ClipboardList,
   Trash2,
   FileText,
+  Pencil,
 } from "lucide-react"
 import { ScrollArea } from "@/components/ui/scroll-area"
 import Image from "next/image"
@@ -22,27 +24,26 @@ import { UpgradeModal } from "./upgrade-modal"
 import { AccountMenu } from "./account-menu"
 import { useChat } from "@/app/contexts/chat-context"
 import { useAuth } from "@/app/contexts/auth-context"
-import { lariaAPI, Document } from "@/lib/laria-api"
-import { useEffect } from "react"
+import { useDocuments, documentState, type DocumentState } from "@/hooks/use-documents"
+
+const DOCUMENT_STATE_LABEL: Record<DocumentState, string> = {
+  ready: "Analizado",
+  failed: "Error de análisis",
+  processing: "Procesando...",
+}
 
 // onNavigate avisa de que el usuario eligió un destino (el cajón móvil se cierra)
 export function Sidebar({ onNavigate }: { onNavigate?: () => void } = {}) {
   const router = useRouter()
-  const { chats, activeChatId, deleteChat } = useChat()
+  const { chats, activeChatId, deleteChat, renameChat } = useChat()
   const { isAuthenticated } = useAuth()
   const [openPanel, setOpenPanel] = useState<string | null>(null)
   const [pinnedPanel, setPinnedPanel] = useState<string | null>(null)
   const [showUpgradeModal, setShowUpgradeModal] = useState(false)
+  // Solo una fila del historial puede estar renombrándose o pidiendo confirmación
+  const [editing, setEditing] = useState<{ chatId: string; mode: RowMode } | null>(null)
   const [showAccountMenu, setShowAccountMenu] = useState(false)
-  const [documents, setDocuments] = useState<Document[]>([])
-
-  useEffect(() => {
-    if (openPanel === "documents" && isAuthenticated) {
-      lariaAPI.documents.list()
-        .then(setDocuments)
-        .catch(() => setDocuments([]))
-    }
-  }, [openPanel, isAuthenticated])
+  const { documents, loadFailed: documentsLoadFailed } = useDocuments(openPanel === "documents" && isAuthenticated)
 
   // El chat nuevo se crea al enviar el primer mensaje
   const navigate = (path: string) => {
@@ -54,10 +55,21 @@ export function Sidebar({ onNavigate }: { onNavigate?: () => void } = {}) {
 
   const handleSelectChat = (chatId: string) => navigate(`/chat/${chatId}`)
 
-  const handleDeleteChat = async (chatId: string, e: React.MouseEvent) => {
-    e.stopPropagation()
-    await deleteChat(chatId)
-    if (chatId === activeChatId) router.push("/")
+  const handleDeleteChat = async (chatId: string) => {
+    try {
+      await deleteChat(chatId)
+      if (chatId === activeChatId) router.push("/")
+    } catch {
+      toast.error("No se pudo borrar el chat")
+    }
+  }
+
+  const handleRenameChat = async (chatId: string, title: string) => {
+    try {
+      await renameChat(chatId, title)
+    } catch {
+      toast.error("No se pudo renombrar el chat")
+    }
   }
 
   const handlePanelChange = (panel: string) => {
@@ -96,6 +108,7 @@ export function Sidebar({ onNavigate }: { onNavigate?: () => void } = {}) {
           variant="ghost"
           className="mb-8 h-10 w-10 shrink-0 text-muted-foreground hover:text-foreground hover:bg-accent rounded-full bg-muted/50"
           onClick={handleNewChat}
+          aria-label="Nuevo chat"
         >
           <Plus className="h-5 w-5 shrink-0" />
         </Button>
@@ -105,6 +118,7 @@ export function Sidebar({ onNavigate }: { onNavigate?: () => void } = {}) {
             <Button
               variant="ghost"
               onClick={() => handlePanelChange("history")}
+              aria-label="Historial"
               className={`h-10 w-10 shrink-0 mx-auto transition-colors ${
                 openPanel === "history"
                   ? "text-foreground bg-accent"
@@ -120,6 +134,7 @@ export function Sidebar({ onNavigate }: { onNavigate?: () => void } = {}) {
             <Button
               variant="ghost"
               onClick={() => handlePanelChange("spaces")}
+              aria-label="Espacios"
               className={`h-10 w-10 shrink-0 mx-auto transition-colors ${
                 openPanel === "spaces"
                   ? "text-foreground bg-accent"
@@ -135,6 +150,7 @@ export function Sidebar({ onNavigate }: { onNavigate?: () => void } = {}) {
             <Button
               variant="ghost"
               onClick={() => navigate("/quiz")}
+              aria-label="Quiz"
               className="h-10 w-10 shrink-0 mx-auto text-muted-foreground hover:text-foreground hover:bg-accent"
             >
               <ClipboardList className="h-5 w-5" />
@@ -146,6 +162,7 @@ export function Sidebar({ onNavigate }: { onNavigate?: () => void } = {}) {
             <Button
               variant="ghost"
               onClick={() => navigate("/perfil")}
+              aria-label="Perfil"
               className="h-10 w-10 shrink-0 mx-auto text-muted-foreground hover:text-foreground hover:bg-accent"
             >
               <Brain className="h-5 w-5" />
@@ -157,6 +174,7 @@ export function Sidebar({ onNavigate }: { onNavigate?: () => void } = {}) {
             <Button
               variant="ghost"
               onClick={() => handlePanelChange("documents")}
+              aria-label="Documentos"
               className={`h-10 w-10 shrink-0 mx-auto transition-colors ${
                 openPanel === "documents"
                   ? "text-foreground bg-accent"
@@ -173,6 +191,7 @@ export function Sidebar({ onNavigate }: { onNavigate?: () => void } = {}) {
           <Button
             variant="ghost"
             onClick={() => setShowAccountMenu(!showAccountMenu)}
+            aria-label="Cuenta"
             className="h-10 w-10 shrink-0 text-muted-foreground hover:text-foreground hover:bg-accent p-0"
           >
             <div className="relative flex h-9 w-9 shrink-0 items-center justify-center rounded-full overflow-visible ring-2 ring-primary/60">
@@ -195,6 +214,7 @@ export function Sidebar({ onNavigate }: { onNavigate?: () => void } = {}) {
           <Button
             variant="ghost"
             onClick={() => setShowUpgradeModal(true)}
+            aria-label="Contribuye"
             className="h-10 w-10 shrink-0 text-muted-foreground hover:text-foreground hover:bg-accent"
           >
             <HandCoins className="h-5 w-5 shrink-0" />
@@ -227,23 +247,16 @@ export function Sidebar({ onNavigate }: { onNavigate?: () => void } = {}) {
                 <div className="space-y-0 pb-2">
                   {chats.length > 0 ? (
                     chats.map((chat) => (
-                      <div
+                      <ChatHistoryItem
                         key={chat.id}
-                        onClick={() => handleSelectChat(chat.id)}
-                        className={`group w-full text-left px-2 py-1.5 text-[13px] leading-tight rounded transition-all duration-200 relative flex items-center justify-between cursor-pointer ${
-                          activeChatId === chat.id
-                            ? "text-foreground bg-accent"
-                            : "text-foreground hover:bg-accent"
-                        }`}
-                      >
-                        <span className="block truncate pr-4 flex-1">{chat.title}</span>
-                        <span
-                          onClick={(e) => handleDeleteChat(chat.id, e)}
-                          className="opacity-0 group-hover:opacity-100 transition-opacity p-1 hover:text-destructive cursor-pointer"
-                        >
-                          <Trash2 className="h-3 w-3" />
-                        </span>
-                      </div>
+                        title={chat.title}
+                        isActive={activeChatId === chat.id}
+                        mode={editing?.chatId === chat.id ? editing.mode : "view"}
+                        onModeChange={(mode) => setEditing(mode === "view" ? null : { chatId: chat.id, mode })}
+                        onSelect={() => handleSelectChat(chat.id)}
+                        onRename={(title) => handleRenameChat(chat.id, title)}
+                        onDelete={() => handleDeleteChat(chat.id)}
+                      />
                     ))
                   ) : (
                     <p className="text-[12px] text-muted-foreground px-2 py-4 text-center">
@@ -325,20 +338,14 @@ export function Sidebar({ onNavigate }: { onNavigate?: () => void } = {}) {
                         <div className="min-w-0 flex-1">
                           <div className="truncate font-medium">{doc.filename}</div>
                           <div className="text-[10.5px] text-muted-foreground truncate">
-                            {doc.status === "analyzed"
-                              ? "Analizado"
-                              : doc.status === "analysis_failed"
-                                ? "Error de análisis"
-                                : doc.has_analysis
-                                  ? "Analizado"
-                                  : "Procesando..."}
+                            {DOCUMENT_STATE_LABEL[documentState(doc)]}
                           </div>
                         </div>
                       </div>
                     ))
                   ) : (
                     <p className="text-[12px] text-muted-foreground px-2 py-4 text-center">
-                      No hay documentos aún.
+                      {documentsLoadFailed ? "No se pudieron cargar tus documentos." : "No hay documentos aún."}
                       <br />
                       Sube archivos desde el chat.
                     </p>
@@ -358,5 +365,115 @@ export function Sidebar({ onNavigate }: { onNavigate?: () => void } = {}) {
       <AccountMenu isOpen={showAccountMenu} onClose={() => setShowAccountMenu(false)} />
       <UpgradeModal isOpen={showUpgradeModal} onClose={() => setShowUpgradeModal(false)} />
     </>
+  )
+}
+
+type RowMode = "view" | "rename" | "confirm-delete"
+
+interface ChatHistoryItemProps {
+  title: string
+  isActive: boolean
+  mode: RowMode
+  onModeChange: (mode: RowMode) => void
+  onSelect: () => void
+  onRename: (title: string) => Promise<void>
+  onDelete: () => Promise<void>
+}
+
+// Una fila del historial: abrir, renombrar en el sitio o borrar tras confirmar
+function ChatHistoryItem({ title, isActive, mode, onModeChange, onSelect, onRename, onDelete }: ChatHistoryItemProps) {
+  const [draft, setDraft] = useState(title)
+  // Enter, Escape y el blur que llega al desmontar el input no deben actuar dos veces
+  const finishedRef = useRef(false)
+
+  const startRename = () => {
+    finishedRef.current = false
+    setDraft(title)
+    onModeChange("rename")
+  }
+
+  const finishRename = async (save: boolean) => {
+    if (finishedRef.current) return
+    finishedRef.current = true
+    onModeChange("view")
+    const next = draft.trim()
+    if (save && next && next !== title) await onRename(next)
+  }
+
+  if (mode === "rename") {
+    return (
+      <div className="px-1 py-1">
+        <input
+          autoFocus
+          aria-label="Nuevo título"
+          value={draft}
+          onChange={(e) => setDraft(e.target.value)}
+          onBlur={() => finishRename(true)}
+          onKeyDown={(e) => {
+            if (e.key === "Enter") finishRename(true)
+            if (e.key === "Escape") finishRename(false)
+          }}
+          className="w-full rounded border border-border bg-background px-2 py-1 text-[13px] focus:outline-none focus:ring-1 focus:ring-ring"
+        />
+      </div>
+    )
+  }
+
+  if (mode === "confirm-delete") {
+    return (
+      <div className="flex items-center justify-between gap-1 rounded bg-destructive/10 px-2 py-1.5 text-[12px]">
+        <span className="min-w-0 truncate">¿Borrar?</span>
+        <div className="flex shrink-0 gap-1">
+          <button
+            onClick={() => onModeChange("view")}
+            className="rounded px-1.5 py-0.5 hover:bg-accent"
+          >
+            Cancelar
+          </button>
+          <button
+            onClick={() => {
+              onModeChange("view")
+              onDelete()
+            }}
+            className="rounded bg-destructive px-1.5 py-0.5 text-white hover:bg-destructive/90"
+          >
+            Borrar
+          </button>
+        </div>
+      </div>
+    )
+  }
+
+  return (
+    <div
+      onClick={onSelect}
+      className={`group relative flex w-full cursor-pointer items-center justify-between rounded px-2 py-1.5 text-left text-[13px] leading-tight text-foreground transition-all duration-200 ${
+        isActive ? "bg-accent" : "hover:bg-accent"
+      }`}
+    >
+      <span className="block flex-1 truncate pr-2">{title}</span>
+      <div className="flex shrink-0 transition-opacity md:opacity-0 md:group-hover:opacity-100 md:focus-within:opacity-100">
+        <button
+          aria-label={`Renombrar chat «${title}»`}
+          onClick={(e) => {
+            e.stopPropagation()
+            startRename()
+          }}
+          className="p-1 hover:text-foreground"
+        >
+          <Pencil className="h-3 w-3" />
+        </button>
+        <button
+          aria-label={`Borrar chat «${title}»`}
+          onClick={(e) => {
+            e.stopPropagation()
+            onModeChange("confirm-delete")
+          }}
+          className="p-1 hover:text-destructive"
+        >
+          <Trash2 className="h-3 w-3" />
+        </button>
+      </div>
+    </div>
   )
 }
