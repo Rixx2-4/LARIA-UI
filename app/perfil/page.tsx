@@ -137,7 +137,7 @@ function Perfil() {
           .slice(0, 4)
           .forEach((c) => {
             strengthItems.push({
-              texto: `Dominio sólido de "${c.concept_key}" (${Math.round(c.mastery)}% de mastery)`,
+              texto: `Dominio sólido de "${c.concept_key}" (${Math.round(c.mastery)}%)`,
             })
           })
 
@@ -360,7 +360,7 @@ function Perfil() {
           </div>
 
           <div className="bg-card border border-border rounded-xl p-[18px]">
-            <h3 className="text-[13px] font-semibold mb-0.5">Mastery por concepto</h3>
+            <h3 className="text-[13px] font-semibold mb-0.5">Dominio por concepto</h3>
             <p className="text-xs text-muted-foreground mb-3.5">Nivel de dominio actual sobre cada tema trabajado.</p>
             <div className="space-y-3.5">
               {mastery.length > 0 ? (
@@ -376,7 +376,7 @@ function Perfil() {
                   </div>
                 ))
               ) : (
-                <p className="text-sm text-muted-foreground">Aún no hay datos de mastery. Realiza quizzes sobre tus documentos para generarlos.</p>
+                <p className="text-sm text-muted-foreground">Aún no hay datos de dominio. Haz quizzes sobre tus documentos para generarlos.</p>
               )}
             </div>
           </div>
@@ -384,7 +384,7 @@ function Perfil() {
 
         <div className="grid grid-cols-1 md:grid-cols-2 gap-4 px-4 md:px-6 mb-4">
           <div className="bg-card border border-border rounded-xl p-[18px]">
-            <h3 className="text-[13px] font-semibold mb-0.5">Señales de struggle</h3>
+            <h3 className="text-[13px] font-semibold mb-0.5">Señales de dificultad</h3>
             <p className="text-xs text-muted-foreground mb-3.5">Patrones que indican dificultad reciente.</p>
             <div className="space-y-2.5">
               {struggleList.length > 0 ? (
@@ -400,7 +400,7 @@ function Perfil() {
               ) : (
                 <div className="flex gap-2.5 items-start text-[12.5px]">
                   <span className="shrink-0 w-1.5 h-1.5 rounded-full bg-primary mt-1.5" />
-                  <span>Sin señales de struggle activas.</span>
+                  <span>Sin señales de dificultad.</span>
                 </div>
               )}
             </div>
@@ -454,7 +454,7 @@ function Perfil() {
             ) : (
               <p className="text-sm text-muted-foreground">
                 {attempts.length === 0
-                  ? "Realiza quizzes sobre tus documentos para recibir recomendaciones personalizadas."
+                  ? "Haz quizzes sobre tus documentos para recibir recomendaciones personalizadas."
                   : "Sin recomendaciones pendientes. ¡Buen trabajo!"}
               </p>
             )}

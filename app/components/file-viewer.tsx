@@ -37,6 +37,7 @@ function ImageViewer({ src, filename }: { src: string; filename: string }) {
     <div className="flex flex-col items-center gap-4 h-full">
       <div className="flex items-center gap-2">
         <Button
+          aria-label="Alejar"
           variant="outline"
           size="sm"
           onClick={() => setZoom(Math.max(0.25, zoom - 0.25))}
@@ -48,6 +49,7 @@ function ImageViewer({ src, filename }: { src: string; filename: string }) {
           {Math.round(zoom * 100)}%
         </span>
         <Button
+          aria-label="Acercar"
           variant="outline"
           size="sm"
           onClick={() => setZoom(Math.min(4, zoom + 0.25))}
@@ -56,6 +58,7 @@ function ImageViewer({ src, filename }: { src: string; filename: string }) {
           <ZoomIn className="h-4 w-4" />
         </Button>
         <Button
+          aria-label="Girar"
           variant="outline"
           size="sm"
           onClick={() => setRotation((r) => (r + 90) % 360)}
@@ -63,6 +66,7 @@ function ImageViewer({ src, filename }: { src: string; filename: string }) {
           <RotateCw className="h-4 w-4" />
         </Button>
         <Button
+          aria-label="Descargar"
           variant="outline"
           size="sm"
           onClick={() => {
@@ -97,7 +101,7 @@ function PdfViewer({ src }: { src: string }) {
       <iframe
         src={src}
         className="w-full h-full border-0 rounded-xl"
-        title="PDF Viewer"
+        title="Visor de PDF"
       />
     </div>
   )
@@ -246,6 +250,7 @@ export function FileViewer({ filename, mimeType, documentId, previewDataUrl, onC
             <p className="text-sm font-medium truncate">{filename}</p>
           </div>
           <Button
+            aria-label="Cerrar"
             variant="ghost"
             size="sm"
             onClick={onClose}

@@ -2,14 +2,14 @@
 
 import { useEffect, useState, type ReactNode } from "react"
 import { usePathname } from "next/navigation"
-import { LogOut, Menu } from "lucide-react"
+import { Menu } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { useAuth } from "@/app/contexts/auth-context"
 import { Sidebar } from "./sidebar"
 
 // Estructura común de las páginas: barra lateral (cajón en móvil), cabecera y contenido
 export function AppShell({ children }: { children: ReactNode }) {
-  const { user, logout } = useAuth()
+  const { user } = useAuth()
   const pathname = usePathname()
   const [drawerOpen, setDrawerOpen] = useState(false)
 
@@ -63,13 +63,8 @@ export function AppShell({ children }: { children: ReactNode }) {
             </span>
           </div>
 
-          <div className="flex min-w-0 items-center gap-2">
-            <span className="truncate text-sm text-muted-foreground">{user?.username}</span>
-            <Button variant="ghost" size="sm" onClick={logout} className="rounded-full text-muted-foreground transition-all duration-200 hover:text-foreground">
-              <LogOut data-icon="inline-start" />
-              Salir
-            </Button>
-          </div>
+          {/* Cerrar sesión está en el menú de Cuenta de la barra lateral */}
+          <span className="min-w-0 truncate text-sm text-muted-foreground">{user?.username}</span>
         </header>
 
         <main className="min-h-0 flex-1">{children}</main>

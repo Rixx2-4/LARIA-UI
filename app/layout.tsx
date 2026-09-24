@@ -7,8 +7,14 @@ import { AuthProvider } from "./contexts/auth-context"
 import { Toaster } from "sonner"
 
 export const metadata: Metadata = {
-  title: "LARIA",
-  description: "LARIA - AI Search Interface",
+  title: { default: "LARIA", template: "%s · LARIA" },
+  description: "LARIA, tu tutor con IA: pregunta, sube tus apuntes y practica con quizzes.",
+  openGraph: {
+    title: "LARIA",
+    description: "Tu tutor con IA: pregunta, sube tus apuntes y practica con quizzes.",
+    locale: "es_ES",
+    type: "website",
+  },
 
   icons: {
     icon: [
@@ -35,7 +41,7 @@ export default function RootLayout({
   children: React.ReactNode
 }>) {
   return (
-    <html lang="en">
+    <html lang="es">
       <body className={`font-sans antialiased`}>
         <AuthProvider>
           <ChatProvider>

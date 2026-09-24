@@ -6,12 +6,8 @@ import { toast } from "sonner"
 import { Button } from "@/components/ui/button"
 import {
   Clock,
-  Grid3x3,
   Plus,
   Pin,
-  LayoutGrid,
-  FolderClosed,
-  HandCoins,
   Brain,
   ClipboardList,
   Trash2,
@@ -20,7 +16,6 @@ import {
 } from "lucide-react"
 import { ScrollArea } from "@/components/ui/scroll-area"
 import Image from "next/image"
-import { UpgradeModal } from "./upgrade-modal"
 import { AccountMenu } from "./account-menu"
 import { useChat } from "@/app/contexts/chat-context"
 import { useAuth } from "@/app/contexts/auth-context"
@@ -37,10 +32,9 @@ const DOCUMENT_STATE_LABEL: Record<DocumentState, string> = {
 export function Sidebar({ onNavigate }: { onNavigate?: () => void } = {}) {
   const router = useRouter()
   const { chats, activeChatId, deleteChat, renameChat } = useChat()
-  const { isAuthenticated } = useAuth()
+  const { isAuthenticated, user } = useAuth()
   const [openPanel, setOpenPanel] = useState<string | null>(null)
   const [pinnedPanel, setPinnedPanel] = useState<string | null>(null)
-  const [showUpgradeModal, setShowUpgradeModal] = useState(false)
   // Solo una fila del historial puede estar renombrándose o pidiendo confirmación
   const [editing, setEditing] = useState<{ chatId: string; mode: RowMode } | null>(null)
   const [showAccountMenu, setShowAccountMenu] = useState(false)
@@ -99,11 +93,9 @@ export function Sidebar({ onNavigate }: { onNavigate?: () => void } = {}) {
     >
       <div className="flex flex-col h-full w-[72px] shrink-0 items-center">
         {/* Logo */}
-        <Button variant="ghost" size="icon" className="mb-6 h-10 w-10 shrink-0">
-          <div className="flex h-8 w-8 items-center justify-center">
-            <Image src="/images/robot.png" alt="Logo" width={32} height={32} className="object-contain" />
-          </div>
-        </Button>
+        <div className="mb-6 flex h-10 w-10 shrink-0 items-center justify-center">
+          <Image src="/images/robot.png" alt="LARIA" width={32} height={32} className="object-contain" />
+        </div>
 
         <Button
           variant="ghost"
@@ -115,7 +107,7 @@ export function Sidebar({ onNavigate }: { onNavigate?: () => void } = {}) {
         </Button>
 
         <nav className="flex flex-1 flex-col gap-1">
-          <div className="relative mb-2">
+          <div className="relative mb-2 flex flex-col items-center">
             <Button
               variant="ghost"
               onClick={() => handlePanelChange("history")}
@@ -128,26 +120,10 @@ export function Sidebar({ onNavigate }: { onNavigate?: () => void } = {}) {
             >
               <Clock className="h-5 w-5" />
             </Button>
-            <div className="text-[9px] text-muted-foreground text-center mt-1 font-medium">History</div>
+            <div className="text-[9px] text-muted-foreground text-center mt-1 font-medium">Historial</div>
           </div>
 
-          <div className="relative mb-2">
-            <Button
-              variant="ghost"
-              onClick={() => handlePanelChange("spaces")}
-              aria-label="Espacios"
-              className={`h-10 w-10 shrink-0 mx-auto transition-colors ${
-                openPanel === "spaces"
-                  ? "text-foreground bg-accent"
-                  : "text-muted-foreground hover:text-foreground hover:bg-accent"
-              }`}
-            >
-              <Grid3x3 className="h-5 w-5" />
-            </Button>
-            <div className="text-[9px] text-muted-foreground text-center mt-1 font-medium">Spaces</div>
-          </div>
-
-          <div className="relative mb-2">
+          <div className="relative mb-2 flex flex-col items-center">
             <Button
               variant="ghost"
               onClick={() => navigate(quizHref(activeChatId))}
@@ -159,7 +135,7 @@ export function Sidebar({ onNavigate }: { onNavigate?: () => void } = {}) {
             <div className="text-[9px] text-muted-foreground text-center mt-1 font-medium">Quiz</div>
           </div>
 
-          <div className="relative mb-2">
+          <div className="relative mb-2 flex flex-col items-center">
             <Button
               variant="ghost"
               onClick={() => navigate("/perfil")}
@@ -171,7 +147,7 @@ export function Sidebar({ onNavigate }: { onNavigate?: () => void } = {}) {
             <div className="text-[9px] text-muted-foreground text-center mt-1 font-medium">Perfil</div>
           </div>
 
-          <div className="relative mb-2">
+          <div className="relative mb-2 flex flex-col items-center">
             <Button
               variant="ghost"
               onClick={() => handlePanelChange("documents")}
@@ -184,44 +160,27 @@ export function Sidebar({ onNavigate }: { onNavigate?: () => void } = {}) {
             >
               <FileText className="h-5 w-5" />
             </Button>
-            <div className="text-[9px] text-muted-foreground text-center mt-1 font-medium">Docs</div>
+            <div className="text-[9px] text-muted-foreground text-center mt-1 font-medium">Documentos</div>
+          </div>
+
+          {/* El menú de cuenta se despliega al lado de este botón */}
+          <div className="relative mb-2 flex flex-col items-center">
+            <Button
+              variant="ghost"
+              onClick={() => setShowAccountMenu(!showAccountMenu)}
+              aria-haspopup="dialog"
+              aria-expanded={showAccountMenu}
+              aria-label="Cuenta"
+              className="h-10 w-10 shrink-0 mx-auto text-muted-foreground hover:text-foreground hover:bg-accent p-0"
+            >
+              <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-primary/10 text-sm font-semibold text-primary">
+                {user?.username?.charAt(0).toUpperCase() ?? "?"}
+              </span>
+            </Button>
+            <div className="text-[9px] text-muted-foreground text-center mt-1 font-medium">Cuenta</div>
+            <AccountMenu isOpen={showAccountMenu} onClose={() => setShowAccountMenu(false)} onNavigate={onNavigate} />
           </div>
         </nav>
-
-        <div className="flex flex-col gap-1 pt-4 items-center">
-          <Button
-            variant="ghost"
-            onClick={() => setShowAccountMenu(!showAccountMenu)}
-            aria-label="Cuenta"
-            className="h-10 w-10 shrink-0 text-muted-foreground hover:text-foreground hover:bg-accent p-0"
-          >
-            <div className="relative flex h-9 w-9 shrink-0 items-center justify-center rounded-full overflow-visible ring-2 ring-primary/60">
-              <div className="h-9 w-9 rounded-full overflow-hidden">
-                <Image
-                  src="/images/robot.png"
-                  alt="Profile"
-                  width={36}
-                  height={36}
-                  className="object-cover"
-                />
-              </div>
-              <span className="absolute -bottom-1 -right-1 text-[7px] font-bold bg-primary text-primary-foreground px-1 py-0.5 rounded">
-                pro
-              </span>
-            </div>
-          </Button>
-          <div className="text-[9px] text-muted-foreground text-center font-medium">Cuenta</div>
-
-          <Button
-            variant="ghost"
-            onClick={() => setShowUpgradeModal(true)}
-            aria-label="Contribuye"
-            className="h-10 w-10 shrink-0 text-muted-foreground hover:text-foreground hover:bg-accent"
-          >
-            <HandCoins className="h-5 w-5 shrink-0" />
-          </Button>
-          <div className="text-[9px] text-muted-foreground text-center font-medium">Contribuye</div>
-        </div>
       </div>
 
       {openPanel && (
@@ -229,8 +188,9 @@ export function Sidebar({ onNavigate }: { onNavigate?: () => void } = {}) {
           {openPanel === "history" && (
             <div className="flex flex-col h-full animate-in fade-in duration-300">
               <div className="flex items-center justify-between px-3 py-2.5">
-                <h2 className="text-sm font-semibold">History</h2>
+                <h2 className="text-sm font-semibold">Historial</h2>
                 <Button
+                  aria-label="Fijar panel"
                   variant="ghost"
                   size="icon"
                   className={`h-6 w-6 transition-colors ${pinnedPanel === "history" ? "text-primary" : ""}`}
@@ -266,49 +226,6 @@ export function Sidebar({ onNavigate }: { onNavigate?: () => void } = {}) {
                   )}
                 </div>
               </ScrollArea>
-              <div className="px-3 py-2">
-                <button className="text-xs text-primary hover:underline">Ver todos</button>
-              </div>
-            </div>
-          )}
-
-          {openPanel === "spaces" && (
-            <div className="flex flex-col h-full animate-in fade-in duration-300">
-              <div className="flex items-center justify-between px-3 py-2.5">
-                <h2 className="text-sm font-semibold">Spaces</h2>
-                <Button
-                  variant="ghost"
-                  size="icon"
-                  className={`h-6 w-6 transition-colors ${pinnedPanel === "spaces" ? "text-primary" : ""}`}
-                  onClick={() => handlePinToggle("spaces")}
-                >
-                  <Pin
-                    className={`h-3.5 w-3.5 transition-transform ${pinnedPanel === "spaces" ? "rotate-45" : ""}`}
-                  />
-                </Button>
-              </div>
-              <div className="p-1.5">
-                <button className="w-full flex items-center gap-2.5 px-2.5 py-2 text-[13px] hover:bg-accent rounded transition-colors">
-                  <LayoutGrid className="h-4 w-4 shrink-0" />
-                  <span className="font-normal">Templates</span>
-                </button>
-                <button className="w-full flex items-center gap-2.5 px-2.5 py-2 text-[13px] hover:bg-accent rounded transition-colors">
-                  <Plus className="h-4 w-4 shrink-0" />
-                  <span className="font-normal">Create new Space</span>
-                </button>
-              </div>
-              <div className="px-1.5 pb-1.5">
-                <div className="flex items-center justify-between px-2.5 py-1.5">
-                  <h3 className="text-[11px] font-medium text-muted-foreground">Private</h3>
-                  <Button variant="ghost" size="icon" className="h-5 w-5">
-                    <Plus className="h-3 w-3" />
-                  </Button>
-                </div>
-                <button className="w-full flex items-center gap-2.5 px-2.5 py-2 text-[13px] hover:bg-accent rounded transition-colors">
-                  <FolderClosed className="h-4 w-4 shrink-0" />
-                  <span className="font-normal">My Space</span>
-                </button>
-              </div>
             </div>
           )}
 
@@ -317,6 +234,7 @@ export function Sidebar({ onNavigate }: { onNavigate?: () => void } = {}) {
               <div className="flex items-center justify-between px-3 py-2.5">
                 <h2 className="text-sm font-semibold">Mis Documentos</h2>
                 <Button
+                  aria-label="Fijar panel"
                   variant="ghost"
                   size="icon"
                   className={`h-6 w-6 transition-colors ${pinnedPanel === "documents" ? "text-primary" : ""}`}
@@ -360,13 +278,7 @@ export function Sidebar({ onNavigate }: { onNavigate?: () => void } = {}) {
     </div>
   )
 
-  return (
-    <>
-      {sidebarContent}
-      <AccountMenu isOpen={showAccountMenu} onClose={() => setShowAccountMenu(false)} />
-      <UpgradeModal isOpen={showUpgradeModal} onClose={() => setShowUpgradeModal(false)} />
-    </>
-  )
+  return sidebarContent
 }
 
 type RowMode = "view" | "rename" | "confirm-delete"

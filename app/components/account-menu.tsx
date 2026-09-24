@@ -1,76 +1,67 @@
 "use client"
-import {
-  User,
-  BrainCircuit,
-  ToggleLeft,
-  Bell,
-  Settings,
-  Check,
-} from "lucide-react"
-import Image from "next/image"
+
+import { useEffect } from "react"
+import Link from "next/link"
+import { BrainCircuit, LogOut } from "lucide-react"
+import { useAuth } from "@/app/contexts/auth-context"
 
 interface AccountMenuProps {
   isOpen: boolean
   onClose: () => void
+  // Avisa de que se eligió un destino (el cajón móvil se cierra)
+  onNavigate?: () => void
 }
 
-export function AccountMenu({ isOpen, onClose }: AccountMenuProps) {
+export function AccountMenu({ isOpen, onClose, onNavigate }: AccountMenuProps) {
+  const { user, logout } = useAuth()
+
+  useEffect(() => {
+    if (!isOpen) return
+    const closeOnEscape = (e: KeyboardEvent) => {
+      if (e.key === "Escape") onClose()
+    }
+    document.addEventListener("keydown", closeOnEscape)
+    return () => document.removeEventListener("keydown", closeOnEscape)
+  }, [isOpen, onClose])
+
   if (!isOpen) return null
 
   return (
     <>
-      {/* Backdrop */}
-      <div className="fixed inset-0 z-40" onClick={onClose} />
+      {/* Por encima de la barra lateral (z-50), para que un clic en ella también cierre */}
+      <div className="fixed inset-0 z-[60]" onClick={onClose} />
 
-      {/* Account Menu */}
-      <div className="fixed bottom-20 left-4 z-50 w-80 rounded-lg border border-border bg-background shadow-2xl animate-in fade-in slide-in-from-bottom-2 duration-200">
+      <div
+        role="dialog"
+        aria-label="Menú de cuenta"
+        className="absolute left-full top-0 z-[70] ml-2 w-72 rounded-lg border border-border bg-background shadow-2xl animate-in fade-in slide-in-from-bottom-2 duration-200"
+      >
+        <div className="border-b border-border px-4 py-3">
+          <p className="truncate text-sm font-medium">{user?.username}</p>
+          <p className="truncate text-xs text-muted-foreground">{user?.email}</p>
+        </div>
         <div className="p-2">
-          {/* Menu Items */}
-          <button className="w-full flex items-center gap-3 px-3 py-2.5 text-sm hover:bg-accent rounded transition-colors">
-            <User className="h-4 w-4 shrink-0" />
-            <span>Cuenta</span>
-          </button>
-
-          <button className="w-full flex items-center gap-3 px-3 py-2.5 text-sm hover:bg-accent rounded transition-colors">
+          <Link
+            href="/perfil"
+            onClick={() => {
+              onClose()
+              onNavigate?.()
+            }}
+            className="flex w-full items-center gap-3 rounded px-3 py-2.5 text-sm transition-colors hover:bg-accent"
+          >
             <BrainCircuit className="h-4 w-4 shrink-0" />
-            <span>Perfil Cognitivo</span>
+            Perfil de aprendizaje
+          </Link>
+          <button
+            onClick={() => {
+              onClose()
+              logout()
+            }}
+            className="flex w-full items-center gap-3 rounded px-3 py-2.5 text-sm transition-colors hover:bg-accent"
+          >
+            <LogOut className="h-4 w-4 shrink-0" />
+            Cerrar sesión
           </button>
-
-          <button className="w-full flex items-center gap-3 px-3 py-2.5 text-sm hover:bg-accent rounded transition-colors">
-            <ToggleLeft className="h-4 w-4 shrink-0" />
-            <span>Personalizacion</span>
-          </button>
-
-          <button className="w-full flex items-center gap-3 px-3 py-2.5 text-sm hover:bg-accent rounded transition-colors">
-            <Bell className="h-4 w-4 shrink-0" />
-            <span>Notificaciones</span>
-          </button>
-
-          <button className="w-full flex items-center gap-3 px-3 py-2.5 text-sm hover:bg-accent rounded transition-colors">
-            <Settings className="h-4 w-4 shrink-0" />
-            <span>Ajustes</span>
-          </button>
-
-          <div className="my-2 border-t border-border" />
-
-          {/* Profile Switcher */}
-          <button className="w-full flex items-center gap-3 px-3 py-2.5 text-sm hover:bg-accent rounded transition-colors group">
-            <div className="relative">
-              <Image
-                src="/images/robot.png"
-                alt="Profile"
-                width={24}
-                height={24}
-                className="rounded-full object-cover"
-              />
-              <span className="absolute -bottom-1 -right-1 text-[8px] font-bold bg-primary text-primary-foreground px-1 rounded">
-                pro
-              </span>
-            </div>
-            <span className="flex-1 text-left">Ri</span>
-            <Check className="h-4 w-4 text-primary shrink-0" />
-          </button>
-
         </div>
       </div>
     </>

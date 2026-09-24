@@ -1,10 +1,11 @@
 import { describe, it, expect, vi, afterEach, beforeEach } from "vitest"
-import { render, screen, cleanup, fireEvent, waitFor } from "@testing-library/react"
+import { render, screen, cleanup, fireEvent, waitFor, act } from "@testing-library/react"
 import { AuthProvider } from "@/app/contexts/auth-context"
 import { ChatProvider } from "@/app/contexts/chat-context"
 import { ChatScreen } from "./chat-screen"
 import { setAuthToken } from "@/lib/laria-api"
 import { controllableSSE, tokenEvent } from "@/test/sse"
+import { FakeSpeechRecognition } from "@/test/speech"
 
 // El router de Next: la URL actual y las navegaciones que pide la pantalla
 const nav = vi.hoisted(() => ({
@@ -65,6 +66,8 @@ describe("ChatScreen", () => {
 
     expect(await screen.findByText("La unidad más pequeña de un elemento.")).toBeTruthy()
     expect(screen.getByText("¿Qué es un átomo?")).toBeTruthy()
+    // Salir vive en el menú de Cuenta, no en la cabecera
+    expect(screen.queryByRole("button", { name: /Salir/ })).toBeNull()
   })
 
   it("en / el primer mensaje crea el chat, lleva a /chat/<id> y la respuesta no se corta", async () => {
@@ -198,5 +201,120 @@ describe("ChatScreen", () => {
     renderAt("c1")
 
     expect(await screen.findByText("tema1.pdf")).toBeTruthy()
+  })
+
+  describe("dictado por voz", () => {
+    const serverWithEmptyChat = () =>
+      vi.stubGlobal("fetch", async (url: string) => {
+        if (url.endsWith("/users/me")) return json({ id: "u1", username: "ana", email: "a@a.a" })
+        if (url.endsWith("/chats/")) return json({ chats: [] })
+        throw new Error(`Petición inesperada: ${url}`)
+      })
+
+    afterEach(() => {
+      delete (window as { SpeechRecognition?: unknown }).SpeechRecognition
+      FakeSpeechRecognition.instances = []
+    })
+
+    it("lo dictado se añade al mensaje y se puede parar", async () => {
+      ;(window as { SpeechRecognition?: unknown }).SpeechRecognition = FakeSpeechRecognition
+      serverWithEmptyChat()
+      renderAt()
+
+      const input = (await screen.findByRole("textbox")) as HTMLInputElement
+      fireEvent.change(input, { target: { value: "Explícame" } })
+      fireEvent.click(screen.getByRole("button", { name: "Dictar" }))
+      const recognition = FakeSpeechRecognition.instances[0]
+      expect(recognition.listening).toBe(true)
+      expect(recognition.lang).toBe("es-ES")
+
+      act(() => recognition.say("la fotosíntesis"))
+      expect(input.value).toBe("Explícame la fotosíntesis")
+
+      fireEvent.click(screen.getByRole("button", { name: "Parar dictado" }))
+      expect(recognition.listening).toBe(false)
+      act(() => recognition.end())
+      expect(screen.getByRole("button", { name: "Dictar" })).toBeTruthy()
+    })
+
+    it("el texto va apareciendo mientras se dicta y se fija al terminar la frase", async () => {
+      ;(window as { SpeechRecognition?: unknown }).SpeechRecognition = FakeSpeechRecognition
+      serverWithEmptyChat()
+      renderAt()
+
+      const input = (await screen.findByRole("textbox")) as HTMLInputElement
+      fireEvent.change(input, { target: { value: "Explícame" } })
+      fireEvent.click(screen.getByRole("button", { name: "Dictar" }))
+      const recognition = FakeSpeechRecognition.instances[0]
+      expect(recognition.interimResults).toBe(true)
+
+      act(() => recognition.sayInterim("la foto"))
+      expect(input.value).toBe("Explícame la foto")
+      act(() => recognition.sayInterim("la fotosín"))
+      expect(input.value).toBe("Explícame la fotosín")
+
+      act(() => recognition.say("la fotosíntesis"))
+      expect(input.value).toBe("Explícame la fotosíntesis")
+
+      act(() => recognition.sayInterim("y la"))
+      fireEvent.click(screen.getByRole("button", { name: "Parar dictado" }))
+      act(() => recognition.end())
+      expect(input.value).toBe("Explícame la fotosíntesis")
+    })
+
+    it("enviar mientras se dicta envía también lo que aún se estaba reconociendo", async () => {
+      ;(window as { SpeechRecognition?: unknown }).SpeechRecognition = FakeSpeechRecognition
+      const sent: string[] = []
+      vi.stubGlobal("fetch", async (url: string, init?: RequestInit) => {
+        const method = init?.method ?? "GET"
+        if (url.endsWith("/users/me")) return json({ id: "u1", username: "ana", email: "a@a.a" })
+        if (url.endsWith("/chats/") && method === "GET") return json({ chats: [] })
+        if (url.endsWith("/chats/") && method === "POST") return json({ id: "c2", title: "Nuevo" })
+        if (url.endsWith("/stream")) {
+          sent.push(JSON.parse(String(init?.body)).content)
+          return new Response("data: [DONE]\n\n", { status: 200 })
+        }
+        return json({ id: "c2", title: "t", messages: [] })
+      })
+      renderAt()
+
+      const input = (await screen.findByRole("textbox")) as HTMLInputElement
+      fireEvent.click(screen.getByRole("button", { name: "Dictar" }))
+      act(() => FakeSpeechRecognition.instances[0].sayInterim("qué es un átomo"))
+      fireEvent.keyDown(input, { key: "Enter" })
+
+      await waitFor(() => expect(sent).toEqual(["qué es un átomo"]))
+      expect(input.value).toBe("")
+    })
+
+    it("si el navegador no reconoce voz, no muestra el micrófono", async () => {
+      serverWithEmptyChat()
+      renderAt()
+
+      await screen.findByRole("textbox")
+      expect(screen.queryByRole("button", { name: "Dictar" })).toBeNull()
+    })
+
+    it("al enviar, una frase que llegue tarde no reaparece en el campo vacío", async () => {
+      ;(window as { SpeechRecognition?: unknown }).SpeechRecognition = FakeSpeechRecognition
+      vi.stubGlobal("fetch", async (url: string, init?: RequestInit) => {
+        const method = init?.method ?? "GET"
+        if (url.endsWith("/users/me")) return json({ id: "u1", username: "ana", email: "a@a.a" })
+        if (url.endsWith("/chats/") && method === "GET") return json({ chats: [] })
+        if (url.endsWith("/chats/") && method === "POST") return json({ id: "c2", title: "Nuevo" })
+        if (url.endsWith("/stream")) return new Response("data: [DONE]\n\n", { status: 200 })
+        return json({ id: "c2", title: "t", messages: [] })
+      })
+      renderAt()
+
+      const input = (await screen.findByRole("textbox")) as HTMLInputElement
+      fireEvent.click(screen.getByRole("button", { name: "Dictar" }))
+      const recognition = FakeSpeechRecognition.instances[0]
+      act(() => recognition.say("hola"))
+      fireEvent.keyDown(input, { key: "Enter" })
+      act(() => recognition.say("frase tardía"))
+
+      expect(input.value).toBe("")
+    })
   })
 })
