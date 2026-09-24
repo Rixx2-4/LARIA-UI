@@ -24,6 +24,7 @@ import { UpgradeModal } from "./upgrade-modal"
 import { AccountMenu } from "./account-menu"
 import { useChat } from "@/app/contexts/chat-context"
 import { useAuth } from "@/app/contexts/auth-context"
+import { quizHref } from "@/lib/routes"
 import { useDocuments, documentState, type DocumentState } from "@/hooks/use-documents"
 
 const DOCUMENT_STATE_LABEL: Record<DocumentState, string> = {
@@ -149,7 +150,7 @@ export function Sidebar({ onNavigate }: { onNavigate?: () => void } = {}) {
           <div className="relative mb-2">
             <Button
               variant="ghost"
-              onClick={() => navigate(activeChatId ? `/quiz?chat=${activeChatId}` : "/quiz")}
+              onClick={() => navigate(quizHref(activeChatId))}
               aria-label="Quiz"
               className="h-10 w-10 shrink-0 mx-auto text-muted-foreground hover:text-foreground hover:bg-accent"
             >

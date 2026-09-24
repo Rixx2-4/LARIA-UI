@@ -1,6 +1,7 @@
 "use client"
 
 import { useState, useEffect, useCallback } from "react"
+import Link from "next/link"
 import { Loader2, RefreshCw } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { AppShell } from "../components/app-shell"
@@ -80,6 +81,7 @@ function Perfil() {
   const [learningProfile, setLearningProfile] = useState<StudentProfile | null>(null)
   const [history, setHistory] = useState<LearningHistory | null>(null)
   const [documents, setDocuments] = useState<Document[]>([])
+  const [documentsFailed, setDocumentsFailed] = useState(false)
 
   const [struggle, setStruggle] = useState<StruggleItem[]>([])
   const [fortalezas, setFortalezas] = useState<FortalezaItem[]>([])
@@ -108,6 +110,7 @@ function Perfil() {
       const hist = lh.status === "fulfilled" ? lh.value : null
       const docList = docs.status === "fulfilled" ? docs.value : []
 
+      setDocumentsFailed(docs.status === "rejected")
       setLearningProfile(profile)
       setHistory(hist)
       setDocuments(docList)
@@ -289,6 +292,12 @@ function Perfil() {
   })
   const repeated = Object.entries(struggleSameConcept).find(([, n]) => n >= 2)
 
+  const hasNoActivity =
+    !learningProfile?.total_attempts &&
+    !learningProfile?.mastery_by_concept.length &&
+    !history?.attempts.length &&
+    !history?.tutor_interactions.length
+
   return (
     <AppShell>
       <div className="h-full overflow-auto">
@@ -314,6 +323,26 @@ function Perfil() {
             <span>
               Muestras dificultad repetida en <strong className="font-bold">{repeated[0][0]}</strong>. Podrías beneficiarte de apoyo adicional además de LARIA.
             </span>
+          </div>
+        )}
+
+        {documentsFailed && (
+          <p className="mx-4 md:mx-6 mb-4 rounded-lg bg-muted px-4 py-3 text-sm text-muted-foreground">
+            No se pudieron cargar tus documentos
+          </p>
+        )}
+
+        {hasNoActivity && (
+          <div className="mx-4 md:mx-6 mb-4 flex flex-col gap-3 rounded-xl border border-border bg-card p-5 sm:flex-row sm:items-center sm:justify-between">
+            <div>
+              <p className="font-medium">Aún no hay actividad de aprendizaje</p>
+              <p className="text-sm text-muted-foreground">
+                Haz un quiz sobre uno de tus documentos y aquí verás tu progreso.
+              </p>
+            </div>
+            <Button asChild>
+              <Link href="/quiz">Hacer un quiz</Link>
+            </Button>
           </div>
         )}
 

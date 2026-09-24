@@ -7,6 +7,7 @@ import { Button } from "@/components/ui/button"
 import { AppShell } from "../components/app-shell"
 import { RequireAuth } from "../components/require-auth"
 import { useChat } from "@/app/contexts/chat-context"
+import { quizHref } from "@/lib/routes"
 import { lariaAPI, QuizQuestion, QuizAttemptQuestion } from "@/lib/laria-api"
 
 interface QuizResult {
@@ -17,26 +18,37 @@ interface QuizResult {
 }
 
 const PRESET_COUNTS = [5, 10, 20]
+const MAX_QUESTIONS = 50
+
 
 export default function QuizPage() {
   return (
     <RequireAuth>
       {/* useSearchParams necesita un Suspense para poder prerenderizar la página */}
       <Suspense>
-        <Quiz />
+        <QuizForUrlChat />
       </Suspense>
     </RequireAuth>
   )
 }
 
-function Quiz() {
-  const router = useRouter()
-  // El chat viene en la URL (/quiz?chat=<id>) para sobrevivir a una recarga
+// El chat viene en la URL (/quiz?chat=<id>) para sobrevivir a una recarga; cambiarlo
+// empieza un quiz de cero (la key descarta el estado del chat anterior)
+function QuizForUrlChat() {
   const chatId = useSearchParams().get("chat")
-  const { chats } = useChat()
+  return <Quiz key={chatId ?? ""} chatId={chatId} />
+}
+
+function Quiz({ chatId }: { chatId: string | null }) {
+  const router = useRouter()
+  const { chats, chatsLoaded } = useChat()
+  const selectedChat = chats.find((c) => c.id === chatId)
+  const chatMissing = chatsLoaded && !!chatId && !selectedChat
   const [step, setStep] = useState<"config" | "quiz" | "results">("config")
   const [questionCount, setQuestionCount] = useState(5)
   const [isCustomCount, setIsCustomCount] = useState(false)
+  // Lo que se está escribiendo; solo se valida al generar
+  const [customCountText, setCustomCountText] = useState("")
   const [quizId, setQuizId] = useState<string | null>(null)
   const [questions, setQuestions] = useState<QuizQuestion[]>([])
   const [currentQuestion, setCurrentQuestion] = useState(0)
@@ -48,10 +60,15 @@ function Quiz() {
 
   const generateQuiz = async () => {
     if (!chatId) return
+    const count = isCustomCount ? Number(customCountText) : questionCount
+    if (!Number.isInteger(count) || count < 1 || count > MAX_QUESTIONS) {
+      setError(`Elige entre 1 y ${MAX_QUESTIONS} preguntas.`)
+      return
+    }
     setIsLoading(true)
     setError(null)
     try {
-      const data = await lariaAPI.chats.generateQuiz(chatId, questionCount)
+      const data = await lariaAPI.chats.generateQuiz(chatId, count)
       if (data.questions && data.questions.length > 0) {
         setQuizId(data.id)
         setQuestions(data.questions)
@@ -92,12 +109,7 @@ function Quiz() {
     setIsLoading(true)
     setError(null)
     try {
-      const answerRecord: Record<string, string> = {}
-      Object.entries(answers).forEach(([idx, ans]) => {
-        answerRecord[idx] = ans
-      })
-
-      const data = await lariaAPI.quizzes.submitAttempt(quizId, answerRecord)
+      const data = await lariaAPI.quizzes.submitAttempt(quizId, answers)
 
       const quizResults: QuizResult[] = data.questions.map((q: QuizAttemptQuestion) => {
         const original = questions.find((oq) => oq.index === q.index)
@@ -128,6 +140,7 @@ function Quiz() {
     setError(null)
   }
 
+  const current: QuizQuestion | undefined = questions[currentQuestion]
   const score = results.filter((r) => r.isCorrect).length
   const total = results.length
   const percentage = total > 0 ? Math.round((score / total) * 100) : 0
@@ -153,19 +166,22 @@ function Quiz() {
 
               <div>
                 <label htmlFor="quiz-chat" className="text-sm font-medium mb-2 block">Chat</label>
-                {chats.length > 0 ? (
+                {!chatsLoaded ? (
+                  <p className="text-sm text-muted-foreground">Cargando tus chats…</p>
+                ) : chats.length > 0 ? (
                   <select
                     id="quiz-chat"
-                    value={chatId ?? ""}
-                    onChange={(e) => router.replace(`/quiz?chat=${e.target.value}`)}
+                    value={selectedChat ? chatId! : ""}
+                    onChange={(e) => router.replace(quizHref(e.target.value))}
                     className="w-full px-3 py-2 border border-border rounded-lg bg-background text-sm"
                   >
                     <option value="" disabled>
                       Elige un chat…
                     </option>
+                    {/* El quiz se genera a partir del documento del chat */}
                     {chats.map((chat) => (
-                      <option key={chat.id} value={chat.id}>
-                        {chat.title}
+                      <option key={chat.id} value={chat.id} disabled={!chat.document_id}>
+                        {chat.document_id ? chat.title : `${chat.title} (sin documento)`}
                       </option>
                     ))}
                   </select>
@@ -173,6 +189,9 @@ function Quiz() {
                   <p className="p-4 bg-muted rounded-lg text-sm text-muted-foreground">
                     Aún no tienes chats. Sube un documento en un chat para generar un quiz sobre él.
                   </p>
+                )}
+                {chatMissing && (
+                  <p className="mt-2 text-sm text-destructive">Ese chat ya no existe. Elige otro.</p>
                 )}
               </div>
 
@@ -194,7 +213,10 @@ function Quiz() {
                   ))}
                   <Button
                     variant={isCustomCount ? "default" : "outline"}
-                    onClick={() => setIsCustomCount(true)}
+                    onClick={() => {
+                      setIsCustomCount(true)
+                      setCustomCountText(String(questionCount))
+                    }}
                     className="h-12"
                   >
                     Personalizar
@@ -209,9 +231,10 @@ function Quiz() {
                     id="quiz-count"
                     type="number"
                     min={1}
-                    max={50}
-                    value={questionCount}
-                    onChange={(e) => setQuestionCount(Math.max(1, Math.min(50, parseInt(e.target.value) || 1)))}
+                    max={MAX_QUESTIONS}
+                    value={customCountText}
+                    placeholder={`1–${MAX_QUESTIONS}`}
+                    onChange={(e) => setCustomCountText(e.target.value)}
                     className="w-full px-3 py-2 border border-border rounded-lg bg-background"
                   />
                 </div>
@@ -219,7 +242,7 @@ function Quiz() {
 
               <Button
                 onClick={generateQuiz}
-                disabled={isLoading || questionCount < 1 || !chatId}
+                disabled={isLoading || !chatId || chatMissing}
                 className="w-full h-12"
               >
                 {isLoading ? (
@@ -230,7 +253,7 @@ function Quiz() {
             </div>
           )}
 
-          {step === "quiz" && questions.length > 0 && (
+          {step === "quiz" && current && (
             <div className="space-y-6">
               <div className="flex items-center justify-between">
                 <span className="text-sm text-muted-foreground">
@@ -251,26 +274,26 @@ function Quiz() {
               <div className="p-6 bg-card border border-border rounded-xl">
                 <div className="flex items-center gap-2 mb-4">
                   <span className={`text-xs px-2 py-0.5 rounded-full ${
-                    questions[currentQuestion].difficulty === "hard"
+                    current.difficulty === "hard"
                       ? "bg-red-100 text-red-700"
-                      : questions[currentQuestion].difficulty === "medium"
+                      : current.difficulty === "medium"
                       ? "bg-yellow-100 text-yellow-700"
                       : "bg-green-100 text-green-700"
                   }`}>
-                    {questions[currentQuestion].difficulty === "hard" ? "Difícil" :
-                     questions[currentQuestion].difficulty === "medium" ? "Medio" : "Fácil"}
+                    {current.difficulty === "hard" ? "Difícil" :
+                     current.difficulty === "medium" ? "Medio" : "Fácil"}
                   </span>
                 </div>
 
-                <h2 className="text-lg font-medium mb-4">{questions[currentQuestion].text}</h2>
+                <h2 className="text-lg font-medium mb-4">{current.text}</h2>
 
                 <div className="space-y-3">
-                  {Object.entries(questions[currentQuestion].options).map(([key, value]) => (
+                  {Object.entries(current.options).map(([key, value]) => (
                     <button
                       key={key}
-                      onClick={() => handleAnswer(questions[currentQuestion], key)}
+                      onClick={() => handleAnswer(current, key)}
                       className={`w-full text-left p-4 rounded-lg border transition-all ${
-                        answers[questions[currentQuestion].index] === key
+                        answers[current.index] === key
                           ? "border-primary bg-primary/5"
                           : "border-border hover:border-primary/50"
                       }`}
@@ -299,7 +322,7 @@ function Quiz() {
                 </Button>
                 <Button
                   onClick={nextQuestion}
-                  disabled={!answers[questions[currentQuestion].index] || isLoading}
+                  disabled={!answers[current.index] || isLoading}
                   className="flex-1"
                 >
                   {currentQuestion === questions.length - 1 ? "Finalizar" : "Siguiente"}

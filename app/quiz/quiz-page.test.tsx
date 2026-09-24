@@ -32,7 +32,13 @@ function stubServer() {
   vi.stubGlobal("fetch", async (url: string, init?: RequestInit) => {
     if (url.endsWith("/users/me")) return json({ id: "u1", username: "ana", email: "a@a.a" })
     if (url.endsWith("/chats/"))
-      return json({ chats: [{ id: "c1", title: "Fotosíntesis", document_id: "d1" }, { id: "c2", title: "Células", document_id: "d2" }] })
+      return json({
+        chats: [
+          { id: "c1", title: "Fotosíntesis", document_id: "d1" },
+          { id: "c2", title: "Células", document_id: "d2" },
+          { id: "c3", title: "Charla sin documento", document_id: null },
+        ],
+      })
     if (url.includes("/quiz?")) {
       requests.push({ url })
       return json(quiz)
@@ -113,5 +119,46 @@ describe("QuizPage", () => {
     fireEvent.change(select, { target: { value: "c2" } })
 
     expect(nav.replace).toHaveBeenCalledWith("/quiz?chat=c2")
+  })
+
+  it("la cantidad personalizada se puede borrar y reescribir con normalidad", async () => {
+    const requests = stubServer()
+    renderQuiz("chat=c1")
+
+    fireEvent.click(await screen.findByRole("button", { name: "Personalizar" }))
+    const input = screen.getByLabelText("Cantidad personalizada") as HTMLInputElement
+    fireEvent.change(input, { target: { value: "" } })
+    expect(input.value).toBe("")
+    fireEvent.change(input, { target: { value: "8" } })
+    fireEvent.click(screen.getByRole("button", { name: "Generar Quiz" }))
+
+    await waitFor(() => expect(requests[0]?.url).toMatch(/num_questions=8$/))
+  })
+
+  it("solo se pueden elegir chats con un documento vinculado", async () => {
+    stubServer()
+    renderQuiz("")
+
+    const option = (await screen.findByRole("option", { name: /Charla sin documento/ })) as HTMLOptionElement
+    expect(option.disabled).toBe(true)
+  })
+
+  it("cambiar de chat en la URL empieza de cero, sin el quiz del chat anterior", async () => {
+    stubServer()
+    const view = renderQuiz("chat=c1")
+    fireEvent.click(await screen.findByRole("button", { name: "Generar Quiz" }))
+    await screen.findByText("¿Dónde ocurre la fotosíntesis?")
+
+    nav.search = "chat=c2"
+    view.rerender(
+      <AuthProvider>
+        <ChatProvider>
+          <QuizPage />
+        </ChatProvider>
+      </AuthProvider>,
+    )
+
+    expect(await screen.findByRole("button", { name: "Generar Quiz" })).toBeTruthy()
+    expect(screen.queryByText("¿Dónde ocurre la fotosíntesis?")).toBeNull()
   })
 })
