@@ -39,15 +39,13 @@ export function SearchBar() {
   const isUserScrolledRef = useRef(false)
   const lastScrollHeightRef = useRef(0)
 
-  const { messages, setMessages, loadChats, activeChatId, createChat: ctxCreateChat, generateTitle } = useChat()
+  const { messages, setMessages, activeChatId, createChat: ctxCreateChat, generateTitle } = useChat()
   const chatId = activeChatId
 
   const {
     isStreaming,
     isThinking,
     displayedContent,
-    fullContent,
-    envelope,
     error: streamError,
     isDone,
     startStreaming,

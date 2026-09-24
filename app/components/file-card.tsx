@@ -1,6 +1,6 @@
 "use client"
 
-import { FileText, Image, FileSpreadsheet, FileCode, File, Presentation, X } from "lucide-react"
+import { FileText, Image as ImageIcon, FileSpreadsheet, FileCode, File, Presentation, X } from "lucide-react"
 
 interface FileCardProps {
   filename: string
@@ -13,7 +13,7 @@ interface FileCardProps {
 }
 
 function getFileIcon(mimeType: string) {
-  if (mimeType.startsWith("image/")) return <Image className="h-5 w-5" />
+  if (mimeType.startsWith("image/")) return <ImageIcon className="h-5 w-5" />
   if (mimeType === "application/pdf") return <FileText className="h-5 w-5" />
   if (mimeType.includes("spreadsheet") || mimeType.includes("csv") || mimeType.includes("excel"))
     return <FileSpreadsheet className="h-5 w-5" />
@@ -63,6 +63,8 @@ export function FileCard({ filename, size, mimeType, previewDataUrl, onClick, on
       >
         {isImage && previewDataUrl ? (
           <div className="h-10 w-10 shrink-0 rounded-lg overflow-hidden bg-muted">
+            {/* Vista previa local (data URL): next/image no aporta nada aquí */}
+            {/* eslint-disable-next-line @next/next/no-img-element */}
             <img
               src={previewDataUrl}
               alt={filename}

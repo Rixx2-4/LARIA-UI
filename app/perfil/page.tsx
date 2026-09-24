@@ -1,6 +1,7 @@
 "use client"
 
 import { useState, useEffect, useCallback } from "react"
+import Link from "next/link"
 import { Loader2, RefreshCw, LogIn } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { Sidebar } from "../components/sidebar"
@@ -161,6 +162,8 @@ export default function PerfilPage() {
   }, [isAuthenticated])
 
   useEffect(() => {
+    // Carga inicial de datos: el estado de carga se actualiza desde aquí
+    // eslint-disable-next-line react-hooks/set-state-in-effect
     loadProfileData()
   }, [loadProfileData])
 
@@ -171,12 +174,12 @@ export default function PerfilPage() {
         <div className="flex-1 flex items-center justify-center bg-background">
           <div className="text-center space-y-4">
             <p className="text-muted-foreground">Inicia sesión para ver tu perfil de aprendizaje.</p>
-            <a href="/">
-              <Button variant="outline" className="gap-2">
+            <Button variant="outline" className="gap-2" asChild>
+              <Link href="/">
                 <LogIn className="h-4 w-4" />
                 Ir a iniciar sesión
-              </Button>
-            </a>
+              </Link>
+            </Button>
           </div>
         </div>
       </div>

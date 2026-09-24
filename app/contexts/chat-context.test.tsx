@@ -1,7 +1,7 @@
 import { describe, it, expect, vi, afterEach, beforeEach } from "vitest"
 import type { ReactNode } from "react"
 import { renderHook, act, waitFor } from "@testing-library/react"
-import { AuthProvider } from "./auth-context"
+import { AuthProvider, useAuth } from "./auth-context"
 import { ChatProvider, useChat } from "./chat-context"
 import { setAuthToken, type ChatMessage } from "@/lib/laria-api"
 
@@ -52,5 +52,26 @@ describe("ChatProvider", () => {
 
     expect(result.current.activeChatId).toBe("c2")
     expect(result.current.messages).toEqual([firstMessage])
+  })
+
+  it("al cerrar sesión no queda ningún chat del usuario anterior", async () => {
+    const saved: ChatMessage[] = [{ role: "user", content: "Mis apuntes privados" }]
+    vi.stubGlobal("fetch", async (url: string) => {
+      if (url.endsWith("/users/me")) return json({ id: "u1", username: "ana", email: "a@a.a" })
+      if (url.endsWith("/chats/")) return json({ chats: [{ id: "c1", title: "Privado" }] })
+      if (url.endsWith("/chats/c1")) return json({ id: "c1", title: "Privado", messages: saved })
+      throw new Error(`Petición inesperada: ${url}`)
+    })
+
+    const { result } = renderHook(() => ({ auth: useAuth(), chat: useChat() }), { wrapper })
+    await waitFor(() => expect(result.current.chat.chats).toHaveLength(1))
+    await act(() => result.current.chat.selectChat("c1"))
+    expect(result.current.chat.messages).toEqual(saved)
+
+    act(() => result.current.auth.logout())
+
+    expect(result.current.chat.chats).toEqual([])
+    expect(result.current.chat.activeChatId).toBeNull()
+    expect(result.current.chat.messages).toEqual([])
   })
 })

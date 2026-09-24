@@ -74,7 +74,7 @@ export default function QuizPage() {
       const quizMsg = (chat.messages || []).find(
         (m) => m.metadata?.type === "quiz"
       )
-      const quizId = quizMsg?.metadata?.envelope?.quiz_id as string | undefined
+      const quizId = quizMsg?.metadata?.envelope?.quiz_id
 
       if (!quizId) {
         setError("No se encontró el quiz activo.")

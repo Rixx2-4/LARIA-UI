@@ -75,6 +75,8 @@ function ImageViewer({ src, filename }: { src: string; filename: string }) {
         </Button>
       </div>
       <div className="flex-1 overflow-auto flex items-center justify-center p-4 bg-muted/30 rounded-xl w-full">
+        {/* Imagen del usuario, local o de la API: next/image no aporta nada aquí */}
+        {/* eslint-disable-next-line @next/next/no-img-element */}
         <img
           src={src}
           alt={filename}
@@ -100,7 +102,7 @@ function PdfViewer({ src }: { src: string }) {
   )
 }
 
-function TextViewer({ content, filename }: { content: string; filename: string }) {
+function TextViewer({ content }: { content: string; filename: string }) {
   return (
     <div className="w-full h-full overflow-auto bg-muted/30 rounded-xl p-4">
       <pre className="text-sm font-mono text-foreground whitespace-pre-wrap break-words">

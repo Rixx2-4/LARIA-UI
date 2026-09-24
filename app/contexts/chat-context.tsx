@@ -8,7 +8,6 @@ interface ChatContextType {
   chats: Chat[]
   activeChatId: string | null
   messages: ChatMessage[]
-  isLoading: boolean
   loadChats: () => Promise<void>
   createChat: (title?: string, documentId?: string) => Promise<Chat>
   selectChat: (chatId: string) => Promise<void>
@@ -26,13 +25,19 @@ export function ChatProvider({ children }: { children: ReactNode }) {
   const [chats, setChats] = useState<Chat[]>([])
   const [activeChatId, setActiveChatId] = useState<string | null>(null)
   const [messages, setMessages] = useState<ChatMessage[]>([])
-  const [isLoading, setIsLoading] = useState(false)
+  // Al cerrar sesión se vacía todo durante el render, sin esperar a un efecto
+  const [wasAuthenticated, setWasAuthenticated] = useState(isAuthenticated)
+  if (wasAuthenticated !== isAuthenticated) {
+    setWasAuthenticated(isAuthenticated)
+    if (!isAuthenticated) {
+      setChats([])
+      setActiveChatId(null)
+      setMessages([])
+    }
+  }
 
   const loadChats = useCallback(async () => {
-    if (!getAuthToken()) {
-      setChats([])
-      return
-    }
+    if (!getAuthToken()) return
     try {
       const response = await lariaAPI.chats.list()
       setChats(response.chats)
@@ -57,13 +62,9 @@ export function ChatProvider({ children }: { children: ReactNode }) {
   }, [])
 
   useEffect(() => {
-    if (isAuthenticated) {
-      loadChats()
-    } else {
-      setChats([])
-      setActiveChatId(null)
-      setMessages([])
-    }
+    // Carga de datos al iniciar sesión; el estado se actualiza tras el await
+    // eslint-disable-next-line react-hooks/set-state-in-effect
+    if (isAuthenticated) loadChats()
   }, [isAuthenticated, loadChats])
 
   const createChat = useCallback(async (title?: string, documentId?: string): Promise<Chat> => {
@@ -125,7 +126,6 @@ export function ChatProvider({ children }: { children: ReactNode }) {
         chats,
         activeChatId,
         messages,
-        isLoading,
         loadChats,
         createChat,
         selectChat,
