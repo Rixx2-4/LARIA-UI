@@ -4,7 +4,7 @@ import { FileText, Image as ImageIcon, FileSpreadsheet, FileCode, File, Presenta
 
 interface FileCardProps {
   filename: string
-  size: number
+  size?: number
   mimeType: string
   documentId?: string
   previewDataUrl?: string
@@ -79,7 +79,7 @@ export function FileCard({ filename, size, mimeType, previewDataUrl, onClick, on
         <div className="min-w-0 flex-1">
           <p className="text-sm font-medium truncate">{filename}</p>
           <p className="text-xs text-muted-foreground">
-            {getFileTypeLabel(mimeType)} · {formatSize(size)}
+            {getFileTypeLabel(mimeType)}{size !== undefined && ` · ${formatSize(size)}`}
           </p>
         </div>
       </button>

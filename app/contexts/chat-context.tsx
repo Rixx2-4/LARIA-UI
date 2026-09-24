@@ -2,6 +2,7 @@
 
 import { createContext, useContext, useState, useEffect, useCallback, useRef, ReactNode } from "react"
 import { lariaAPI, ApiError, Chat, ChatMessage, getAuthToken } from "@/lib/laria-api"
+import { toast } from "sonner"
 import { useAuth } from "./auth-context"
 
 export type ChatLoadError = "not-found" | "load-failed"
@@ -9,6 +10,8 @@ export type ChatLoadError = "not-found" | "load-failed"
 interface ChatContextType {
   chats: Chat[]
   activeChatId: string | null
+  // El documento vinculado al chat activo, según el servidor
+  activeDocumentId: string | null
   messages: ChatMessage[]
   // Por qué no se pudo abrir el chat activo
   chatError: ChatLoadError | null
@@ -29,6 +32,7 @@ export function ChatProvider({ children }: { children: ReactNode }) {
   const { isAuthenticated } = useAuth()
   const [chats, setChats] = useState<Chat[]>([])
   const [activeChatId, setActiveChatId] = useState<string | null>(null)
+  const [activeDocumentId, setActiveDocumentId] = useState<string | null>(null)
   const [messages, setMessages] = useState<ChatMessage[]>([])
   const [chatError, setChatError] = useState<ChatLoadError | null>(null)
   const requestedChatIdRef = useRef<string | null>(null)
@@ -40,6 +44,7 @@ export function ChatProvider({ children }: { children: ReactNode }) {
     if (!isAuthenticated) {
       setChats([])
       setActiveChatId(null)
+      setActiveDocumentId(null)
       setChatError(null)
       setMessages([])
     }
@@ -53,6 +58,7 @@ export function ChatProvider({ children }: { children: ReactNode }) {
     } catch (error) {
       console.error("Error loading chats:", error)
       setChats([])
+      toast.error("No se pudieron cargar tus chats")
     }
   }, [])
 
@@ -67,6 +73,7 @@ export function ChatProvider({ children }: { children: ReactNode }) {
     await loadChats()
     requestedChatIdRef.current = chat.id
     setActiveChatId(chat.id)
+    setActiveDocumentId(chat.document_id ?? documentId ?? null)
     setChatError(null)
     setMessages([])
     return chat
@@ -76,11 +83,14 @@ export function ChatProvider({ children }: { children: ReactNode }) {
     requestedChatIdRef.current = chatId
     setActiveChatId(chatId)
     setChatError(null)
+    setActiveDocumentId(null)
     setMessages([])
     try {
       const chat = await lariaAPI.chats.get(chatId)
       // Si mientras tanto se abrió otro chat, esta respuesta ya no interesa
-      if (requestedChatIdRef.current === chatId) setMessages(chat.messages || [])
+      if (requestedChatIdRef.current !== chatId) return
+      setMessages(chat.messages || [])
+      setActiveDocumentId(chat.document_id ?? null)
     } catch (error) {
       if (requestedChatIdRef.current !== chatId) return
       const notFound = error instanceof ApiError && (error.status === 404 || error.status === 403)
@@ -97,6 +107,7 @@ export function ChatProvider({ children }: { children: ReactNode }) {
     await lariaAPI.chats.delete(chatId)
     if (activeChatId === chatId) {
       setActiveChatId(null)
+      setActiveDocumentId(null)
       setMessages([])
     }
     await loadChats()
@@ -110,6 +121,7 @@ export function ChatProvider({ children }: { children: ReactNode }) {
   const clearActiveChat = useCallback(() => {
     requestedChatIdRef.current = null
     setActiveChatId(null)
+    setActiveDocumentId(null)
     setChatError(null)
     setMessages([])
   }, [])
@@ -140,6 +152,7 @@ export function ChatProvider({ children }: { children: ReactNode }) {
       value={{
         chats,
         activeChatId,
+        activeDocumentId,
         messages,
         chatError,
         loadChats,

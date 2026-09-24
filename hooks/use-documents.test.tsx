@@ -52,4 +52,21 @@ describe("useDocuments", () => {
     await act(() => vi.advanceTimersByTimeAsync(10000))
     expect(calls()).toBe(0)
   })
+
+  it("un fallo de red momentáneo no detiene la consulta ni vacía la lista", async () => {
+    let calls = 0
+    vi.stubGlobal("fetch", async () => {
+      calls++
+      if (calls === 2) throw new TypeError("Failed to fetch")
+      return new Response(JSON.stringify([doc(calls >= 3 ? "analyzed" : "processing")]), { status: 200 })
+    })
+    const { result } = renderHook(() => useDocuments(true))
+
+    await act(() => vi.advanceTimersByTimeAsync(0))
+    await act(() => vi.advanceTimersByTimeAsync(3000)) // falla
+    expect(result.current.documents[0].status).toBe("processing")
+
+    await act(() => vi.advanceTimersByTimeAsync(10000))
+    expect(result.current.documents[0].status).toBe("analyzed")
+  })
 })

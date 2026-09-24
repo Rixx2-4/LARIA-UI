@@ -1,6 +1,6 @@
 "use client"
 
-import { useState } from "react"
+import { useRef, useState } from "react"
 import { useRouter } from "next/navigation"
 import { toast } from "sonner"
 import { Button } from "@/components/ui/button"
@@ -24,7 +24,13 @@ import { UpgradeModal } from "./upgrade-modal"
 import { AccountMenu } from "./account-menu"
 import { useChat } from "@/app/contexts/chat-context"
 import { useAuth } from "@/app/contexts/auth-context"
-import { useDocuments } from "@/hooks/use-documents"
+import { useDocuments, documentState, type DocumentState } from "@/hooks/use-documents"
+
+const DOCUMENT_STATE_LABEL: Record<DocumentState, string> = {
+  ready: "Analizado",
+  failed: "Error de análisis",
+  processing: "Procesando...",
+}
 
 // onNavigate avisa de que el usuario eligió un destino (el cajón móvil se cierra)
 export function Sidebar({ onNavigate }: { onNavigate?: () => void } = {}) {
@@ -34,8 +40,10 @@ export function Sidebar({ onNavigate }: { onNavigate?: () => void } = {}) {
   const [openPanel, setOpenPanel] = useState<string | null>(null)
   const [pinnedPanel, setPinnedPanel] = useState<string | null>(null)
   const [showUpgradeModal, setShowUpgradeModal] = useState(false)
+  // Solo una fila del historial puede estar renombrándose o pidiendo confirmación
+  const [editing, setEditing] = useState<{ chatId: string; mode: RowMode } | null>(null)
   const [showAccountMenu, setShowAccountMenu] = useState(false)
-  const { documents } = useDocuments(openPanel === "documents" && isAuthenticated)
+  const { documents, loadFailed: documentsLoadFailed } = useDocuments(openPanel === "documents" && isAuthenticated)
 
   // El chat nuevo se crea al enviar el primer mensaje
   const navigate = (path: string) => {
@@ -243,6 +251,8 @@ export function Sidebar({ onNavigate }: { onNavigate?: () => void } = {}) {
                         key={chat.id}
                         title={chat.title}
                         isActive={activeChatId === chat.id}
+                        mode={editing?.chatId === chat.id ? editing.mode : "view"}
+                        onModeChange={(mode) => setEditing(mode === "view" ? null : { chatId: chat.id, mode })}
                         onSelect={() => handleSelectChat(chat.id)}
                         onRename={(title) => handleRenameChat(chat.id, title)}
                         onDelete={() => handleDeleteChat(chat.id)}
@@ -328,20 +338,14 @@ export function Sidebar({ onNavigate }: { onNavigate?: () => void } = {}) {
                         <div className="min-w-0 flex-1">
                           <div className="truncate font-medium">{doc.filename}</div>
                           <div className="text-[10.5px] text-muted-foreground truncate">
-                            {doc.status === "analyzed"
-                              ? "Analizado"
-                              : doc.status === "analysis_failed"
-                                ? "Error de análisis"
-                                : doc.has_analysis
-                                  ? "Analizado"
-                                  : "Procesando..."}
+                            {DOCUMENT_STATE_LABEL[documentState(doc)]}
                           </div>
                         </div>
                       </div>
                     ))
                   ) : (
                     <p className="text-[12px] text-muted-foreground px-2 py-4 text-center">
-                      No hay documentos aún.
+                      {documentsLoadFailed ? "No se pudieron cargar tus documentos." : "No hay documentos aún."}
                       <br />
                       Sube archivos desde el chat.
                     </p>
@@ -364,23 +368,36 @@ export function Sidebar({ onNavigate }: { onNavigate?: () => void } = {}) {
   )
 }
 
+type RowMode = "view" | "rename" | "confirm-delete"
+
 interface ChatHistoryItemProps {
   title: string
   isActive: boolean
+  mode: RowMode
+  onModeChange: (mode: RowMode) => void
   onSelect: () => void
   onRename: (title: string) => Promise<void>
   onDelete: () => Promise<void>
 }
 
 // Una fila del historial: abrir, renombrar en el sitio o borrar tras confirmar
-function ChatHistoryItem({ title, isActive, onSelect, onRename, onDelete }: ChatHistoryItemProps) {
-  const [mode, setMode] = useState<"view" | "rename" | "confirm-delete">("view")
+function ChatHistoryItem({ title, isActive, mode, onModeChange, onSelect, onRename, onDelete }: ChatHistoryItemProps) {
   const [draft, setDraft] = useState(title)
+  // Enter, Escape y el blur que llega al desmontar el input no deben actuar dos veces
+  const finishedRef = useRef(false)
 
-  const saveRename = async () => {
+  const startRename = () => {
+    finishedRef.current = false
+    setDraft(title)
+    onModeChange("rename")
+  }
+
+  const finishRename = async (save: boolean) => {
+    if (finishedRef.current) return
+    finishedRef.current = true
+    onModeChange("view")
     const next = draft.trim()
-    setMode("view")
-    if (next && next !== title) await onRename(next)
+    if (save && next && next !== title) await onRename(next)
   }
 
   if (mode === "rename") {
@@ -391,10 +408,10 @@ function ChatHistoryItem({ title, isActive, onSelect, onRename, onDelete }: Chat
           aria-label="Nuevo título"
           value={draft}
           onChange={(e) => setDraft(e.target.value)}
-          onBlur={saveRename}
+          onBlur={() => finishRename(true)}
           onKeyDown={(e) => {
-            if (e.key === "Enter") saveRename()
-            if (e.key === "Escape") setMode("view")
+            if (e.key === "Enter") finishRename(true)
+            if (e.key === "Escape") finishRename(false)
           }}
           className="w-full rounded border border-border bg-background px-2 py-1 text-[13px] focus:outline-none focus:ring-1 focus:ring-ring"
         />
@@ -408,14 +425,14 @@ function ChatHistoryItem({ title, isActive, onSelect, onRename, onDelete }: Chat
         <span className="min-w-0 truncate">¿Borrar?</span>
         <div className="flex shrink-0 gap-1">
           <button
-            onClick={() => setMode("view")}
+            onClick={() => onModeChange("view")}
             className="rounded px-1.5 py-0.5 hover:bg-accent"
           >
             Cancelar
           </button>
           <button
             onClick={() => {
-              setMode("view")
+              onModeChange("view")
               onDelete()
             }}
             className="rounded bg-destructive px-1.5 py-0.5 text-white hover:bg-destructive/90"
@@ -440,8 +457,7 @@ function ChatHistoryItem({ title, isActive, onSelect, onRename, onDelete }: Chat
           aria-label={`Renombrar chat «${title}»`}
           onClick={(e) => {
             e.stopPropagation()
-            setDraft(title)
-            setMode("rename")
+            startRename()
           }}
           className="p-1 hover:text-foreground"
         >
@@ -451,7 +467,7 @@ function ChatHistoryItem({ title, isActive, onSelect, onRename, onDelete }: Chat
           aria-label={`Borrar chat «${title}»`}
           onClick={(e) => {
             e.stopPropagation()
-            setMode("confirm-delete")
+            onModeChange("confirm-delete")
           }}
           className="p-1 hover:text-destructive"
         >

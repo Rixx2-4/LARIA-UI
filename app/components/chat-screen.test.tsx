@@ -183,4 +183,20 @@ describe("ChatScreen", () => {
     await screen.findByText("Hola desde c1")
     expect(screen.getByText("tema1.txt")).toBeTruthy()
   })
+
+  it("al abrir un chat con documento vinculado (p. ej. tras recargar), muestra su archivo", async () => {
+    vi.stubGlobal("fetch", async (url: string) => {
+      if (url.endsWith("/users/me")) return json({ id: "u1", username: "ana", email: "a@a.a" })
+      if (url.endsWith("/chats/")) return json({ chats: [] })
+      if (url.endsWith("/documents/"))
+        return json([{ id: "d1", owner_id: "u1", filename: "tema1.pdf", subject: "", status: "analyzed", uploaded_at: "", has_analysis: true, error_message: null }])
+      if (url.endsWith("/chats/c1"))
+        return json({ id: "c1", title: "Tema 1", document_id: "d1", messages: [{ role: "user", content: "📎 Subí el archivo: tema1.pdf" }] })
+      throw new Error(`Petición inesperada: ${url}`)
+    })
+
+    renderAt("c1")
+
+    expect(await screen.findByText("tema1.pdf")).toBeTruthy()
+  })
 })

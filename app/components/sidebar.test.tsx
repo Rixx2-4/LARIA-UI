@@ -14,8 +14,8 @@ vi.mock("next/navigation", () => ({
 const json = (body: unknown, status = 200) => new Response(JSON.stringify(body), { status })
 
 // Servidor con un chat "Átomos"; registra las peticiones que cambian algo
-function stubServer() {
-  let chats = [{ id: "c1", title: "Átomos" }]
+function stubServer(extra: { id: string; title: string }[] = []) {
+  let chats = [{ id: "c1", title: "Átomos" }, ...extra]
   const writes: string[] = []
   vi.stubGlobal("fetch", async (url: string, init?: RequestInit) => {
     const method = init?.method ?? "GET"
@@ -23,13 +23,13 @@ function stubServer() {
     if (url.endsWith("/chats/")) return json({ chats })
     if (url.endsWith("/chats/c1") && method === "DELETE") {
       writes.push("DELETE c1")
-      chats = []
+      chats = chats.filter((c) => c.id !== "c1")
       return new Response(null, { status: 204 })
     }
     if (url.endsWith("/chats/c1") && method === "PUT") {
       const { title } = JSON.parse(String(init?.body))
       writes.push(`PUT c1 ${title}`)
-      chats = [{ id: "c1", title }]
+      chats = chats.map((c) => (c.id === "c1" ? { ...c, title } : c))
       return json(chats[0])
     }
     throw new Error(`Petición inesperada: ${method} ${url}`)
@@ -84,5 +84,32 @@ describe("Sidebar", () => {
 
     expect(await screen.findByText("Química básica")).toBeTruthy()
     expect(writes).toEqual(["PUT c1 Química básica"])
+  })
+
+  it("Escape cancela el renombrado sin guardar", async () => {
+    const writes = stubServer()
+    await openHistory()
+
+    fireEvent.click(screen.getByRole("button", { name: "Renombrar chat «Átomos»" }))
+    const input = screen.getByRole("textbox", { name: "Nuevo título" })
+    fireEvent.change(input, { target: { value: "Otro nombre" } })
+    fireEvent.keyDown(input, { key: "Escape" })
+    fireEvent.blur(input)
+
+    expect(screen.getByText("Átomos")).toBeTruthy()
+    expect(writes).toEqual([])
+  })
+
+  it("solo una fila a la vez: empezar a renombrar otra cancela la confirmación de borrado", async () => {
+    stubServer([{ id: "c2", title: "Células" }])
+    await openHistory()
+
+    fireEvent.click(screen.getByRole("button", { name: "Borrar chat «Átomos»" }))
+    expect(screen.getByText("¿Borrar?")).toBeTruthy()
+    fireEvent.click(screen.getByRole("button", { name: "Renombrar chat «Células»" }))
+
+    expect(screen.queryByText("¿Borrar?")).toBeNull()
+    expect(screen.getByText("Átomos")).toBeTruthy()
+    expect(screen.getByRole("textbox", { name: "Nuevo título" })).toBeTruthy()
   })
 })

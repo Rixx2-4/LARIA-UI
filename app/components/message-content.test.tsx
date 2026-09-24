@@ -50,4 +50,18 @@ describe("MessageContent", () => {
     expect(container.querySelector("img")).toBeNull()
     expect(container.textContent).toContain("hola")
   })
+
+  it("las cantidades de dinero no se confunden con fórmulas", () => {
+    const { container } = render(<MessageContent content={"El libro cuesta $5 y el cuaderno $10. Área: $x^2$"} />)
+
+    expect(container.textContent).toContain("cuesta $5 y el cuaderno $10")
+    expect(container.querySelectorAll(".katex")).toHaveLength(1)
+  })
+
+  it("no toca la notación LaTeX escrita dentro de código en línea", () => {
+    const { container } = render(<MessageContent content={"Escribe `\\(x\\)` para una fórmula"} />)
+
+    expect(container.querySelector("code")?.textContent).toBe("\\(x\\)")
+    expect(container.querySelector(".katex")).toBeNull()
+  })
 })

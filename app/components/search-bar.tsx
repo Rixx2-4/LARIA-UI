@@ -19,10 +19,26 @@ const ALLOWED_EXTENSIONS = [
   ".css", ".sql", ".json", ".xml", ".php", ".rb",
 ]
 
+// Un adjunto del chat: recién subido (con tamaño y vista previa local) o
+// recuperado del servidor tras recargar (solo con sus datos básicos)
 interface UploadedFile {
-  file: File
+  filename: string
+  mimeType: string
+  size?: number
   document?: Document
   dataUrl?: string
+}
+
+const MIME_BY_EXTENSION: Record<string, string> = {
+  pdf: "application/pdf", txt: "text/plain", md: "text/markdown", csv: "text/csv",
+  json: "application/json", xml: "text/xml", html: "text/html", css: "text/css",
+  js: "text/javascript", ts: "text/typescript", py: "text/x-python",
+  png: "image/png", jpg: "image/jpeg", jpeg: "image/jpeg", gif: "image/gif", webp: "image/webp",
+}
+
+function mimeFromFilename(filename: string): string {
+  const ext = filename.split(".").pop()?.toLowerCase() ?? ""
+  return MIME_BY_EXTENSION[ext] ?? "application/octet-stream"
 }
 
 export function SearchBar() {
@@ -44,7 +60,7 @@ export function SearchBar() {
   const lastScrollHeightRef = useRef(0)
 
   const router = useRouter()
-  const { messages, setMessages, activeChatId, createChat: ctxCreateChat, generateTitle } = useChat()
+  const { messages, setMessages, activeChatId, activeDocumentId, createChat: ctxCreateChat, generateTitle } = useChat()
   const chatId = activeChatId
 
   const {
@@ -176,7 +192,7 @@ export function SearchBar() {
       const { id: currentChatId, isNew: isNewChat } = await ensureChat(doc.id)
       setUploadsByChat((prev) => ({
         ...prev,
-        [currentChatId]: [...(prev[currentChatId] ?? []), { file, document: doc, dataUrl }],
+        [currentChatId]: [...(prev[currentChatId] ?? []), { filename: file.name, mimeType: file.type, size: file.size, document: doc, dataUrl }],
       }))
       if (!isNewChat) {
         await lariaAPI.chats.update(currentChatId, { document_id: doc.id })
@@ -199,11 +215,34 @@ export function SearchBar() {
     }
   }
 
-  const uploadedFiles = (chatId && uploadsByChat[chatId]) || []
+  // Tras recargar, los adjuntos locales se pierden: se muestra el documento que el
+  // servidor tiene vinculado al chat
+  const [fetchedDocument, setFetchedDocument] = useState<Document | null>(null)
+  const linkedDocument = fetchedDocument?.id === activeDocumentId ? fetchedDocument : null
+  useEffect(() => {
+    if (!activeDocumentId) return
+    let cancelled = false
+    lariaAPI.documents
+      .list()
+      .then((docs) => {
+        const doc = docs.find((d) => d.id === activeDocumentId)
+        if (!cancelled && doc) setFetchedDocument(doc)
+      })
+      .catch(() => {})
+    return () => {
+      cancelled = true
+    }
+  }, [activeDocumentId])
+
+  const localUploads = (chatId && uploadsByChat[chatId]) || []
+  const uploadedFiles: UploadedFile[] =
+    localUploads.length > 0 || !linkedDocument
+      ? localUploads
+      : [{ document: linkedDocument, filename: linkedDocument.filename, mimeType: mimeFromFilename(linkedDocument.filename) }]
 
   const removeFile = (index: number) => {
     if (!chatId) return
-    setUploadsByChat((prev) => ({ ...prev, [chatId]: uploadedFiles.filter((_, i) => i !== index) }))
+    setUploadsByChat((prev) => ({ ...prev, [chatId]: (prev[chatId] ?? []).filter((_, i) => i !== index) }))
   }
 
   const handleSend = async () => {
@@ -241,13 +280,13 @@ export function SearchBar() {
     cancelStreaming()
   }
 
-  const renderMessageContent = (msg: typeof messages[0], isCurrentStreaming: boolean) =>
+  const renderMessageContent = (msg: typeof messages[0], isLive: boolean) =>
     msg.role === "user" ? (
       <div className="text-[14px] whitespace-pre-wrap">{msg.content}</div>
     ) : (
       <div className="text-[14px] leading-relaxed">
         <MessageContent content={msg.content} />
-        {isCurrentStreaming && isStreaming && (
+        {isLive && (
           <span className="inline-block w-2 h-4 ml-0.5 bg-foreground/70 animate-pulse" />
         )}
       </div>
@@ -277,7 +316,8 @@ export function SearchBar() {
         ) : (
           <div className="mx-auto w-full max-w-3xl space-y-4 px-4 py-6 md:px-6">
             {messages.map((msg, index) => {
-              const isCurrentStreaming = index === messages.length - 1 && msg.role === "assistant"
+              // La respuesta que se está escribiendo ahora mismo
+              const isLive = isStreaming && index === messages.length - 1 && msg.role === "assistant"
               return (
                 <div
                   key={`${index}-${msg.role}`}
@@ -290,32 +330,29 @@ export function SearchBar() {
                         : "bg-muted text-foreground"
                     }`}
                   >
-                    {renderMessageContent(msg, isCurrentStreaming)}
+                    {renderMessageContent(msg, isLive)}
 
-                    {msg.role === "assistant" && !(isCurrentStreaming && isStreaming) && (
-                      <button
-                        onClick={() => copyToClipboard(msg.content)}
-                        aria-label="Copiar respuesta"
-                        className="mt-2 flex items-center gap-1 text-[11px] text-muted-foreground transition-colors hover:text-foreground"
-                      >
-                        <Copy className="h-3 w-3" />
-                        Copiar
-                      </button>
-                    )}
-
-                    {msg.role === "assistant" && msg.metadata?.envelope && (
-                      <div className="mt-2 pt-2 border-t border-border/30 flex items-center gap-2 text-[11px] text-muted-foreground">
-                        {msg.metadata.envelope.type && (
+                    {msg.role === "assistant" && !isLive && (
+                      <div className="mt-2 pt-2 border-t border-border/30 flex flex-wrap items-center gap-2 text-[11px] text-muted-foreground">
+                        <button
+                          onClick={() => copyToClipboard(msg.content)}
+                          aria-label="Copiar respuesta"
+                          className="flex items-center gap-1 transition-colors hover:text-foreground"
+                        >
+                          <Copy className="h-3 w-3" />
+                          Copiar
+                        </button>
+                        {msg.metadata?.envelope?.type && (
                           <span className="px-1.5 py-0.5 rounded bg-secondary/50">
                             {msg.metadata.envelope.type}
                           </span>
                         )}
-                        {msg.metadata.envelope.emotion && (
+                        {msg.metadata?.envelope?.emotion && (
                           <span className="px-1.5 py-0.5 rounded bg-secondary/50">
                             {msg.metadata.envelope.emotion}
                           </span>
                         )}
-                        {msg.metadata.envelope.grounded !== undefined && (
+                        {msg.metadata?.envelope?.grounded !== undefined && (
                           <span className={`px-1.5 py-0.5 rounded ${msg.metadata.envelope.grounded ? "bg-green-500/20 text-green-700" : "bg-yellow-500/20 text-yellow-700"}`}>
                             {msg.metadata.envelope.grounded ? "Tutoría" : "Chat libre"}
                           </span>
@@ -356,15 +393,15 @@ export function SearchBar() {
             {uploadedFiles.map((uf, index) => (
               <FileCard
                 key={`${uf.document?.id || index}`}
-                filename={uf.file.name}
-                size={uf.file.size}
-                mimeType={uf.file.type}
+                filename={uf.filename}
+                size={uf.size}
+                mimeType={uf.mimeType}
                 documentId={uf.document?.id}
                 previewDataUrl={uf.dataUrl}
                 onClick={() =>
                   setViewerFile({
-                    filename: uf.file.name,
-                    mimeType: uf.file.type,
+                    filename: uf.filename,
+                    mimeType: uf.mimeType,
                     documentId: uf.document?.id,
                     dataUrl: uf.dataUrl,
                   })
