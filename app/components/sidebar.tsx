@@ -149,7 +149,7 @@ export function Sidebar({ onNavigate }: { onNavigate?: () => void } = {}) {
           <div className="relative mb-2">
             <Button
               variant="ghost"
-              onClick={() => navigate("/quiz")}
+              onClick={() => navigate(activeChatId ? `/quiz?chat=${activeChatId}` : "/quiz")}
               aria-label="Quiz"
               className="h-10 w-10 shrink-0 mx-auto text-muted-foreground hover:text-foreground hover:bg-accent"
             >

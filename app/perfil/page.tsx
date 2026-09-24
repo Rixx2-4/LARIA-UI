@@ -98,6 +98,12 @@ function Perfil() {
 
       if (me.status === "fulfilled") setUserData(me.value)
 
+      // Sin perfil ni historial, el panel mostraría ceros como si fueran datos reales
+      if (lp.status === "rejected" || lh.status === "rejected") {
+        setError("No se pudo cargar tu perfil de aprendizaje")
+        return
+      }
+
       const profile = lp.status === "fulfilled" ? lp.value : null
       const hist = lh.status === "fulfilled" ? lh.value : null
       const docList = docs.status === "fulfilled" ? docs.value : []
@@ -176,6 +182,20 @@ function Perfil() {
       <AppShell>
         <div className="flex h-full items-center justify-center">
           <Loader2 className="h-8 w-8 animate-spin text-muted-foreground" />
+        </div>
+      </AppShell>
+    )
+  }
+
+  if (error) {
+    return (
+      <AppShell>
+        <div className="flex h-full flex-col items-center justify-center gap-4 px-4 text-center">
+          <p className="text-muted-foreground">{error}</p>
+          <Button variant="outline" onClick={loadProfileData} className="gap-2">
+            <RefreshCw className="h-4 w-4" />
+            Reintentar
+          </Button>
         </div>
       </AppShell>
     )
@@ -287,12 +307,6 @@ function Perfil() {
             </div>
           </div>
         </div>
-
-        {error && (
-          <div className="mx-6 mb-5 p-3 px-4 bg-destructive/10 border border-destructive/20 rounded-[10px] text-sm text-destructive">
-            {error}
-          </div>
-        )}
 
         {repeated && repeated.length > 0 && (
           <div className="mx-6 mb-5 p-3 px-4 bg-destructive/10 border border-destructive/20 rounded-[10px] text-sm text-destructive flex gap-2.5 items-start leading-relaxed">

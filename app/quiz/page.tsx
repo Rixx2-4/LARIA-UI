@@ -1,7 +1,7 @@
 "use client"
 
-import { useState } from "react"
-import { useRouter } from "next/navigation"
+import { Suspense, useState } from "react"
+import { useRouter, useSearchParams } from "next/navigation"
 import { Loader2, CheckCircle, XCircle, ArrowRight, RotateCcw } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { AppShell } from "../components/app-shell"
@@ -16,38 +16,50 @@ interface QuizResult {
   correctAnswer: string
 }
 
+const PRESET_COUNTS = [5, 10, 20]
+
 export default function QuizPage() {
   return (
     <RequireAuth>
-      <Quiz />
+      {/* useSearchParams necesita un Suspense para poder prerenderizar la página */}
+      <Suspense>
+        <Quiz />
+      </Suspense>
     </RequireAuth>
   )
 }
 
 function Quiz() {
   const router = useRouter()
-  const { activeChatId } = useChat()
+  // El chat viene en la URL (/quiz?chat=<id>) para sobrevivir a una recarga
+  const chatId = useSearchParams().get("chat")
+  const { chats } = useChat()
   const [step, setStep] = useState<"config" | "quiz" | "results">("config")
   const [questionCount, setQuestionCount] = useState(5)
+  const [isCustomCount, setIsCustomCount] = useState(false)
+  const [quizId, setQuizId] = useState<string | null>(null)
   const [questions, setQuestions] = useState<QuizQuestion[]>([])
   const [currentQuestion, setCurrentQuestion] = useState(0)
+  // Respuestas por el index que el backend da a cada pregunta
   const [answers, setAnswers] = useState<Record<number, string>>({})
   const [isLoading, setIsLoading] = useState(false)
   const [results, setResults] = useState<QuizResult[]>([])
   const [error, setError] = useState<string | null>(null)
 
   const generateQuiz = async () => {
-    if (!activeChatId) {
-      setError("Abre o crea un chat con un documento vinculado antes de generar un quiz.")
-      return
-    }
+    if (!chatId) return
     setIsLoading(true)
     setError(null)
     try {
-      const data = await lariaAPI.chats.generateQuiz(activeChatId, questionCount)
+      const data = await lariaAPI.chats.generateQuiz(chatId, questionCount)
       if (data.questions && data.questions.length > 0) {
+        setQuizId(data.id)
         setQuestions(data.questions)
+        setCurrentQuestion(0)
+        setAnswers({})
         setStep("quiz")
+      } else {
+        setError("El quiz generado no tiene preguntas. Prueba de nuevo.")
       }
     } catch (err) {
       console.error("Failed to generate quiz:", err)
@@ -57,8 +69,8 @@ function Quiz() {
     }
   }
 
-  const handleAnswer = (questionIndex: number, answer: string) => {
-    setAnswers({ ...answers, [questionIndex]: answer })
+  const handleAnswer = (question: QuizQuestion, answer: string) => {
+    setAnswers({ ...answers, [question.index]: answer })
   }
 
   const nextQuestion = () => {
@@ -76,24 +88,13 @@ function Quiz() {
   }
 
   const submitQuiz = async () => {
-    if (!activeChatId) return
+    if (!quizId) return
     setIsLoading(true)
+    setError(null)
     try {
-      const chat = await lariaAPI.chats.get(activeChatId)
-      const quizMsg = (chat.messages || []).find(
-        (m) => m.metadata?.type === "quiz"
-      )
-      const quizId = quizMsg?.metadata?.envelope?.quiz_id
-
-      if (!quizId) {
-        setError("No se encontró el quiz activo.")
-        setIsLoading(false)
-        return
-      }
-
       const answerRecord: Record<string, string> = {}
       Object.entries(answers).forEach(([idx, ans]) => {
-        answerRecord[String(idx)] = ans
+        answerRecord[idx] = ans
       })
 
       const data = await lariaAPI.quizzes.submitAttempt(quizId, answerRecord)
@@ -119,6 +120,7 @@ function Quiz() {
 
   const restartQuiz = () => {
     setStep("config")
+    setQuizId(null)
     setQuestions([])
     setCurrentQuestion(0)
     setAnswers({})
@@ -139,7 +141,7 @@ function Quiz() {
               <div>
                 <h1 className="text-2xl font-semibold mb-2">Quiz</h1>
                 <p className="text-muted-foreground">
-                  Genera un quiz basado en el material del chat activo
+                  Genera un quiz basado en el material de un chat
                 </p>
               </div>
 
@@ -149,34 +151,62 @@ function Quiz() {
                 </div>
               )}
 
-              {!activeChatId && (
-                <div className="p-4 bg-muted rounded-lg">
-                  <p className="text-sm text-muted-foreground">
-                    Abre o crea un chat con un documento vinculado para generar un quiz.
+              <div>
+                <label htmlFor="quiz-chat" className="text-sm font-medium mb-2 block">Chat</label>
+                {chats.length > 0 ? (
+                  <select
+                    id="quiz-chat"
+                    value={chatId ?? ""}
+                    onChange={(e) => router.replace(`/quiz?chat=${e.target.value}`)}
+                    className="w-full px-3 py-2 border border-border rounded-lg bg-background text-sm"
+                  >
+                    <option value="" disabled>
+                      Elige un chat…
+                    </option>
+                    {chats.map((chat) => (
+                      <option key={chat.id} value={chat.id}>
+                        {chat.title}
+                      </option>
+                    ))}
+                  </select>
+                ) : (
+                  <p className="p-4 bg-muted rounded-lg text-sm text-muted-foreground">
+                    Aún no tienes chats. Sube un documento en un chat para generar un quiz sobre él.
                   </p>
-                </div>
-              )}
+                )}
+              </div>
 
               <div>
                 <label className="text-sm font-medium mb-3 block">Número de preguntas</label>
                 <div className="grid grid-cols-4 gap-3">
-                  {[5, 10, 20, "custom"].map((count) => (
+                  {PRESET_COUNTS.map((count) => (
                     <Button
-                      key={String(count)}
-                      variant={questionCount === count ? "default" : "outline"}
-                      onClick={() => typeof count === "number" && setQuestionCount(count)}
+                      key={count}
+                      variant={!isCustomCount && questionCount === count ? "default" : "outline"}
+                      onClick={() => {
+                        setIsCustomCount(false)
+                        setQuestionCount(count)
+                      }}
                       className="h-12"
                     >
-                      {count === "custom" ? "Personalizar" : count}
+                      {count}
                     </Button>
                   ))}
+                  <Button
+                    variant={isCustomCount ? "default" : "outline"}
+                    onClick={() => setIsCustomCount(true)}
+                    className="h-12"
+                  >
+                    Personalizar
+                  </Button>
                 </div>
               </div>
 
-              {questionCount === 0 && (
+              {isCustomCount && (
                 <div>
-                  <label className="text-sm font-medium mb-2 block">Cantidad personalizada</label>
+                  <label htmlFor="quiz-count" className="text-sm font-medium mb-2 block">Cantidad personalizada</label>
                   <input
+                    id="quiz-count"
                     type="number"
                     min={1}
                     max={50}
@@ -189,7 +219,7 @@ function Quiz() {
 
               <Button
                 onClick={generateQuiz}
-                disabled={isLoading || questionCount < 1 || !activeChatId}
+                disabled={isLoading || questionCount < 1 || !chatId}
                 className="w-full h-12"
               >
                 {isLoading ? (
@@ -238,9 +268,9 @@ function Quiz() {
                   {Object.entries(questions[currentQuestion].options).map(([key, value]) => (
                     <button
                       key={key}
-                      onClick={() => handleAnswer(currentQuestion, key)}
+                      onClick={() => handleAnswer(questions[currentQuestion], key)}
                       className={`w-full text-left p-4 rounded-lg border transition-all ${
-                        answers[currentQuestion] === key
+                        answers[questions[currentQuestion].index] === key
                           ? "border-primary bg-primary/5"
                           : "border-border hover:border-primary/50"
                       }`}
@@ -251,6 +281,12 @@ function Quiz() {
                   ))}
                 </div>
               </div>
+
+              {error && (
+                <div className="p-4 bg-destructive/10 border border-destructive/20 rounded-lg text-sm text-destructive">
+                  {error}
+                </div>
+              )}
 
               <div className="flex gap-3">
                 <Button
@@ -263,7 +299,7 @@ function Quiz() {
                 </Button>
                 <Button
                   onClick={nextQuestion}
-                  disabled={!answers[currentQuestion]}
+                  disabled={!answers[questions[currentQuestion].index] || isLoading}
                   className="flex-1"
                 >
                   {currentQuestion === questions.length - 1 ? "Finalizar" : "Siguiente"}
@@ -318,7 +354,7 @@ function Quiz() {
                   <RotateCcw className="h-4 w-4 mr-2" />
                   Nuevo Quiz
                 </Button>
-                <Button onClick={() => router.push("/")} className="flex-1">
+                <Button onClick={() => router.push(chatId ? `/chat/${chatId}` : "/")} className="flex-1">
                   Volver al Chat
                 </Button>
               </div>
