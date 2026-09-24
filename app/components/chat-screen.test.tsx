@@ -1,10 +1,11 @@
 import { describe, it, expect, vi, afterEach, beforeEach } from "vitest"
-import { render, screen, cleanup, fireEvent, waitFor } from "@testing-library/react"
+import { render, screen, cleanup, fireEvent, waitFor, act } from "@testing-library/react"
 import { AuthProvider } from "@/app/contexts/auth-context"
 import { ChatProvider } from "@/app/contexts/chat-context"
 import { ChatScreen } from "./chat-screen"
 import { setAuthToken } from "@/lib/laria-api"
 import { controllableSSE, tokenEvent } from "@/test/sse"
+import { FakeSpeechRecognition } from "@/test/speech"
 
 // El router de Next: la URL actual y las navegaciones que pide la pantalla
 const nav = vi.hoisted(() => ({
@@ -198,5 +199,47 @@ describe("ChatScreen", () => {
     renderAt("c1")
 
     expect(await screen.findByText("tema1.pdf")).toBeTruthy()
+  })
+
+  describe("dictado por voz", () => {
+    const serverWithEmptyChat = () =>
+      vi.stubGlobal("fetch", async (url: string) => {
+        if (url.endsWith("/users/me")) return json({ id: "u1", username: "ana", email: "a@a.a" })
+        if (url.endsWith("/chats/")) return json({ chats: [] })
+        throw new Error(`Petición inesperada: ${url}`)
+      })
+
+    afterEach(() => {
+      delete (window as { SpeechRecognition?: unknown }).SpeechRecognition
+      FakeSpeechRecognition.instances = []
+    })
+
+    it("lo dictado se añade al mensaje y se puede parar", async () => {
+      ;(window as { SpeechRecognition?: unknown }).SpeechRecognition = FakeSpeechRecognition
+      serverWithEmptyChat()
+      renderAt()
+
+      const input = (await screen.findByRole("textbox")) as HTMLInputElement
+      fireEvent.change(input, { target: { value: "Explícame" } })
+      fireEvent.click(screen.getByRole("button", { name: "Dictar" }))
+      const recognition = FakeSpeechRecognition.instances[0]
+      expect(recognition.listening).toBe(true)
+      expect(recognition.lang).toBe("es-ES")
+
+      act(() => recognition.say("la fotosíntesis"))
+      expect(input.value).toBe("Explícame la fotosíntesis")
+
+      fireEvent.click(screen.getByRole("button", { name: "Parar dictado" }))
+      expect(recognition.listening).toBe(false)
+      expect(screen.getByRole("button", { name: "Dictar" })).toBeTruthy()
+    })
+
+    it("si el navegador no reconoce voz, no muestra el micrófono", async () => {
+      serverWithEmptyChat()
+      renderAt()
+
+      await screen.findByRole("textbox")
+      expect(screen.queryByRole("button", { name: "Dictar" })).toBeNull()
+    })
   })
 })

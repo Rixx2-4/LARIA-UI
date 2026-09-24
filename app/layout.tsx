@@ -8,7 +8,7 @@ import { Toaster } from "sonner"
 
 export const metadata: Metadata = {
   title: "LARIA",
-  description: "LARIA - AI Search Interface",
+  description: "LARIA, tu tutor con IA: pregunta, sube tus apuntes y practica con quizzes.",
 
   icons: {
     icon: [
@@ -35,7 +35,7 @@ export default function RootLayout({
   children: React.ReactNode
 }>) {
   return (
-    <html lang="en">
+    <html lang="es">
       <body className={`font-sans antialiased`}>
         <AuthProvider>
           <ChatProvider>

@@ -4,13 +4,14 @@ import { useState, useRef, useEffect, useCallback } from "react"
 import { useRouter } from "next/navigation"
 import { toast } from "sonner"
 import { Button } from "@/components/ui/button"
-import { Search, Paperclip, Mic, Send, Loader2, Square, Copy } from "lucide-react"
+import { Paperclip, Mic, Send, Loader2, Square, Copy } from "lucide-react"
 import { useChat } from "@/app/contexts/chat-context"
 import { lariaAPI, Document } from "@/lib/laria-api"
 import { FileCard } from "./file-card"
 import { FileViewer } from "./file-viewer"
 import { MessageContent } from "./message-content"
 import { useStreamingChat } from "@/hooks/use-streaming-chat"
+import { useDictation } from "@/hooks/use-dictation"
 
 const ALLOWED_EXTENSIONS = [
   ".pdf", ".docx", ".doc", ".txt", ".md", ".rtf", ".odt", ".epub",
@@ -36,6 +37,17 @@ const MIME_BY_EXTENSION: Record<string, string> = {
   png: "image/png", jpg: "image/jpeg", jpeg: "image/jpeg", gif: "image/gif", webp: "image/webp",
 }
 
+// Cómo llama el tutor a cada tipo de respuesta; lo que no esté aquí se muestra tal cual
+const ENVELOPE_TYPE_LABEL: Record<string, string> = {
+  explanation: "Explicación",
+  example: "Ejemplo",
+  hint: "Pista",
+  feedback: "Corrección",
+  question: "Pregunta",
+  quiz: "Quiz",
+  summary: "Resumen",
+}
+
 function mimeFromFilename(filename: string): string {
   const ext = filename.split(".").pop()?.toLowerCase() ?? ""
   return MIME_BY_EXTENSION[ext] ?? "application/octet-stream"
@@ -43,7 +55,6 @@ function mimeFromFilename(filename: string): string {
 
 export function SearchBar() {
   const [query, setQuery] = useState("")
-  const [showSuggestions, setShowSuggestions] = useState(false)
   const [isFocused, setIsFocused] = useState(false)
   const [isUploading, setIsUploading] = useState(false)
   // Los adjuntos de cada chat, para que no se vean en los demás
@@ -250,6 +261,7 @@ export function SearchBar() {
     if (!userMessage || isStreaming) return
 
     setQuery("")
+    dictation.stop()
     resetStreaming()
     isUserScrolledRef.current = false
 
@@ -266,6 +278,12 @@ export function SearchBar() {
       toast.error("No se pudo enviar el mensaje")
     }
   }
+
+  // Lo dictado se añade a lo que ya se hubiera escrito
+  const dictation = useDictation(
+    (text) => setQuery((current) => (current.trim() ? `${current.trimEnd()} ${text}` : text)),
+    (message) => toast.error(message),
+  )
 
   const copyToClipboard = async (text: string) => {
     try {
@@ -344,7 +362,7 @@ export function SearchBar() {
                         </button>
                         {msg.metadata?.envelope?.type && (
                           <span className="px-1.5 py-0.5 rounded bg-secondary/50">
-                            {msg.metadata.envelope.type}
+                            {ENVELOPE_TYPE_LABEL[msg.metadata.envelope.type] ?? msg.metadata.envelope.type}
                           </span>
                         )}
                         {msg.metadata?.envelope?.emotion && (
@@ -421,25 +439,17 @@ export function SearchBar() {
           <div className="flex items-center px-4 md:px-5 py-3 md:py-3.5">
             <input
               value={query}
-              onChange={(e) => {
-                setQuery(e.target.value)
-                setShowSuggestions(e.target.value.length > 0)
-              }}
-              onFocus={() => {
-                setIsFocused(true)
-                if (query.length > 0) setShowSuggestions(true)
-              }}
-              onBlur={() => {
-                setIsFocused(false)
-                setTimeout(() => setShowSuggestions(false), 150)
-              }}
+              onChange={(e) => setQuery(e.target.value)}
+              onFocus={() => setIsFocused(true)}
+              onBlur={() => setIsFocused(false)}
               onKeyDown={(e) => {
                 if (e.key === "Enter" && query.trim() && !isStreaming) {
                   e.preventDefault()
                   handleSend()
                 }
               }}
-              placeholder={isStreaming ? "Generando respuesta..." : "Ask anything..."}
+              placeholder={isStreaming ? "Generando respuesta…" : "Pregunta lo que quieras…"}
+              aria-label="Mensaje"
               disabled={isStreaming}
               className="w-full border-0 bg-transparent text-[14px] md:text-[15px] text-foreground placeholder:text-muted-foreground/60 focus:outline-none disabled:opacity-50"
             />
@@ -473,14 +483,21 @@ export function SearchBar() {
             </div>
 
             <div className="flex items-center gap-0.5">
-              <Button
-                variant="ghost"
-                size="icon"
-                disabled={isStreaming}
-                className="h-8 w-8 md:h-9 md:w-9 rounded-lg text-muted-foreground transition-all hover:bg-accent/60 hover:text-foreground"
-              >
-                <Mic className="h-4 w-4 md:h-[17px] md:w-[17px]" />
-              </Button>
+              {dictation.isSupported && (
+                <Button
+                  variant="ghost"
+                  size="icon"
+                  disabled={isStreaming}
+                  onClick={dictation.isListening ? dictation.stop : dictation.start}
+                  aria-label={dictation.isListening ? "Parar dictado" : "Dictar"}
+                  aria-pressed={dictation.isListening}
+                  className={`h-8 w-8 md:h-9 md:w-9 rounded-lg transition-all hover:bg-accent/60 ${
+                    dictation.isListening ? "text-destructive animate-pulse" : "text-muted-foreground hover:text-foreground"
+                  }`}
+                >
+                  <Mic className="h-4 w-4 md:h-[17px] md:w-[17px]" />
+                </Button>
+              )}
 
               {isStreaming ? (
                 <Button
@@ -504,27 +521,7 @@ export function SearchBar() {
             </div>
           </div>
 
-          {showSuggestions && query && !isStreaming && (
-            <div className="animate-in fade-in slide-in-from-top-2 duration-200 border-t border-border/40">
-              {["test", "test internet speed", "test my speed", "testament", "test my internet speed"]
-                .filter((s) => s.toLowerCase().includes(query.toLowerCase()))
-                .map((suggestion, index) => (
-                  <button
-                    key={index}
-                    onMouseDown={(e) => {
-                      e.preventDefault()
-                      setQuery(suggestion)
-                      setShowSuggestions(false)
-                    }}
-                    className="flex w-full items-center gap-3 px-5 py-2.5 text-left text-[13px] text-foreground transition-colors hover:bg-accent/50"
-                  >
-                    <Search className="h-3.5 w-3.5 text-muted-foreground" />
-                    <span className="font-normal">{suggestion}</span>
-                  </button>
-                ))}
-            </div>
-          )}
-        </div>
+          </div>
       </div>
     </div>
   )
