@@ -9,6 +9,8 @@ export type ChatLoadError = "not-found" | "load-failed"
 
 interface ChatContextType {
   chats: Chat[]
+  // false hasta que llega la primera lista (para no decir "no hay chats" mientras carga)
+  chatsLoaded: boolean
   activeChatId: string | null
   // El documento vinculado al chat activo, según el servidor
   activeDocumentId: string | null
@@ -31,6 +33,7 @@ const ChatContext = createContext<ChatContextType | undefined>(undefined)
 export function ChatProvider({ children }: { children: ReactNode }) {
   const { isAuthenticated } = useAuth()
   const [chats, setChats] = useState<Chat[]>([])
+  const [chatsLoaded, setChatsLoaded] = useState(false)
   const [activeChatId, setActiveChatId] = useState<string | null>(null)
   const [activeDocumentId, setActiveDocumentId] = useState<string | null>(null)
   const [messages, setMessages] = useState<ChatMessage[]>([])
@@ -55,9 +58,11 @@ export function ChatProvider({ children }: { children: ReactNode }) {
     try {
       const response = await lariaAPI.chats.list()
       setChats(response.chats)
+      setChatsLoaded(true)
     } catch (error) {
       console.error("Error loading chats:", error)
       setChats([])
+      setChatsLoaded(true)
       toast.error("No se pudieron cargar tus chats")
     }
   }, [])
@@ -151,6 +156,7 @@ export function ChatProvider({ children }: { children: ReactNode }) {
     <ChatContext.Provider
       value={{
         chats,
+        chatsLoaded,
         activeChatId,
         activeDocumentId,
         messages,
