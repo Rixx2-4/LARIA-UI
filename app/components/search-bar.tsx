@@ -2,12 +2,14 @@
 
 import { useState, useRef, useEffect, useCallback } from "react"
 import { useRouter } from "next/navigation"
+import { toast } from "sonner"
 import { Button } from "@/components/ui/button"
-import { Search, Paperclip, Mic, Send, Loader2, Square } from "lucide-react"
+import { Search, Paperclip, Mic, Send, Loader2, Square, Copy } from "lucide-react"
 import { useChat } from "@/app/contexts/chat-context"
 import { lariaAPI, Document } from "@/lib/laria-api"
 import { FileCard } from "./file-card"
 import { FileViewer } from "./file-viewer"
+import { MessageContent } from "./message-content"
 import { useStreamingChat } from "@/hooks/use-streaming-chat"
 
 const ALLOWED_EXTENSIONS = [
@@ -28,7 +30,8 @@ export function SearchBar() {
   const [showSuggestions, setShowSuggestions] = useState(false)
   const [isFocused, setIsFocused] = useState(false)
   const [isUploading, setIsUploading] = useState(false)
-  const [uploadedFiles, setUploadedFiles] = useState<UploadedFile[]>([])
+  // Los adjuntos de cada chat, para que no se vean en los demás
+  const [uploadsByChat, setUploadsByChat] = useState<Record<string, UploadedFile[]>>({})
   const [viewerFile, setViewerFile] = useState<{
     filename: string
     mimeType: string
@@ -159,7 +162,9 @@ export function SearchBar() {
 
     const ext = "." + (file.name.split(".").pop() || "").toLowerCase()
     if (!ALLOWED_EXTENSIONS.includes(ext)) {
-      alert(`Tipo de archivo no soportado: ${ext}\nFormatos admitidos: ${ALLOWED_EXTENSIONS.join(", ")}`)
+      toast.error(`Tipo de archivo no soportado: ${ext}`, {
+        description: `Formatos admitidos: ${ALLOWED_EXTENSIONS.join(", ")}`,
+      })
       return
     }
 
@@ -168,12 +173,11 @@ export function SearchBar() {
       const doc = await lariaAPI.documents.upload(file)
       const dataUrl = await generatePreview(file)
 
-      setUploadedFiles((prev) => [
-        ...prev,
-        { file, document: doc, dataUrl },
-      ])
-
       const { id: currentChatId, isNew: isNewChat } = await ensureChat(doc.id)
+      setUploadsByChat((prev) => ({
+        ...prev,
+        [currentChatId]: [...(prev[currentChatId] ?? []), { file, document: doc, dataUrl }],
+      }))
       if (!isNewChat) {
         await lariaAPI.chats.update(currentChatId, { document_id: doc.id })
       }
@@ -188,15 +192,18 @@ export function SearchBar() {
       }
     } catch (error) {
       console.error("Upload error:", error)
-      alert(error instanceof Error ? error.message : "Error al subir el archivo")
+      toast.error(error instanceof Error ? error.message : "Error al subir el archivo")
     } finally {
       setIsUploading(false)
       if (fileInputRef.current) fileInputRef.current.value = ""
     }
   }
 
+  const uploadedFiles = (chatId && uploadsByChat[chatId]) || []
+
   const removeFile = (index: number) => {
-    setUploadedFiles((prev) => prev.filter((_, i) => i !== index))
+    if (!chatId) return
+    setUploadsByChat((prev) => ({ ...prev, [chatId]: uploadedFiles.filter((_, i) => i !== index) }))
   }
 
   const handleSend = async () => {
@@ -217,6 +224,16 @@ export function SearchBar() {
       }
     } catch (error) {
       console.error("Chat error:", error)
+      toast.error("No se pudo enviar el mensaje")
+    }
+  }
+
+  const copyToClipboard = async (text: string) => {
+    try {
+      await navigator.clipboard.writeText(text)
+      toast.success("Respuesta copiada")
+    } catch {
+      toast.error("No se pudo copiar")
     }
   }
 
@@ -224,14 +241,17 @@ export function SearchBar() {
     cancelStreaming()
   }
 
-  const renderMessageContent = (msg: typeof messages[0], isCurrentStreaming: boolean) => (
-    <div className="text-[14px] whitespace-pre-wrap">
-      {msg.content}
-      {isCurrentStreaming && isStreaming && (
-        <span className="inline-block w-2 h-4 ml-0.5 bg-foreground/70 animate-pulse" />
-      )}
-    </div>
-  )
+  const renderMessageContent = (msg: typeof messages[0], isCurrentStreaming: boolean) =>
+    msg.role === "user" ? (
+      <div className="text-[14px] whitespace-pre-wrap">{msg.content}</div>
+    ) : (
+      <div className="text-[14px] leading-relaxed">
+        <MessageContent content={msg.content} />
+        {isCurrentStreaming && isStreaming && (
+          <span className="inline-block w-2 h-4 ml-0.5 bg-foreground/70 animate-pulse" />
+        )}
+      </div>
+    )
 
   return (
     <div className="relative flex h-full flex-col">
@@ -271,6 +291,17 @@ export function SearchBar() {
                     }`}
                   >
                     {renderMessageContent(msg, isCurrentStreaming)}
+
+                    {msg.role === "assistant" && !(isCurrentStreaming && isStreaming) && (
+                      <button
+                        onClick={() => copyToClipboard(msg.content)}
+                        aria-label="Copiar respuesta"
+                        className="mt-2 flex items-center gap-1 text-[11px] text-muted-foreground transition-colors hover:text-foreground"
+                      >
+                        <Copy className="h-3 w-3" />
+                        Copiar
+                      </button>
+                    )}
 
                     {msg.role === "assistant" && msg.metadata?.envelope && (
                       <div className="mt-2 pt-2 border-t border-border/30 flex items-center gap-2 text-[11px] text-muted-foreground">

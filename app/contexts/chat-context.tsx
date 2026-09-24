@@ -16,6 +16,7 @@ interface ChatContextType {
   createChat: (title?: string, documentId?: string) => Promise<Chat>
   selectChat: (chatId: string) => Promise<void>
   deleteChat: (chatId: string) => Promise<void>
+  renameChat: (chatId: string, title: string) => Promise<void>
   addMessage: (chatId: string, role: "user" | "assistant", content: string) => Promise<void>
   setMessages: (msgs: ChatMessage[]) => void
   clearActiveChat: () => void
@@ -87,6 +88,11 @@ export function ChatProvider({ children }: { children: ReactNode }) {
     }
   }, [])
 
+  const renameChat = useCallback(async (chatId: string, title: string) => {
+    await lariaAPI.chats.update(chatId, { title })
+    await loadChats()
+  }, [loadChats])
+
   const deleteChat = useCallback(async (chatId: string) => {
     await lariaAPI.chats.delete(chatId)
     if (activeChatId === chatId) {
@@ -140,6 +146,7 @@ export function ChatProvider({ children }: { children: ReactNode }) {
         createChat,
         selectChat,
         deleteChat,
+        renameChat,
         addMessage,
         setMessages,
         clearActiveChat,

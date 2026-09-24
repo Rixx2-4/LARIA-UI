@@ -1,8 +1,10 @@
 import type React from "react"
 import type { Metadata } from "next"
+import "katex/dist/katex.min.css"
 import "./globals.css"
 import { ChatProvider } from "./contexts/chat-context"
 import { AuthProvider } from "./contexts/auth-context"
+import { Toaster } from "sonner"
 
 export const metadata: Metadata = {
   title: "LARIA",
@@ -38,6 +40,7 @@ export default function RootLayout({
         <AuthProvider>
           <ChatProvider>
             {children}
+            <Toaster position="top-center" richColors style={{ fontFamily: "inherit" }} />
           </ChatProvider>
         </AuthProvider>
       </body>
