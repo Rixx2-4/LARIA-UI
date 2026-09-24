@@ -179,6 +179,8 @@ interface QuizAttemptResponse {
 }
 
 interface StreamCallbacks {
+  // El tutor está preparando la respuesta; label es su texto si el backend lo manda
+  onThinking?: (label: string) => void
   onToken?: (token: string) => void
   onEnvelope?: (envelope: Record<string, unknown>) => void
   onDone?: () => void
@@ -356,20 +358,43 @@ export const lariaAPI = {
         const decoder = new TextDecoder()
         let buffer = ""
 
-        // Devuelve true cuando llega el [DONE]
+        // Nombre del evento SSE en curso (event: …), si el servidor lo usa
+        let eventName = ""
+
+        // Devuelve true cuando el stream ha terminado ([DONE] o evento done)
         const handleLine = (line: string): boolean => {
+          if (line === "") {
+            eventName = ""
+            return false
+          }
+          if (line.startsWith("event:")) {
+            eventName = line.slice(6).trim()
+            return false
+          }
           if (!line.startsWith("data:")) return false
           const data = line.slice(5).replace(/^ /, "")
           if (data === "[DONE]") return true
+
+          let parsed: unknown = data
           try {
-            const parsed = JSON.parse(data)
-            if (parsed.type === "token") {
-              callbacks.onToken?.(parsed.content || "")
-            } else if (parsed.type === "envelope") {
-              callbacks.onEnvelope?.(parsed)
-            }
+            parsed = JSON.parse(data)
           } catch {
-            callbacks.onToken?.(data)
+            // Texto sin JSON: se interpreta según el nombre del evento
+          }
+          const payload = parsed !== null && typeof parsed === "object" ? (parsed as Record<string, unknown>) : null
+          const type = (typeof payload?.type === "string" ? payload.type : "") || eventName || "token"
+          const text = typeof parsed === "string" ? parsed : ""
+
+          if (type === "token") {
+            const content = payload ? payload.content : text
+            callbacks.onToken?.(typeof content === "string" ? content : "")
+          } else if (type === "thinking") {
+            const label = payload ? (payload.content ?? payload.message ?? payload.label ?? "") : text
+            callbacks.onThinking?.(typeof label === "string" ? label : "")
+          } else if (type === "envelope") {
+            callbacks.onEnvelope?.({ ...(payload ?? {}), type: "envelope" })
+          } else if (type === "done") {
+            return true
           }
           return false
         }
@@ -404,7 +429,9 @@ export const lariaAPI = {
     },
 
     generateQuiz: (chatId: string, numQuestions: number = 5) =>
-      fetchAPI<QuizResponse>(`/chats/${chatId}/quiz?num_questions=${numQuestions}`),
+      fetchAPI<QuizResponse>(`/chats/${chatId}/quiz?num_questions=${numQuestions}`, {
+        method: "POST",
+      }),
 
     generateTitle: (messages: { role: string; content: string }[]) =>
       fetchAPI<{ title: string }>("/chats/generate-title", {

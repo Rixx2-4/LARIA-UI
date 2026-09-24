@@ -6,6 +6,8 @@ import { lariaAPI, ChatMessage } from "@/lib/laria-api"
 interface StreamingState {
   isStreaming: boolean
   isThinking: boolean
+  // Lo que el tutor dice que está haciendo mientras piensa ("" si no dice nada)
+  thinkingLabel: string
   displayedContent: string
   fullContent: string
   envelope: Record<string, unknown> | null
@@ -20,10 +22,16 @@ interface UseStreamingChatOptions {
 }
 
 interface UseStreamingChatReturn extends StreamingState {
-  startStreaming: (content: string, targetChatId?: string) => Promise<void>
+  // Resuelve con la respuesta completa, o null si se paró, falló o se cambió de chat
+  startStreaming: (content: string, targetChatId?: string) => Promise<string | null>
   cancelStreaming: () => void
   resetStreaming: () => void
 }
+
+// Ritmo de escritura: mínimo por fotograma y en cuántos fotogramas (~60/s) se
+// alcanzaría lo pendiente si no llegara nada más
+const MIN_CHARS_PER_FRAME = 2
+const CATCH_UP_FRAMES = 30
 
 export function useStreamingChat({
   messages,
@@ -33,6 +41,7 @@ export function useStreamingChat({
   const [state, setState] = useState<StreamingState>({
     isStreaming: false,
     isThinking: false,
+    thinkingLabel: "",
     displayedContent: "",
     fullContent: "",
     envelope: null,
@@ -41,13 +50,13 @@ export function useStreamingChat({
   })
 
   const abortControllerRef = useRef<AbortController | null>(null)
-  const displayQueueRef = useRef<string[]>([])
   const animationFrameRef = useRef<number | null>(null)
-  const lastDisplayTimeRef = useRef<number>(0)
-  const pendingContentRef = useRef<string>("")
+  // Todo lo recibido del servidor y la parte que ya se ve en pantalla
+  const receivedRef = useRef<string>("")
   const displayedRef = useRef<string>("")
+  // El servidor ya terminó; al acabar de mostrarse se cierra la respuesta
+  const finishRef = useRef<(() => void) | null>(null)
   const baseMessagesRef = useRef<ChatMessage[]>([])
-  const flushTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
   // Cada stream tiene su generación: lo que llegue de uno anterior se descarta
   const streamGenRef = useRef(0)
   const streamChatIdRef = useRef<string | null>(null)
@@ -65,76 +74,42 @@ export function useStreamingChat({
     }
   }, [])
 
-  const calculateRenderSpeed = useCallback(() => {
-    const pending = pendingContentRef.current.length
-    const pendingChars = pending
+  // Efecto de escritura: en cada fotograma se muestra un poco más, más cuanto más
+  // texto queda pendiente, para no quedarse atrás aunque el servidor mande todo de golpe
+  const revealTick = useCallback(function tick() {
+    const received = receivedRef.current
+    const shown = displayedRef.current.length
+    const backlog = received.length - shown
 
-    if (pendingChars < 50) {
-      return 30
-    } else if (pendingChars < 200) {
-      return 16
-    } else if (pendingChars < 500) {
-      return 8
-    } else {
-      return 4
-    }
-  }, [])
-
-  const processDisplayQueue = useCallback(function tick() {
-    if (displayQueueRef.current.length === 0) {
-      animationFrameRef.current = null
-      return
+    if (backlog > 0) {
+      let end = shown + Math.max(MIN_CHARS_PER_FRAME, Math.ceil(backlog / CATCH_UP_FRAMES))
+      // No partir un emoji (par sustituto) por la mitad
+      const code = received.charCodeAt(end - 1)
+      if (code >= 0xd800 && code <= 0xdbff) end++
+      showAssistantText(received.slice(0, end))
+      setState((prev) => ({ ...prev, isThinking: false, displayedContent: displayedRef.current }))
     }
 
-    const now = Date.now()
-    const timeSinceLastDisplay = now - lastDisplayTimeRef.current
-    const targetInterval = calculateRenderSpeed()
-
-    if (timeSinceLastDisplay < targetInterval) {
-      animationFrameRef.current = requestAnimationFrame(tick)
-      return
-    }
-
-    const chunk = displayQueueRef.current.shift()
-    if (chunk) {
-      pendingContentRef.current = pendingContentRef.current.slice(chunk.length)
-
-      showAssistantText(displayedRef.current + chunk)
-      setState((prev) => ({
-        ...prev,
-        isThinking: false,
-        displayedContent: displayedRef.current,
-      }))
-
-      lastDisplayTimeRef.current = now
-    }
-
-    if (displayQueueRef.current.length > 0) {
+    if (receivedRef.current.length > displayedRef.current.length) {
       animationFrameRef.current = requestAnimationFrame(tick)
     } else {
       animationFrameRef.current = null
+      finishRef.current?.()
     }
-  }, [calculateRenderSpeed, showAssistantText])
+  }, [showAssistantText])
 
   const queueDisplay = useCallback((content: string) => {
-    const chunkSize = pendingContentRef.current.length > 200 ? 10 : 
-                     pendingContentRef.current.length > 50 ? 5 : 1
-
-    for (let i = 0; i < content.length; i += chunkSize) {
-      displayQueueRef.current.push(content.slice(i, i + chunkSize))
-    }
-
-    pendingContentRef.current += content
-
+    receivedRef.current += content
     if (!animationFrameRef.current) {
-      lastDisplayTimeRef.current = Date.now()
-      animationFrameRef.current = requestAnimationFrame(processDisplayQueue)
+      animationFrameRef.current = requestAnimationFrame(revealTick)
     }
-  }, [processDisplayQueue])
+  }, [revealTick])
 
   const startStreaming = useCallback(async (content: string, targetChatId?: string) => {
     const activeId = targetChatId || chatId
-    if (!activeId) return
+    if (!activeId) return null
+    let reply = ""
+    let completed = false
 
     const gen = ++streamGenRef.current
     const isCurrent = () => gen === streamGenRef.current
@@ -144,6 +119,7 @@ export function useStreamingChat({
     setState({
       isStreaming: true,
       isThinking: true,
+      thinkingLabel: "",
       displayedContent: "",
       fullContent: "",
       envelope: null,
@@ -151,17 +127,22 @@ export function useStreamingChat({
       isDone: false,
     })
 
-    displayQueueRef.current = []
-    pendingContentRef.current = ""
+    receivedRef.current = ""
     displayedRef.current = ""
+    finishRef.current = null
 
     const userMsg: ChatMessage = { role: "user", content }
     baseMessagesRef.current = [...messages, userMsg]
     setMessages(baseMessagesRef.current)
 
     await lariaAPI.chats.stream(activeId, "user", content, {
+      onThinking: (label: string) => {
+        if (!isCurrent()) return
+        setState((prev) => ({ ...prev, thinkingLabel: label }))
+      },
       onToken: (token: string) => {
         if (!isCurrent()) return
+        reply += token
         setState((prev) => ({
           ...prev,
           fullContent: prev.fullContent + token,
@@ -177,15 +158,10 @@ export function useStreamingChat({
       },
       onDone: () => {
         if (!isCurrent()) return
-        const flushQueue = () => {
-          flushTimerRef.current = null
+        completed = true
+        finishRef.current = () => {
+          finishRef.current = null
           if (!isCurrent()) return
-          stopAnimation()
-          const allPending = displayQueueRef.current.join("")
-          displayQueueRef.current = []
-          pendingContentRef.current = ""
-          if (allPending) showAssistantText(displayedRef.current + allPending)
-
           setState((prev) => ({
             ...prev,
             displayedContent: displayedRef.current,
@@ -194,15 +170,15 @@ export function useStreamingChat({
             isDone: true,
           }))
 
-          // Después del vaciado, para que la copia local no pise la guardada
+          // Ya se ve entera: ahora sí se trae la versión guardada (con sus metadatos)
           lariaAPI.chats.get(activeId).then((chat) => {
             if (!isCurrent()) return
             streamChatIdRef.current = null
             setMessages(chat.messages || [])
           }).catch(console.error)
         }
-
-        flushTimerRef.current = setTimeout(flushQueue, 100)
+        // Si no queda nada por mostrar se cierra ya; si no, lo hará la animación al acabar
+        if (!animationFrameRef.current) finishRef.current()
       },
       onError: (error: Error) => {
         if (!isCurrent()) return
@@ -214,7 +190,8 @@ export function useStreamingChat({
         }))
       },
     }, { signal: abortControllerRef.current.signal })
-  }, [chatId, messages, setMessages, queueDisplay, showAssistantText, stopAnimation])
+    return completed && isCurrent() ? reply : null
+  }, [chatId, messages, setMessages, queueDisplay])
 
   const cancelStreaming = useCallback(() => {
     streamGenRef.current++
@@ -224,14 +201,9 @@ export function useStreamingChat({
       abortControllerRef.current.abort()
       abortControllerRef.current = null
     }
-    if (flushTimerRef.current) {
-      clearTimeout(flushTimerRef.current)
-      flushTimerRef.current = null
-    }
     stopAnimation()
-
-    displayQueueRef.current = []
-    pendingContentRef.current = ""
+    finishRef.current = null
+    receivedRef.current = displayedRef.current
 
     setState((prev) => ({
       ...prev,
@@ -253,6 +225,7 @@ export function useStreamingChat({
     setState({
       isStreaming: false,
       isThinking: false,
+      thinkingLabel: "",
       displayedContent: "",
       fullContent: "",
       envelope: null,
@@ -267,7 +240,6 @@ export function useStreamingChat({
       // eslint-disable-next-line react-hooks/exhaustive-deps
       streamGenRef.current++
       stopAnimation()
-      if (flushTimerRef.current) clearTimeout(flushTimerRef.current)
       abortControllerRef.current?.abort()
     }
   }, [stopAnimation])

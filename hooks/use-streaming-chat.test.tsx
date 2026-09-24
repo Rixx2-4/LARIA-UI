@@ -110,7 +110,8 @@ describe("useStreamingChat", () => {
     sse.push("data: [DONE]\n\n")
     sse.close()
 
-    await waitFor(() => expect(result.current.isDone).toBe(true))
+    // La respuesta se revela a ritmo de escritura: tarda algo más de un segundo
+    await waitFor(() => expect(result.current.isDone).toBe(true), { timeout: 5000 })
     await act(() => new Promise((r) => setTimeout(r, 200)))
     expect(result.current.messages).toEqual(saved)
   })
@@ -155,5 +156,33 @@ describe("useStreamingChat", () => {
 
     expect(result.current.isStreaming).toBe(true)
     expect(last(result.current.messages)).toMatchObject({ role: "assistant", content: "Dos" })
+  })
+
+  it("aunque la respuesta llegue de golpe, se va mostrando poco a poco hasta completarse", async () => {
+    const answer = "La mitocondria produce energía en forma de ATP. ".repeat(17).trim()
+    expect(answer.length).toBeGreaterThan(800)
+    const sse = network([
+      { role: "user", content: "hola" },
+      { role: "assistant", content: answer },
+    ])
+    const { result } = renderChat()
+
+    act(() => {
+      result.current.startStreaming("hola")
+    })
+    sse.push(tokenEvent(answer))
+    sse.push("data: [DONE]\n\n")
+    sse.close()
+
+    await sleep(150)
+    const partial = last(result.current.messages)
+    expect(partial.role).toBe("assistant")
+    expect(partial.content.length).toBeGreaterThan(0)
+    expect(partial.content.length).toBeLessThan(answer.length)
+    expect(answer.startsWith(partial.content)).toBe(true)
+    expect(result.current.isStreaming).toBe(true)
+
+    await waitFor(() => expect(result.current.isDone).toBe(true), { timeout: 5000 })
+    expect(last(result.current.messages).content).toBe(answer)
   })
 })

@@ -3,7 +3,10 @@
 import { createContext, useContext, useState, useEffect, useCallback, useRef, ReactNode } from "react"
 import { lariaAPI, ApiError, Chat, ChatMessage, getAuthToken } from "@/lib/laria-api"
 import { toast } from "sonner"
+import { titleRequestMessages, fallbackTitle } from "@/lib/chat-titles"
 import { useAuth } from "./auth-context"
+
+const MAX_TITLE_ATTEMPTS = 3
 
 export type ChatLoadError = "not-found" | "load-failed"
 
@@ -21,11 +24,12 @@ interface ChatContextType {
   createChat: (title?: string, documentId?: string) => Promise<Chat>
   selectChat: (chatId: string) => Promise<void>
   deleteChat: (chatId: string) => Promise<void>
-  renameChat: (chatId: string, title: string) => Promise<void>
+  // provisional: un título de apoyo que el generado podrá sustituir más tarde
+  renameChat: (chatId: string, title: string, options?: { provisional?: boolean }) => Promise<void>
   addMessage: (chatId: string, role: "user" | "assistant", content: string) => Promise<void>
   setMessages: (msgs: ChatMessage[]) => void
   clearActiveChat: () => void
-  generateTitle: (chatId: string, messages: { role: string; content: string }[]) => Promise<void>
+  maybeGenerateTitle: (chatId: string, messages: { role: string; content: string }[]) => Promise<void>
 }
 
 const ChatContext = createContext<ChatContextType | undefined>(undefined)
@@ -39,6 +43,9 @@ export function ChatProvider({ children }: { children: ReactNode }) {
   const [messages, setMessages] = useState<ChatMessage[]>([])
   const [chatError, setChatError] = useState<ChatLoadError | null>(null)
   const requestedChatIdRef = useRef<string | null>(null)
+  // Chats recién creados que aún esperan un título generado, con los intentos fallidos
+  const pendingTitlesRef = useRef(new Map<string, number>())
+  const titleInFlightRef = useRef(new Set<string>())
 
   // Al cerrar sesión se vacía todo durante el render, sin esperar a un efecto
   const [wasAuthenticated, setWasAuthenticated] = useState(isAuthenticated)
@@ -77,6 +84,7 @@ export function ChatProvider({ children }: { children: ReactNode }) {
     const chat = await lariaAPI.chats.create(title, documentId)
     await loadChats()
     requestedChatIdRef.current = chat.id
+    pendingTitlesRef.current.set(chat.id, 0)
     setActiveChatId(chat.id)
     setActiveDocumentId(chat.document_id ?? documentId ?? null)
     setChatError(null)
@@ -103,7 +111,9 @@ export function ChatProvider({ children }: { children: ReactNode }) {
     }
   }, [])
 
-  const renameChat = useCallback(async (chatId: string, title: string) => {
+  const renameChat = useCallback(async (chatId: string, title: string, options?: { provisional?: boolean }) => {
+    // Un nombre puesto a mano manda: ya no se sustituye por uno generado
+    if (!options?.provisional) pendingTitlesRef.current.delete(chatId)
     await lariaAPI.chats.update(chatId, { title })
     await loadChats()
   }, [loadChats])
@@ -131,24 +141,36 @@ export function ChatProvider({ children }: { children: ReactNode }) {
     setMessages([])
   }, [])
 
-  const generateTitle = useCallback(async (chatId: string, msgs: { role: string; content: string }[]) => {
+  // Tras cada respuesta, mientras el chat no tenga título, se pide al backend con la
+  // conversación hasta ese momento; si falla se reintenta en la siguiente respuesta
+  const maybeGenerateTitle = useCallback(async (chatId: string, msgs: { role: string; content: string }[]) => {
+    const failures = pendingTitlesRef.current.get(chatId)
+    if (failures === undefined || titleInFlightRef.current.has(chatId)) return
+    const request = titleRequestMessages(msgs)
+    if (request.length === 0) return
+
+    titleInFlightRef.current.add(chatId)
     try {
-      const response = await lariaAPI.chats.generateTitle(msgs)
-      await lariaAPI.chats.update(chatId, { title: response.title })
+      const { title } = await lariaAPI.chats.generateTitle(request)
+      if (!pendingTitlesRef.current.has(chatId)) return // renombrado a mano mientras tanto
+      pendingTitlesRef.current.delete(chatId)
+      await lariaAPI.chats.update(chatId, { title: title.trim() })
       await loadChats()
     } catch (error) {
       console.error("Error generating title:", error)
-      if (msgs.length > 0 && msgs[0].content) {
-        const fallbackTitle = msgs[0].content.length > 50
-          ? msgs[0].content.substring(0, 50).trim() + "..."
-          : msgs[0].content.trim()
-        try {
-          await lariaAPI.chats.update(chatId, { title: fallbackTitle })
-          await loadChats()
-        } catch (updateError) {
-          console.error("Error updating fallback title:", updateError)
-        }
+      if (!pendingTitlesRef.current.has(chatId)) return
+      if (failures + 1 < MAX_TITLE_ATTEMPTS) {
+        pendingTitlesRef.current.set(chatId, failures + 1)
+        return
       }
+      pendingTitlesRef.current.delete(chatId)
+      const fallback = fallbackTitle(msgs)
+      if (fallback) {
+        await lariaAPI.chats.update(chatId, { title: fallback }).catch(() => {})
+        await loadChats()
+      }
+    } finally {
+      titleInFlightRef.current.delete(chatId)
     }
   }, [loadChats])
 
@@ -169,7 +191,7 @@ export function ChatProvider({ children }: { children: ReactNode }) {
         addMessage,
         setMessages,
         clearActiveChat,
-        generateTitle,
+        maybeGenerateTitle,
       }}
     >
       {children}

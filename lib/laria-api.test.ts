@@ -15,6 +15,7 @@ function recorder() {
       onEnvelope: (e: Record<string, unknown>) => events.push(`envelope:${e.type}`),
       onDone: () => events.push("done"),
       onError: (e: Error) => events.push(`error:${e.message}`),
+      onThinking: (label: string) => events.push(`thinking:${label}`),
     },
   }
 }
@@ -32,6 +33,36 @@ describe("lariaAPI.chats.stream", () => {
     await done
 
     expect(events).toEqual(["token:Hola", "done"])
+  })
+
+  it("avisa de la fase de pensar, con el texto que mande el backend si lo hay", async () => {
+    const sse = controllableSSE()
+    vi.stubGlobal("fetch", sse.fetchMock)
+    const { events, callbacks } = recorder()
+
+    const done = lariaAPI.chats.stream("c1", "user", "hola", callbacks)
+    sse.push('data: {"type":"thinking"}\n\n')
+    sse.push('data: {"type":"thinking","content":"Buscando en tus apuntes"}\n\n')
+    sse.push(tokenEvent("Hola"))
+    sse.push('data: {"type":"done"}\n\n')
+    await done
+
+    expect(events).toEqual(["thinking:", "thinking:Buscando en tus apuntes", "token:Hola", "done"])
+  })
+
+  it("entiende también las fases enviadas como eventos SSE con nombre (event: …)", async () => {
+    const sse = controllableSSE()
+    vi.stubGlobal("fetch", sse.fetchMock)
+    const { events, callbacks } = recorder()
+
+    const done = lariaAPI.chats.stream("c1", "user", "hola", callbacks)
+    sse.push("event: thinking\ndata: Pensando en un ejemplo\n\n")
+    sse.push("event: token\ndata: Hola\n\n")
+    sse.push('event: envelope\ndata: {"emotion":"calm"}\n\n')
+    sse.push("event: done\ndata: {}\n\n")
+    await done
+
+    expect(events).toEqual(["thinking:Pensando en un ejemplo", "token:Hola", "envelope:envelope", "done"])
   })
 
   it("reconstruye un evento partido entre dos fragmentos de red", async () => {
@@ -186,5 +217,19 @@ describe("lariaAPI.auth.login", () => {
     await expect(lariaAPI.auth.login("ana@example.com", "mal")).rejects.toThrow("Email o contraseña incorrectos")
     expect(listener).not.toHaveBeenCalled()
     unsubscribe()
+  })
+})
+
+describe("lariaAPI.chats.generateQuiz", () => {
+  it("pide el quiz con POST, como espera el backend", async () => {
+    let request: { url: string; method?: string } | null = null
+    vi.stubGlobal("fetch", async (url: string, init?: RequestInit) => {
+      request = { url, method: init?.method }
+      return new Response(JSON.stringify({ id: "q1", document_id: "d1", questions: [], total_points: 0, created_at: "" }), { status: 200 })
+    })
+
+    await lariaAPI.chats.generateQuiz("c1", 7)
+
+    expect(request).toEqual({ url: expect.stringMatching(/\/chats\/c1\/quiz\?num_questions=7$/), method: "POST" })
   })
 })

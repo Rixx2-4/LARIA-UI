@@ -1,0 +1,22 @@
+import { chromium } from "playwright-core"
+const browser = await chromium.launch({ executablePath: "/usr/bin/chromium" })
+const ctx = await browser.newContext({ viewport: { width: 1280, height: 800 } })
+await ctx.addInitScript(() => localStorage.setItem("laria_token", "t"))
+const p = await ctx.newPage(); const errors = []; p.on("pageerror", (e) => errors.push(e.message))
+await p.goto("http://localhost:3100/"); await p.getByRole("textbox").waitFor()
+await p.getByRole("textbox").fill("Explícame la fotosíntesis"); await p.keyboard.press("Enter")
+await p.getByRole("status").filter({ hasText: /…/ }).waitFor(); await p.waitForTimeout(300)
+console.log("indicador:", (await p.getByRole("status").filter({ hasText: /…/ }).textContent()).trim())
+await p.screenshot({ path: "22-thinking.png" })
+await p.waitForTimeout(2300)
+console.log("indicador tras 2.3 s:", (await p.getByRole("status").filter({ hasText: /…/ }).textContent().catch(() => "(ya no está)")).trim())
+await p.getByText("Fotosíntesis", { exact: false }).first().waitFor()
+const lens = []
+for (let i = 0; i < 8; i++) { lens.push(await p.evaluate(() => document.querySelector(".typing-live")?.textContent?.length ?? -1)); await p.waitForTimeout(120) }
+console.log("caracteres visibles cada 120 ms:", lens.join(", "))
+await p.screenshot({ path: "23-typing.png" })
+await p.waitForTimeout(3000)
+await p.getByRole("button", { name: "Historial" }).click(); await p.waitForTimeout(500)
+console.log("títulos en el historial:", await p.locator("aside, nav").first().evaluate(() => [...document.querySelectorAll("span.truncate")].map(e => e.textContent).join(" | ")))
+console.log(errors.length ? errors.join("\n") : "sin errores de página")
+await browser.close()

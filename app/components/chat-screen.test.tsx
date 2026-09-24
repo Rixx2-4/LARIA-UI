@@ -317,4 +317,82 @@ describe("ChatScreen", () => {
       expect(input.value).toBe("")
     })
   })
+
+  describe("títulos de chat", () => {
+    // Servidor que responde a cada mensaje con `reply` y registra las peticiones de título
+    function titleServer(reply: string, titleResponses: Response[]) {
+      const titleRequests: { role: string; content: string }[][] = []
+      const renames: string[] = []
+      const saved: { role: string; content: string }[] = []
+      vi.stubGlobal("fetch", async (url: string, init?: RequestInit) => {
+        const method = init?.method ?? "GET"
+        if (url.endsWith("/users/me")) return json({ id: "u1", username: "ana", email: "a@a.a" })
+        if (url.endsWith("/chats/") && method === "GET") return json({ chats: [] })
+        if (url.endsWith("/chats/") && method === "POST") return json({ id: "c2", title: "Nuevo chat" })
+        if (url.endsWith("/stream")) {
+          saved.push({ role: "user", content: JSON.parse(String(init?.body)).content }, { role: "assistant", content: reply })
+          return new Response(`data: ${JSON.stringify({ type: "token", content: reply })}\n\ndata: [DONE]\n\n`, { status: 200 })
+        }
+        if (url.endsWith("/generate-title")) {
+          titleRequests.push(JSON.parse(String(init?.body)).messages)
+          return titleResponses.shift() ?? json({ title: "Sin respuesta preparada" })
+        }
+        if (url.endsWith("/chats/c2") && method === "PUT") {
+          renames.push(JSON.parse(String(init?.body)).title)
+          return json({ id: "c2", title: "t" })
+        }
+        return json({ id: "c2", title: "t", messages: saved })
+      })
+      return { titleRequests, renames }
+    }
+
+    async function send(text: string) {
+      const input = (await screen.findByRole("textbox")) as HTMLInputElement
+      fireEvent.change(input, { target: { value: text } })
+      fireEvent.keyDown(input, { key: "Enter" })
+    }
+
+    it("al terminar la primera respuesta, pide el título con la pregunta y la respuesta", async () => {
+      const server = titleServer("Es el proceso por el que las plantas fabrican glucosa.", [json({ title: "Fotosíntesis en plantas" })])
+      renderAt()
+
+      await send("¿Qué es la fotosíntesis?")
+
+      await waitFor(() => expect(server.renames).toEqual(["Fotosíntesis en plantas"]))
+      expect(server.titleRequests).toEqual([
+        [
+          { role: "user", content: "¿Qué es la fotosíntesis?" },
+          { role: "assistant", content: "Es el proceso por el que las plantas fabrican glucosa." },
+        ],
+      ])
+    })
+
+    it("si falla, no recorta el mensaje como título: lo reintenta tras la siguiente respuesta", async () => {
+      const server = titleServer("Respuesta del tutor.", [json({ detail: "Error del modelo" }, 502), json({ title: "Repaso de química" })])
+      const { rerender } = renderAt()
+
+      await send("Hola, quiero repasar química del tema 3")
+      await waitFor(() => expect(server.titleRequests).toHaveLength(1))
+      await new Promise((r) => setTimeout(r, 50))
+      expect(server.renames).toEqual([])
+
+      nav.params = { id: "c2" }
+      rerender(tree)
+      await waitFor(() => expect((screen.getByRole("textbox") as HTMLInputElement).disabled).toBe(false), { timeout: 5000 })
+      await send("Empecemos por los enlaces")
+
+      await waitFor(() => expect(server.renames).toEqual(["Repaso de química"]), { timeout: 5000 })
+      expect(server.titleRequests[1].length).toBeGreaterThan(2)
+    })
+
+    it("no manda al backend mensajes de más de 2000 caracteres (los rechazaría)", async () => {
+      const server = titleServer("Vale.", [json({ title: "Texto largo" })])
+      renderAt()
+
+      await send("a".repeat(3000))
+
+      await waitFor(() => expect(server.titleRequests).toHaveLength(1))
+      expect(server.titleRequests[0].every((m) => m.content.length <= 2000)).toBe(true)
+    })
+  })
 })
