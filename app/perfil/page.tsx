@@ -1,10 +1,10 @@
 "use client"
 
 import { useState, useEffect, useCallback } from "react"
-import Link from "next/link"
-import { Loader2, RefreshCw, LogIn } from "lucide-react"
+import { Loader2, RefreshCw } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { Sidebar } from "../components/sidebar"
+import { RequireAuth } from "../components/require-auth"
 import { useAuth } from "@/app/contexts/auth-context"
 import { lariaAPI, User, StudentProfile, LearningHistory, Document } from "@/lib/laria-api"
 
@@ -64,7 +64,15 @@ function masteryColor(v: number) {
 }
 
 export default function PerfilPage() {
-  const { isAuthenticated, isLoading: authLoading, user: authUser } = useAuth()
+  return (
+    <RequireAuth>
+      <Perfil />
+    </RequireAuth>
+  )
+}
+
+function Perfil() {
+  const { user: authUser } = useAuth()
   const [isLoading, setIsLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
 
@@ -78,10 +86,6 @@ export default function PerfilPage() {
   const [recomendaciones, setRecomendaciones] = useState<string[]>([])
 
   const loadProfileData = useCallback(async () => {
-    if (!isAuthenticated) {
-      setIsLoading(false)
-      return
-    }
     setIsLoading(true)
     setError(null)
     try {
@@ -159,7 +163,7 @@ export default function PerfilPage() {
     } finally {
       setIsLoading(false)
     }
-  }, [isAuthenticated])
+  }, [])
 
   useEffect(() => {
     // Carga inicial de datos: el estado de carga se actualiza desde aquí
@@ -167,26 +171,7 @@ export default function PerfilPage() {
     loadProfileData()
   }, [loadProfileData])
 
-  if (!isAuthenticated) {
-    return (
-      <div className="flex h-screen w-full">
-        <Sidebar />
-        <div className="flex-1 flex items-center justify-center bg-background">
-          <div className="text-center space-y-4">
-            <p className="text-muted-foreground">Inicia sesión para ver tu perfil de aprendizaje.</p>
-            <Button variant="outline" className="gap-2" asChild>
-              <Link href="/">
-                <LogIn className="h-4 w-4" />
-                Ir a iniciar sesión
-              </Link>
-            </Button>
-          </div>
-        </div>
-      </div>
-    )
-  }
-
-  if (isLoading || authLoading) {
+  if (isLoading) {
     return (
       <div className="flex h-screen w-full">
         <Sidebar />

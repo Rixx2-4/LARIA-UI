@@ -3,6 +3,7 @@
 import { useState, useEffect, useRef } from "react"
 import { X, Download, ZoomIn, ZoomOut, RotateCw, FileText, FileCode, FileSpreadsheet } from "lucide-react"
 import { Button } from "@/components/ui/button"
+import { lariaAPI } from "@/lib/laria-api"
 
 interface FileViewerProps {
   filename: string
@@ -122,6 +123,22 @@ function GenericViewer({ filename, mimeType }: { filename: string; mimeType: str
   )
 }
 
+// Qué vista previa admite cada tipo de archivo; null si ninguna
+function previewKind(mimeType: string): "image" | "pdf" | "text" | null {
+  if (mimeType.startsWith("image/")) return "image"
+  if (mimeType === "application/pdf") return "pdf"
+  if (
+    mimeType.startsWith("text/") ||
+    mimeType.includes("json") ||
+    mimeType.includes("xml") ||
+    mimeType.includes("javascript") ||
+    mimeType.includes("typescript") ||
+    mimeType.includes("python")
+  )
+    return "text"
+  return null
+}
+
 export function FileViewer({ filename, mimeType, documentId, previewDataUrl, onClose }: FileViewerProps) {
   const [content, setContent] = useState<string | null>(null)
   const [isLoading, setIsLoading] = useState(false)
@@ -136,51 +153,52 @@ export function FileViewer({ filename, mimeType, documentId, previewDataUrl, onC
     return () => document.removeEventListener("keydown", handleEscape)
   }, [onClose])
 
+  const [blobUrl, setBlobUrl] = useState<string | null>(null)
+  const kind = previewKind(mimeType)
+
   useEffect(() => {
-    if (!documentId || previewDataUrl) return
+    if (!documentId || previewDataUrl || !kind) return
 
-    const isTextFile =
-      mimeType.startsWith("text/") ||
-      mimeType.includes("json") ||
-      mimeType.includes("xml") ||
-      mimeType.includes("javascript") ||
-      mimeType.includes("typescript") ||
-      mimeType.includes("python")
-
-    if (!isTextFile) return
+    // Se descarga con la cabecera Authorization: el token nunca va en la URL
+    let cancelled = false
+    let objectUrl: string | null = null
 
     const fetchContent = async () => {
       setIsLoading(true)
       setError(null)
       try {
-        const API_BASE_URL = process.env.NEXT_PUBLIC_LARIA_API_URL || "http://localhost:8000/api/v1"
-        const token = localStorage.getItem("laria_token")
-        const response = await fetch(`${API_BASE_URL}/documents/${documentId}/content`, {
-          headers: token ? { Authorization: `Bearer ${token}` } : {},
-        })
-        if (!response.ok) throw new Error("Error al cargar el archivo")
-        const text = await response.text()
-        setContent(text)
+        const blob = await lariaAPI.documents.content(documentId)
+        if (cancelled) return
+        if (kind === "text") {
+          setContent(await blob.text())
+        } else {
+          objectUrl = URL.createObjectURL(blob)
+          setBlobUrl(objectUrl)
+        }
       } catch (err) {
-        setError(err instanceof Error ? err.message : "Error al cargar el archivo")
+        if (!cancelled) setError(err instanceof Error ? err.message : "Error al cargar el archivo")
       } finally {
-        setIsLoading(false)
+        if (!cancelled) setIsLoading(false)
       }
     }
 
     fetchContent()
-  }, [documentId, mimeType, previewDataUrl])
+    return () => {
+      cancelled = true
+      if (objectUrl) URL.revokeObjectURL(objectUrl)
+      setBlobUrl(null)
+      setContent(null)
+    }
+  }, [documentId, kind, previewDataUrl])
 
-  const getSourceUrl = () => {
-    if (previewDataUrl) return previewDataUrl
-    if (!documentId) return ""
-    const API_BASE_URL = process.env.NEXT_PUBLIC_LARIA_API_URL || "http://localhost:8000/api/v1"
-    const token = localStorage.getItem("laria_token")
-    return `${API_BASE_URL}/documents/${documentId}/content${token ? `?token=${token}` : ""}`
-  }
+  // Un archivo recién adjuntado se previsualiza con lo que leyó el navegador
+  // (data URL si es imagen, el texto tal cual si es texto); si no, con lo descargado
+  const sourceUrl = previewDataUrl || blobUrl || ""
+  const text = kind === "text" ? (previewDataUrl ?? content) : null
 
   const renderContent = () => {
-    if (isLoading) {
+    const needsSource = kind === "image" || kind === "pdf"
+    if (isLoading || (needsSource && documentId && !sourceUrl && !error)) {
       return (
         <div className="flex items-center justify-center h-full text-muted-foreground">
           Cargando...
@@ -199,16 +217,16 @@ export function FileViewer({ filename, mimeType, documentId, previewDataUrl, onC
       )
     }
 
-    if (mimeType.startsWith("image/")) {
-      return <ImageViewer src={getSourceUrl()} filename={filename} />
+    if (kind === "image") {
+      return <ImageViewer src={sourceUrl} filename={filename} />
     }
 
-    if (mimeType === "application/pdf") {
-      return <PdfViewer src={getSourceUrl()} />
+    if (kind === "pdf") {
+      return <PdfViewer src={sourceUrl} />
     }
 
-    if (content !== null) {
-      return <TextViewer content={content} filename={filename} />
+    if (text !== null) {
+      return <TextViewer content={text} filename={filename} />
     }
 
     return <GenericViewer filename={filename} mimeType={mimeType} />

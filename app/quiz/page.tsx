@@ -5,6 +5,7 @@ import { useRouter } from "next/navigation"
 import { Loader2, CheckCircle, XCircle, ArrowRight, RotateCcw } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { Sidebar } from "../components/sidebar"
+import { RequireAuth } from "../components/require-auth"
 import { useChat } from "@/app/contexts/chat-context"
 import { lariaAPI, QuizQuestion, QuizAttemptQuestion } from "@/lib/laria-api"
 
@@ -16,6 +17,14 @@ interface QuizResult {
 }
 
 export default function QuizPage() {
+  return (
+    <RequireAuth>
+      <Quiz />
+    </RequireAuth>
+  )
+}
+
+function Quiz() {
   const router = useRouter()
   const { activeChatId } = useChat()
   const [step, setStep] = useState<"config" | "quiz" | "results">("config")
