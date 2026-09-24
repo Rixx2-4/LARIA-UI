@@ -57,10 +57,6 @@ export function AppShell({ children }: { children: ReactNode }) {
             >
               <Menu className="h-5 w-5" />
             </Button>
-            <span className="text-xl md:text-2xl font-bold tracking-tight text-foreground">LARIA</span>
-            <span className="rounded-full bg-primary px-2 py-0.5 text-[10px] md:text-xs font-semibold text-primary-foreground">
-              IA
-            </span>
           </div>
 
           {/* Cerrar sesión está en el menú de Cuenta de la barra lateral */}
