@@ -151,6 +151,65 @@ describe("ChatScreen", () => {
     await waitFor(() => expect(live()).toBe("Respuesta de LARIA lista."))
   })
 
+  describe("nivelación", () => {
+    const learnChat = (intent: string) =>
+      vi.stubGlobal("fetch", async (url: string) => {
+        if (url.endsWith("/users/me")) return json({ id: "u1", username: "ana", email: "a@a.a" })
+        if (url.endsWith("/chats/")) return json({ chats: [{ id: "c1", title: "Ecuaciones" }] })
+        if (url.endsWith("/chats/c1"))
+          return json({
+            id: "c1",
+            title: "Ecuaciones",
+            messages: [
+              { role: "user", content: "Quiero aprender ecuaciones" },
+              {
+                role: "assistant",
+                content: "Una ecuación es una igualdad con una incógnita.",
+                // Así guarda el backend el envelope: directamente en metadata
+                metadata: { type: "explanation", emotion: "encouraging", payload: { content: "…", intent, grounded: false } },
+              },
+            ],
+          })
+        throw new Error(`Petición inesperada: ${url}`)
+      })
+
+    beforeEach(() => localStorage.clear())
+
+    it("si el tutor detecta «quiero aprender», ofrece nivelarse con el tema ya puesto", async () => {
+      learnChat("learn")
+      renderAt("c1")
+
+      const topic = (await screen.findByLabelText("Tema de la nivelación")) as HTMLInputElement
+      expect(topic.value).toBe("ecuaciones")
+      expect(screen.getByRole("link", { name: "Empezar" }).getAttribute("href")).toBe("/nivelacion?tema=ecuaciones&chat=c1")
+      // Las etiquetas del tutor se leen de metadata (antes no salían nunca)
+      expect(screen.getByText("Explicación")).toBeTruthy()
+      expect(screen.getByText("Chat libre")).toBeTruthy()
+      expect(screen.queryByText("encouraging")).toBeNull()
+    })
+
+    it("«Ahora no» la cierra y ese chat no la vuelve a ofrecer", async () => {
+      learnChat("learn")
+      const { unmount } = renderAt("c1")
+
+      fireEvent.click(await screen.findByRole("button", { name: "Ahora no" }))
+      expect(screen.queryByLabelText("Tema de la nivelación")).toBeNull()
+
+      unmount()
+      renderAt("c1")
+      await screen.findByText("Una ecuación es una igualdad con una incógnita.")
+      expect(screen.queryByLabelText("Tema de la nivelación")).toBeNull()
+    })
+
+    it("con otra intención no ofrece nada", async () => {
+      learnChat("general")
+      renderAt("c1")
+
+      await screen.findByText("Una ecuación es una igualdad con una incógnita.")
+      expect(screen.queryByLabelText("Tema de la nivelación")).toBeNull()
+    })
+  })
+
   it("un chat que no existe lo dice y ofrece empezar uno nuevo", async () => {
     vi.stubGlobal("fetch", async (url: string) => {
       if (url.endsWith("/users/me")) return json({ id: "u1", username: "ana", email: "a@a.a" })

@@ -13,3 +13,12 @@ export function chatHref(chatId: string): string {
 export function quizHref(chatId: string | null): string {
   return chatId ? `/quiz?chat=${encodeURIComponent(chatId)}` : "/quiz"
 }
+
+// Nivelación en un tema; con el chat de origen, para poder volver a él al terminar
+export function placementHref(topic?: string, chatId?: string | null): string {
+  const params = new URLSearchParams()
+  if (topic) params.set("tema", topic)
+  if (chatId) params.set("chat", chatId)
+  const query = params.toString()
+  return query ? `/nivelacion?${query}` : "/nivelacion"
+}
