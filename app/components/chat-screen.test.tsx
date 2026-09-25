@@ -6,6 +6,7 @@ import { ChatScreen } from "./chat-screen"
 import { setAuthToken } from "@/lib/laria-api"
 import { controllableSSE, tokenEvent } from "@/test/sse"
 import { FakeSpeechRecognition } from "@/test/speech"
+import { preferReducedMotion } from "@/test/media"
 
 // El router de Next: la URL actual y las navegaciones que pide la pantalla
 const nav = vi.hoisted(() => ({
@@ -35,6 +36,8 @@ function renderAt(id?: string) {
 }
 
 beforeEach(() => {
+  // Estos tests van de rutas y anuncios, no del efecto de escritura: sin él, no dependen del reloj
+  preferReducedMotion()
   setAuthToken("token")
   nav.replace.mockReset()
   nav.push.mockReset()
@@ -43,6 +46,7 @@ afterEach(() => {
   cleanup()
   setAuthToken(null)
   vi.unstubAllGlobals()
+  vi.restoreAllMocks()
 })
 
 describe("ChatScreen", () => {

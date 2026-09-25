@@ -4,9 +4,11 @@ import { renderHook, act, waitFor } from "@testing-library/react"
 import { useStreamingChat } from "./use-streaming-chat"
 import type { ChatMessage } from "@/lib/laria-api"
 import { controllableSSE, tokenEvent } from "@/test/sse"
+import { preferReducedMotion } from "@/test/media"
 
 afterEach(() => {
   vi.unstubAllGlobals()
+  vi.restoreAllMocks()
 })
 
 // Simula el servidor de chats: cada POST /stream abre el siguiente SSE de la lista;
@@ -58,6 +60,21 @@ describe("useStreamingChat", () => {
     )
     expect(result.current.messages[0]).toMatchObject({ role: "user", content: "¿Qué es la fotosíntesis?" })
     expect(result.current.isStreaming).toBe(true)
+  })
+
+  it("con «reducir movimiento» muestra cada fragmento tal cual llega, sin efecto de escritura", async () => {
+    preferReducedMotion()
+    const frames = vi.spyOn(window, "requestAnimationFrame")
+    const sse = network()
+    const { result } = renderChat()
+
+    act(() => {
+      result.current.startStreaming("hola")
+    })
+    sse.push(tokenEvent("Una respuesta larga que llega de golpe"))
+
+    await waitFor(() => expect(last(result.current.messages).content).toBe("Una respuesta larga que llega de golpe"))
+    expect(frames).not.toHaveBeenCalled()
   })
 
   it("parar corta la conexión y deja lo que ya se había escrito", async () => {

@@ -3,6 +3,11 @@
 import { useState, useCallback, useRef, useEffect } from "react"
 import { lariaAPI, ChatMessage } from "@/lib/laria-api"
 
+// Con "reducir movimiento" el texto se muestra tal cual llega, sin efecto de escritura
+function prefersReducedMotion(): boolean {
+  return typeof window !== "undefined" && !!window.matchMedia?.("(prefers-reduced-motion: reduce)").matches
+}
+
 interface StreamingState {
   isStreaming: boolean
   isThinking: boolean
@@ -117,6 +122,12 @@ export function useStreamingChat({
   }, [calculateRenderSpeed, showAssistantText])
 
   const queueDisplay = useCallback((content: string) => {
+    if (prefersReducedMotion()) {
+      showAssistantText(displayedRef.current + content)
+      setState((prev) => ({ ...prev, isThinking: false, displayedContent: displayedRef.current }))
+      return
+    }
+
     const chunkSize = pendingContentRef.current.length > 200 ? 10 : 
                      pendingContentRef.current.length > 50 ? 5 : 1
 
@@ -130,7 +141,7 @@ export function useStreamingChat({
       lastDisplayTimeRef.current = Date.now()
       animationFrameRef.current = requestAnimationFrame(processDisplayQueue)
     }
-  }, [processDisplayQueue])
+  }, [processDisplayQueue, showAssistantText])
 
   const startStreaming = useCallback(async (content: string, targetChatId?: string) => {
     const activeId = targetChatId || chatId
