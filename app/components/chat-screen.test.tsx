@@ -4,7 +4,7 @@ import { AuthProvider } from "@/app/contexts/auth-context"
 import { ChatProvider } from "@/app/contexts/chat-context"
 import { ChatScreen } from "./chat-screen"
 import { setAuthToken } from "@/lib/laria-api"
-import { controllableSSE, tokenEvent } from "@/test/sse"
+import { controllableSSE, doneEvent, tokenEvent } from "@/test/sse"
 import { FakeSpeechRecognition } from "@/test/speech"
 import { preferReducedMotion } from "@/test/media"
 
@@ -144,7 +144,7 @@ describe("ChatScreen", () => {
     expect(await screen.findByText("Es un proceso")).toBeTruthy()
     expect(live()).toBe("LARIA está respondiendo…")
 
-    sse.push("data: [DONE]\n\n")
+    sse.push(doneEvent())
     await waitFor(() => expect(live()).toBe("Respuesta de LARIA lista."))
   })
 
@@ -323,7 +323,7 @@ describe("ChatScreen", () => {
         if (url.endsWith("/chats/") && method === "POST") return json({ id: "c2", title: "Nuevo" })
         if (url.endsWith("/stream")) {
           sent.push(JSON.parse(String(init?.body)).content)
-          return new Response("data: [DONE]\n\n", { status: 200 })
+          return new Response(doneEvent(), { status: 200 })
         }
         return json({ id: "c2", title: "t", messages: [] })
       })
@@ -353,7 +353,7 @@ describe("ChatScreen", () => {
         if (url.endsWith("/users/me")) return json({ id: "u1", username: "ana", email: "a@a.a" })
         if (url.endsWith("/chats/") && method === "GET") return json({ chats: [] })
         if (url.endsWith("/chats/") && method === "POST") return json({ id: "c2", title: "Nuevo" })
-        if (url.endsWith("/stream")) return new Response("data: [DONE]\n\n", { status: 200 })
+        if (url.endsWith("/stream")) return new Response(doneEvent(), { status: 200 })
         return json({ id: "c2", title: "t", messages: [] })
       })
       renderAt()

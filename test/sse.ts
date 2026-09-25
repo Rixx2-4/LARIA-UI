@@ -36,5 +36,10 @@ export function controllableSSE() {
   }
 }
 
-export const tokenEvent = (content: string) =>
-  `data: ${JSON.stringify({ type: "token", content })}\n\n`
+// Eventos con el formato del backend: "event: <nombre>" y "data: <json>"
+const sseEvent = (name: string, data: unknown) => `event: ${name}\ndata: ${JSON.stringify(data)}\n\n`
+
+export const tokenEvent = (content: string) => sseEvent("token", { content })
+export const doneEvent = () => sseEvent("done", { message_id: "m1" })
+export const errorEvent = (content: string) =>
+  sseEvent("error", { type: "error", payload: { content, grounded: false } })

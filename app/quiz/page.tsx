@@ -11,6 +11,12 @@ import { useChat } from "@/app/contexts/chat-context"
 import { quizHref } from "@/lib/routes"
 import { lariaAPI, QuizQuestion, QuizAttemptQuestion } from "@/lib/laria-api"
 
+// "B. Cloroplasto" en lugar de solo "B" cuando se conoce el texto de la opción
+function answerLabel(question: QuizQuestion, letter: string): string {
+  const text = question.options[letter]
+  return text ? `${letter}. ${text}` : letter
+}
+
 interface QuizResult {
   question: QuizQuestion
   userAnswer: string
@@ -306,6 +312,7 @@ function Quiz({ chatId }: { chatId: string | null }) {
                     <button
                       key={key}
                       onClick={() => handleAnswer(current, key)}
+                      aria-pressed={answers[current.index] === key}
                       className={`w-full text-left p-4 rounded-lg border transition-all ${
                         answers[current.index] === key
                           ? "border-primary bg-primary/5"
@@ -375,11 +382,15 @@ function Quiz({ chatId }: { chatId: string | null }) {
                       <div className="flex-1">
                         <p className="font-medium mb-2">{result.question.text}</p>
                         <p className="text-sm text-muted-foreground">
-                          Tu respuesta: <span className="font-medium">{result.userAnswer || "Sin respuesta"}</span>
+                          Tu respuesta:{" "}
+                          <span className="font-medium">
+                            {result.userAnswer ? answerLabel(result.question, result.userAnswer) : "Sin respuesta"}
+                          </span>
                         </p>
                         {!result.isCorrect && (
                           <p className="text-sm text-green-700 dark:text-green-400">
-                            Respuesta correcta: <span className="font-medium">{result.correctAnswer}</span>
+                            Respuesta correcta:{" "}
+                            <span className="font-medium">{answerLabel(result.question, result.correctAnswer)}</span>
                           </p>
                         )}
                       </div>

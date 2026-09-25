@@ -11,6 +11,7 @@ import { FileCard } from "./file-card"
 import { FileViewer } from "./file-viewer"
 import { MessageContent } from "./message-content"
 import { MessagesSkeleton } from "./skeletons"
+import { isTextMime, mimeFromFilename } from "@/lib/file-types"
 import { useStreamingChat } from "@/hooks/use-streaming-chat"
 import { useDictation } from "@/hooks/use-dictation"
 
@@ -31,13 +32,6 @@ interface UploadedFile {
   dataUrl?: string
 }
 
-const MIME_BY_EXTENSION: Record<string, string> = {
-  pdf: "application/pdf", txt: "text/plain", md: "text/markdown", csv: "text/csv",
-  json: "application/json", xml: "text/xml", html: "text/html", css: "text/css",
-  js: "text/javascript", ts: "text/typescript", py: "text/x-python",
-  png: "image/png", jpg: "image/jpeg", jpeg: "image/jpeg", gif: "image/gif", webp: "image/webp",
-}
-
 // Cómo llama el tutor a cada tipo de respuesta; lo que no esté aquí se muestra tal cual
 const ENVELOPE_TYPE_LABEL: Record<string, string> = {
   explanation: "Explicación",
@@ -47,11 +41,6 @@ const ENVELOPE_TYPE_LABEL: Record<string, string> = {
   question: "Pregunta",
   quiz: "Quiz",
   summary: "Resumen",
-}
-
-function mimeFromFilename(filename: string): string {
-  const ext = filename.split(".").pop()?.toLowerCase() ?? ""
-  return MIME_BY_EXTENSION[ext] ?? "application/octet-stream"
 }
 
 export function SearchBar({ isOpeningChat = false }: { isOpeningChat?: boolean }) {
@@ -69,10 +58,9 @@ export function SearchBar({ isOpeningChat = false }: { isOpeningChat?: boolean }
   const fileInputRef = useRef<HTMLInputElement>(null)
   const messagesContainerRef = useRef<HTMLDivElement>(null)
   const isUserScrolledRef = useRef(false)
-  const lastScrollHeightRef = useRef(0)
 
   const router = useRouter()
-  const { messages, setMessages, activeChatId, activeDocumentId, createChat: ctxCreateChat, generateTitle } = useChat()
+  const { messages, setMessages, addMessage, activeChatId, activeDocumentId, createChat: ctxCreateChat, generateTitle } = useChat()
   const chatId = activeChatId
 
   const {
@@ -128,30 +116,16 @@ export function SearchBar({ isOpeningChat = false }: { isOpeningChat?: boolean }
     return () => container.removeEventListener("scroll", handleScroll)
   }, [isAtBottom])
 
+  // Mientras llega la respuesta se sigue el final, salvo que el usuario haya subido a leer
   useEffect(() => {
-    if (isStreaming && !isUserScrolledRef.current) {
-      scrollToBottom()
-    }
+    if (isStreaming && !isUserScrolledRef.current) scrollToBottom(false)
   }, [displayedContent, isStreaming, scrollToBottom])
 
   useEffect(() => {
-    if (isDone && !isUserScrolledRef.current) {
-      setTimeout(() => scrollToBottom(), 100)
-    }
+    if (!isDone || isUserScrolledRef.current) return
+    const timer = setTimeout(() => scrollToBottom(), 100)
+    return () => clearTimeout(timer)
   }, [isDone, scrollToBottom])
-
-  useEffect(() => {
-    const container = messagesContainerRef.current
-    if (!container) return
-
-    const newHeight = container.scrollHeight
-    if (lastScrollHeightRef.current !== newHeight) {
-      lastScrollHeightRef.current = newHeight
-      if (!isUserScrolledRef.current && isStreaming) {
-        scrollToBottom(false)
-      }
-    }
-  }, [displayedContent, isStreaming, scrollToBottom])
 
   // Al abrir otro chat, o cuando llegan sus mensajes, se muestra el final
   useEffect(() => {
@@ -177,14 +151,7 @@ export function SearchBar({ isOpeningChat = false }: { isOpeningChat?: boolean }
         reader.onload = (e) => resolve(e.target?.result as string)
         reader.onerror = () => resolve(undefined)
         reader.readAsDataURL(file)
-      } else if (
-        file.type.startsWith("text/") ||
-        file.type.includes("json") ||
-        file.type.includes("xml") ||
-        file.type.includes("javascript") ||
-        file.type.includes("typescript") ||
-        file.type.includes("python")
-      ) {
+      } else if (isTextMime(file.type)) {
         const reader = new FileReader()
         reader.onload = (e) => resolve(e.target?.result as string)
         reader.onerror = () => resolve(undefined)
@@ -220,10 +187,7 @@ export function SearchBar({ isOpeningChat = false }: { isOpeningChat?: boolean }
         await lariaAPI.chats.update(currentChatId, { document_id: doc.id })
       }
 
-      await lariaAPI.chats.addMessage(currentChatId, "user", `📎 Subí el archivo: ${file.name}`)
-
-      const chatFinal = await lariaAPI.chats.get(currentChatId)
-      setMessages(chatFinal.messages || [])
+      await addMessage(currentChatId, "user", `📎 Subí el archivo: ${file.name}`)
 
       if (isNewChat) {
         generateTitle(currentChatId, [{ role: "user", content: `Archivo: ${file.name}` }])
@@ -296,6 +260,8 @@ export function SearchBar({ isOpeningChat = false }: { isOpeningChat?: boolean }
       }
     } catch (error) {
       console.error("Chat error:", error)
+      // Lo escrito no se pierde: vuelve al campo para reintentarlo
+      setQuery((current) => current || userMessage)
       toast.error("No se pudo enviar el mensaje")
     }
   }

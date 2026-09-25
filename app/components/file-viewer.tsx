@@ -1,10 +1,12 @@
 "use client"
 
 import { useState, useEffect, useRef } from "react"
-import { X, Download, ZoomIn, ZoomOut, RotateCw, FileText, FileCode, FileSpreadsheet } from "lucide-react"
+import { X, Download, ZoomIn, ZoomOut, RotateCw } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { lariaAPI } from "@/lib/laria-api"
+import { previewKind } from "@/lib/file-types"
 import { FilePreviewSkeleton } from "./skeletons"
+import { FileTypeIcon } from "./file-type-icon"
 
 interface FileViewerProps {
   filename: string
@@ -12,22 +14,6 @@ interface FileViewerProps {
   documentId?: string
   previewDataUrl?: string
   onClose: () => void
-}
-
-function getFileIcon(mimeType: string) {
-  if (mimeType === "application/pdf") return <FileText className="h-8 w-8" />
-  if (mimeType.includes("spreadsheet") || mimeType.includes("csv") || mimeType.includes("excel"))
-    return <FileSpreadsheet className="h-8 w-8" />
-  if (
-    mimeType.startsWith("text/") ||
-    mimeType.includes("json") ||
-    mimeType.includes("xml") ||
-    mimeType.includes("javascript") ||
-    mimeType.includes("typescript") ||
-    mimeType.includes("python")
-  )
-    return <FileCode className="h-8 w-8" />
-  return <FileText className="h-8 w-8" />
 }
 
 function ImageViewer({ src, filename }: { src: string; filename: string }) {
@@ -121,27 +107,11 @@ function TextViewer({ content }: { content: string; filename: string }) {
 function GenericViewer({ filename, mimeType }: { filename: string; mimeType: string }) {
   return (
     <div className="flex flex-col items-center justify-center h-full gap-4 text-muted-foreground">
-      {getFileIcon(mimeType)}
+      <FileTypeIcon mimeType={mimeType} className="h-8 w-8" />
       <p className="text-lg font-medium">{filename}</p>
       <p className="text-sm">Vista previa no disponible</p>
     </div>
   )
-}
-
-// Qué vista previa admite cada tipo de archivo; null si ninguna
-function previewKind(mimeType: string): "image" | "pdf" | "text" | null {
-  if (mimeType.startsWith("image/")) return "image"
-  if (mimeType === "application/pdf") return "pdf"
-  if (
-    mimeType.startsWith("text/") ||
-    mimeType.includes("json") ||
-    mimeType.includes("xml") ||
-    mimeType.includes("javascript") ||
-    mimeType.includes("typescript") ||
-    mimeType.includes("python")
-  )
-    return "text"
-  return null
 }
 
 export function FileViewer({ filename, mimeType, documentId, previewDataUrl, onClose }: FileViewerProps) {
@@ -177,7 +147,9 @@ export function FileViewer({ filename, mimeType, documentId, previewDataUrl, onC
         if (kind === "text") {
           setContent(await blob.text())
         } else {
-          objectUrl = URL.createObjectURL(blob)
+          // El iframe comparte el origen de la app: se fuerza el tipo PDF para que
+          // un archivo que en realidad sea HTML nunca se ejecute como página
+          objectUrl = URL.createObjectURL(kind === "pdf" ? new Blob([blob], { type: "application/pdf" }) : blob)
           setBlobUrl(objectUrl)
         }
       } catch (err) {

@@ -146,7 +146,8 @@ export function ChatProvider({ children }: { children: ReactNode }) {
       await lariaAPI.chats.update(chatId, { title: response.title })
       await loadChats()
     } catch (error) {
-      console.error("Error generating title:", error)
+      // Previsto: si la IA no da un título válido, se usa el primer mensaje
+      console.warn("Título generado no disponible; se usa el primer mensaje:", error)
       if (msgs.length > 0 && msgs[0].content) {
         const fallbackTitle = msgs[0].content.length > 50
           ? msgs[0].content.substring(0, 50).trim() + "..."
@@ -155,7 +156,7 @@ export function ChatProvider({ children }: { children: ReactNode }) {
           await lariaAPI.chats.update(chatId, { title: fallbackTitle })
           await loadChats()
         } catch (updateError) {
-          console.error("Error updating fallback title:", updateError)
+          console.warn("No se pudo guardar el título de respaldo:", updateError)
         }
       }
     }
