@@ -50,12 +50,14 @@ export function LoginScreen() {
   return (
     <main className="relative flex min-h-screen w-full items-center justify-center bg-background px-6 py-12">
       {/* Salir sin entrar: de vuelta a la página de presentación */}
+      {/* Bien visible: botón con borde y, desde tablet, con texto; en móvil solo la X (44 px) */}
       <Link
         href="/"
         aria-label="Cerrar y volver a la página de inicio"
-        className="absolute right-4 top-4 rounded-full p-2 text-muted-foreground transition-colors hover:bg-accent hover:text-foreground sm:right-6 sm:top-6"
+        className="absolute right-3 top-3 z-10 flex h-11 min-w-11 items-center justify-center gap-2 rounded-full border border-border bg-background px-3 text-sm font-medium text-foreground shadow-sm transition-colors hover:bg-accent sm:right-6 sm:top-6 sm:px-4"
       >
-        <X className="h-5 w-5" />
+        <X className="h-5 w-5 shrink-0" aria-hidden />
+        <span className="hidden sm:inline">Volver al inicio</span>
       </Link>
       <section className="flex w-full max-w-md flex-col items-center gap-8 text-center">
         <div className="flex flex-col items-center gap-5">
