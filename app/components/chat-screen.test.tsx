@@ -70,6 +70,25 @@ describe("ChatScreen", () => {
     expect(screen.queryByRole("button", { name: /Salir/ })).toBeNull()
   })
 
+  it("mientras llega un chat existente no se presenta como un chat nuevo", async () => {
+    let answer: (response: Response) => void = () => {}
+    vi.stubGlobal("fetch", async (url: string) => {
+      if (url.endsWith("/users/me")) return json({ id: "u1", username: "ana", email: "a@a.a" })
+      if (url.endsWith("/chats/")) return json({ chats: [{ id: "c1", title: "Átomos" }] })
+      if (url.endsWith("/chats/c1")) return new Promise<Response>((resolve) => (answer = resolve))
+      throw new Error(`Petición inesperada: ${url}`)
+    })
+
+    renderAt("c1")
+
+    expect(await screen.findByRole("status", { name: "Cargando la conversación" })).toBeTruthy()
+    expect(screen.queryByText("¿Qué quieres aprender hoy?")).toBeNull()
+
+    act(() => answer(json({ id: "c1", title: "Átomos", messages: [{ role: "user", content: "¿Qué es un átomo?" }] })))
+    expect(await screen.findByText("¿Qué es un átomo?")).toBeTruthy()
+    expect(screen.queryByRole("status", { name: "Cargando la conversación" })).toBeNull()
+  })
+
   it("en / el primer mensaje crea el chat, lleva a /chat/<id> y la respuesta no se corta", async () => {
     const sse = controllableSSE()
     vi.stubGlobal("fetch", async (url: string, init?: RequestInit) => {

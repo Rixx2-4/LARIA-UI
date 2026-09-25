@@ -1,22 +1,17 @@
 "use client"
 
 import type { ReactNode } from "react"
-import { Loader2, RefreshCw } from "lucide-react"
+import { RefreshCw } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { useAuth } from "@/app/contexts/auth-context"
 import { LoginScreen } from "./login-screen"
+import { AppShellSkeleton } from "./skeletons"
 
 // Muestra la página solo con sesión; si no, el login o el aviso de conexión
 export function RequireAuth({ children }: { children: ReactNode }) {
   const { isAuthenticated, isLoading, connectionError, retry } = useAuth()
 
-  if (isLoading) {
-    return (
-      <div role="status" aria-label="Cargando" className="flex min-h-screen items-center justify-center bg-background">
-        <Loader2 className="animate-spin text-muted-foreground" />
-      </div>
-    )
-  }
+  if (isLoading) return <AppShellSkeleton />
 
   if (connectionError) {
     return (

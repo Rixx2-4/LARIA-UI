@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, afterEach } from "vitest"
-import { lariaAPI, getAuthToken, onUnauthorized, setAuthToken } from "./laria-api"
+import { lariaAPI, getAuthToken, onUnauthorized, setAuthToken, describeErrorDetail } from "./laria-api"
 import { controllableSSE, tokenEvent } from "@/test/sse"
 
 afterEach(() => {
@@ -186,5 +186,36 @@ describe("lariaAPI.auth.login", () => {
     await expect(lariaAPI.auth.login("ana@example.com", "mal")).rejects.toThrow("Email o contraseña incorrectos")
     expect(listener).not.toHaveBeenCalled()
     unsubscribe()
+  })
+})
+
+describe("errores de validación del backend", () => {
+  it("un 422 con la lista de FastAPI se cuenta en español, no como [object Object]", async () => {
+    vi.stubGlobal("fetch", async () =>
+      new Response(
+        JSON.stringify({
+          detail: [{ type: "string_too_short", loc: ["body", "password"], msg: "String should have at least 12 characters", ctx: { min_length: 12 } }],
+        }),
+        { status: 422 },
+      ),
+    )
+
+    await expect(lariaAPI.auth.register("ana", "ana@example.com", "Abcdef12")).rejects.toThrow(
+      "La contraseña debe tener al menos 12 caracteres.",
+    )
+  })
+
+  it("junta varios errores y deja pasar los textos que ya vienen en español", () => {
+    expect(
+      describeErrorDetail(
+        [
+          { type: "missing", loc: ["body", "username"], msg: "Field required" },
+          { type: "value_error", loc: ["body", "email"], msg: "value is not a valid email address: An email address must have an @-sign." },
+        ],
+        "fallo",
+      ),
+    ).toBe("El nombre de usuario es obligatorio. El email no es válido.")
+    expect(describeErrorDetail("La contraseña es demasiado débil", "fallo")).toBe("La contraseña es demasiado débil")
+    expect(describeErrorDetail(undefined, "fallo")).toBe("fallo")
   })
 })

@@ -57,6 +57,29 @@ afterEach(() => {
 })
 
 describe("Sidebar", () => {
+  it("mientras cargan los chats no dice que no hay ninguno", async () => {
+    let answer: (response: Response) => void = () => {}
+    vi.stubGlobal("fetch", async (url: string) => {
+      if (url.endsWith("/users/me")) return json({ id: "u1", username: "ana", email: "a@a.a" })
+      if (url.endsWith("/chats/")) return new Promise<Response>((resolve) => (answer = resolve))
+      throw new Error(`Petición inesperada: ${url}`)
+    })
+    render(
+      <AuthProvider>
+        <ChatProvider>
+          <Sidebar />
+        </ChatProvider>
+      </AuthProvider>,
+    )
+    fireEvent.click(await screen.findByRole("button", { name: "Historial" }))
+
+    expect(screen.getByRole("status", { name: "Cargando tus chats" })).toBeTruthy()
+    expect(screen.queryByText("No hay chats aún")).toBeNull()
+
+    answer(json({ chats: [] }))
+    expect(await screen.findByText("No hay chats aún")).toBeTruthy()
+  })
+
   it("borrar un chat pide confirmación y cancelar no lo borra", async () => {
     const writes = stubServer()
     await openHistory()
