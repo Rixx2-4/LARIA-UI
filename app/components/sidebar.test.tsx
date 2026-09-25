@@ -112,4 +112,23 @@ describe("Sidebar", () => {
     expect(screen.getByText("Átomos")).toBeTruthy()
     expect(screen.getByRole("textbox", { name: "Nuevo título" })).toBeTruthy()
   })
+
+  it("el nombre LARIA solo aparece con la barra lateral desplegada", async () => {
+    stubServer()
+    render(
+      <AuthProvider>
+        <ChatProvider>
+          <Sidebar />
+        </ChatProvider>
+      </AuthProvider>,
+    )
+    const historial = await screen.findByRole("button", { name: "Historial" })
+    expect(screen.queryByText("LARIA")).toBeNull()
+
+    fireEvent.click(historial)
+    expect(screen.getByText("LARIA")).toBeTruthy()
+
+    fireEvent.click(historial)
+    expect(screen.queryByText("LARIA")).toBeNull()
+  })
 })
