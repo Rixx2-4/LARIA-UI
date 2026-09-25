@@ -185,99 +185,105 @@ export function Sidebar({ onNavigate }: { onNavigate?: () => void } = {}) {
       </div>
 
       {openPanel && (
-        <div key={openPanel} className="w-[208px] bg-background border-r border-border">
-          {openPanel === "history" && (
-            <div className="flex flex-col h-full animate-in fade-in duration-300">
-              <div className="flex items-center justify-between px-3 py-2.5">
-                <h2 className="text-sm font-semibold">Historial</h2>
-                <Button
-                  aria-label="Fijar panel"
-                  variant="ghost"
-                  size="icon"
-                  className={`h-6 w-6 transition-colors ${pinnedPanel === "history" ? "text-primary" : ""}`}
-                  onClick={() => handlePinToggle("history")}
-                >
-                  <Pin
-                    className={`h-3.5 w-3.5 transition-transform ${pinnedPanel === "history" ? "rotate-45" : ""}`}
-                  />
-                </Button>
-              </div>
-              <div className="px-3 py-1.5">
-                <h3 className="text-[11px] font-medium text-muted-foreground">Recientes</h3>
-              </div>
-              <ScrollArea className="flex-1 px-1.5">
-                <div className="space-y-0 pb-2">
-                  {!chatsLoaded ? (
-                    <ChatListSkeleton />
-                  ) : chats.length > 0 ? (
-                    chats.map((chat) => (
-                      <ChatHistoryItem
-                        key={chat.id}
-                        title={chat.title}
-                        isActive={activeChatId === chat.id}
-                        mode={editing?.chatId === chat.id ? editing.mode : "view"}
-                        onModeChange={(mode) => setEditing(mode === "view" ? null : { chatId: chat.id, mode })}
-                        onSelect={() => handleSelectChat(chat.id)}
-                        onRename={(title) => handleRenameChat(chat.id, title)}
-                        onDelete={() => handleDeleteChat(chat.id)}
-                      />
-                    ))
-                  ) : (
-                    <p className="text-[12px] text-muted-foreground px-2 py-4 text-center">
-                      No hay chats aún
-                    </p>
-                  )}
+        <div key={openPanel} className="flex w-[208px] flex-col bg-background border-r border-border">
+          {/* El nombre de la app solo se ve con la barra lateral desplegada, a la altura del logo */}
+          <div className="mb-6 flex h-10 shrink-0 items-center px-3">
+            <span className="text-xl font-bold tracking-tight text-foreground">LARIA</span>
+          </div>
+          <div className="min-h-0 flex-1">
+            {openPanel === "history" && (
+              <div className="flex flex-col h-full animate-in fade-in duration-300">
+                <div className="flex items-center justify-between px-3 py-2.5">
+                  <h2 className="text-sm font-semibold">Historial</h2>
+                  <Button
+                    aria-label="Fijar panel"
+                    variant="ghost"
+                    size="icon"
+                    className={`h-6 w-6 transition-colors ${pinnedPanel === "history" ? "text-primary" : ""}`}
+                    onClick={() => handlePinToggle("history")}
+                  >
+                    <Pin
+                      className={`h-3.5 w-3.5 transition-transform ${pinnedPanel === "history" ? "rotate-45" : ""}`}
+                    />
+                  </Button>
                 </div>
-              </ScrollArea>
-            </div>
-          )}
-
-          {openPanel === "documents" && (
-            <div className="flex flex-col h-full animate-in fade-in duration-300">
-              <div className="flex items-center justify-between px-3 py-2.5">
-                <h2 className="text-sm font-semibold">Mis Documentos</h2>
-                <Button
-                  aria-label="Fijar panel"
-                  variant="ghost"
-                  size="icon"
-                  className={`h-6 w-6 transition-colors ${pinnedPanel === "documents" ? "text-primary" : ""}`}
-                  onClick={() => handlePinToggle("documents")}
-                >
-                  <Pin
-                    className={`h-3.5 w-3.5 transition-transform ${pinnedPanel === "documents" ? "rotate-45" : ""}`}
-                  />
-                </Button>
+                <div className="px-3 py-1.5">
+                  <h3 className="text-[11px] font-medium text-muted-foreground">Recientes</h3>
+                </div>
+                <ScrollArea className="flex-1 px-1.5">
+                  <div className="space-y-0 pb-2">
+                    {!chatsLoaded ? (
+                      <ChatListSkeleton />
+                    ) : chats.length > 0 ? (
+                      chats.map((chat) => (
+                        <ChatHistoryItem
+                          key={chat.id}
+                          title={chat.title}
+                          isActive={activeChatId === chat.id}
+                          mode={editing?.chatId === chat.id ? editing.mode : "view"}
+                          onModeChange={(mode) => setEditing(mode === "view" ? null : { chatId: chat.id, mode })}
+                          onSelect={() => handleSelectChat(chat.id)}
+                          onRename={(title) => handleRenameChat(chat.id, title)}
+                          onDelete={() => handleDeleteChat(chat.id)}
+                        />
+                      ))
+                    ) : (
+                      <p className="text-[12px] text-muted-foreground px-2 py-4 text-center">
+                        No hay chats aún
+                      </p>
+                    )}
+                  </div>
+                </ScrollArea>
               </div>
-              <ScrollArea className="flex-1 px-1.5">
-                <div className="space-y-0 pb-2">
-                  {!documentsLoaded ? (
-                    <DocumentListSkeleton />
-                  ) : documents.length > 0 ? (
-                    documents.map((doc) => (
-                      <div
-                        key={doc.id}
-                        className="group w-full text-left px-2 py-2 text-[13px] rounded transition-all flex items-center gap-2.5 cursor-default"
-                      >
-                        <FileText className="h-4 w-4 shrink-0 text-muted-foreground" />
-                        <div className="min-w-0 flex-1">
-                          <div className="truncate font-medium">{doc.filename}</div>
-                          <div className="text-[10.5px] text-muted-foreground truncate">
-                            {DOCUMENT_STATE_LABEL[documentState(doc)]}
+            )}
+
+            {openPanel === "documents" && (
+              <div className="flex flex-col h-full animate-in fade-in duration-300">
+                <div className="flex items-center justify-between px-3 py-2.5">
+                  <h2 className="text-sm font-semibold">Mis Documentos</h2>
+                  <Button
+                    aria-label="Fijar panel"
+                    variant="ghost"
+                    size="icon"
+                    className={`h-6 w-6 transition-colors ${pinnedPanel === "documents" ? "text-primary" : ""}`}
+                    onClick={() => handlePinToggle("documents")}
+                  >
+                    <Pin
+                      className={`h-3.5 w-3.5 transition-transform ${pinnedPanel === "documents" ? "rotate-45" : ""}`}
+                    />
+                  </Button>
+                </div>
+                <ScrollArea className="flex-1 px-1.5">
+                  <div className="space-y-0 pb-2">
+                    {!documentsLoaded ? (
+                      <DocumentListSkeleton />
+                    ) : documents.length > 0 ? (
+                      documents.map((doc) => (
+                        <div
+                          key={doc.id}
+                          className="group w-full text-left px-2 py-2 text-[13px] rounded transition-all flex items-center gap-2.5 cursor-default"
+                        >
+                          <FileText className="h-4 w-4 shrink-0 text-muted-foreground" />
+                          <div className="min-w-0 flex-1">
+                            <div className="truncate font-medium">{doc.filename}</div>
+                            <div className="text-[10.5px] text-muted-foreground truncate">
+                              {DOCUMENT_STATE_LABEL[documentState(doc)]}
+                            </div>
                           </div>
                         </div>
-                      </div>
-                    ))
-                  ) : (
-                    <p className="text-[12px] text-muted-foreground px-2 py-4 text-center">
-                      {documentsLoadFailed ? "No se pudieron cargar tus documentos." : "No hay documentos aún."}
-                      <br />
-                      Sube archivos desde el chat.
-                    </p>
-                  )}
-                </div>
-              </ScrollArea>
-            </div>
-          )}
+                      ))
+                    ) : (
+                      <p className="text-[12px] text-muted-foreground px-2 py-4 text-center">
+                        {documentsLoadFailed ? "No se pudieron cargar tus documentos." : "No hay documentos aún."}
+                        <br />
+                        Sube archivos desde el chat.
+                      </p>
+                    )}
+                  </div>
+                </ScrollArea>
+              </div>
+            )}
+          </div>
         </div>
       )}
     </div>
