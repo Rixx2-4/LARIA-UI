@@ -26,12 +26,8 @@ export function AppShellSkeleton() {
       </div>
       <div className="flex min-w-0 flex-1 flex-col">
         <header className="flex shrink-0 items-center justify-between gap-2 border-b border-border/60 px-3 py-2 md:px-6 md:py-3">
-          <div className="flex items-center gap-1">
-            <span className="text-xl md:text-2xl font-bold tracking-tight text-foreground">LARIA</span>
-            <span className="rounded-full bg-primary px-2 py-0.5 text-[10px] md:text-xs font-semibold text-primary-foreground">
-              IA
-            </span>
-          </div>
+          {/* Como la cabecera real: sin el nombre de la app (va en la barra lateral desplegada) */}
+          <div />
           <Skeleton className="h-4 w-24" />
         </header>
         <div className="flex min-h-0 flex-1 flex-col items-center justify-end px-4 pb-6">
