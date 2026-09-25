@@ -58,4 +58,15 @@ describe("LoginScreen", () => {
     expect(screen.getByText("Crea tu cuenta")).toBeTruthy()
     window.history.replaceState(null, "", "/")
   })
+
+  it("tiene una X (y el logo) para volver a la página de presentación", () => {
+    render(
+      <AuthProvider>
+        <LoginScreen />
+      </AuthProvider>,
+    )
+
+    expect(screen.getByRole("link", { name: "Cerrar y volver a la página de inicio" }).getAttribute("href")).toBe("/")
+    expect(screen.getByRole("link", { name: "LARIA, página de inicio" }).getAttribute("href")).toBe("/")
+  })
 })
