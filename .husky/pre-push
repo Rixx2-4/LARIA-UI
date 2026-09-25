@@ -1,0 +1,51 @@
+# Antes de subir nada a GitHub se comprueba que lo nuevo no rompe lo que ya había:
+# lint, tipos, tests y build de producción. Si algo falla, el push se cancela.
+# Saltárselo en una emergencia: git push --no-verify
+
+# Borrar una rama remota no sube código: no hay nada que comprobar
+pushes_code=false
+while read -r _local_ref local_sha _remote_ref _remote_sha; do
+  case "$local_sha" in
+    *[!0]*) pushes_code=true ;;
+  esac
+done
+[ "$pushes_code" = false ] && exit 0
+
+# pnpm 9 no entiende el pnpm-workspace.yaml del proyecto; con él, se usa npm para los scripts
+if pnpm -v 2>/dev/null | grep -Eq '^(1[0-9]|[2-9][0-9])\.'; then
+  run="pnpm run --silent"
+else
+  run="npm run --silent"
+fi
+
+# Se comprueba la carpeta de trabajo, no solo los commits: avisar si difieren
+if [ -n "$(git status --porcelain)" ]; then
+  echo "⚠  Hay cambios sin commitear: se comprobarán también, aunque no se suban."
+fi
+
+step() {
+  label=$1
+  script=$2
+  start=$(date +%s)
+  printf '▶ %s… ' "$label"
+  log=$(mktemp)
+  if $run "$script" >"$log" 2>&1; then
+    echo "✔ ($(($(date +%s) - start))s)"
+    rm -f "$log"
+  else
+    echo "✘"
+    echo
+    tail -n 40 "$log"
+    rm -f "$log"
+    echo
+    echo "✘ Push cancelado: falló «$label». Arréglalo y vuelve a intentarlo (detalle: pnpm $script)."
+    exit 1
+  fi
+}
+
+echo "Comprobando antes del push…"
+step "Lint" lint
+step "Tipos" typecheck
+step "Tests" test
+step "Build de producción" build
+echo "✔ Todo en orden: subiendo."

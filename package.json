@@ -6,8 +6,11 @@
     "build": "next build",
     "dev": "next dev",
     "lint": "eslint .",
+    "prepare": "husky",
     "start": "next start",
-    "test": "vitest run"
+    "test": "vitest run",
+    "typecheck": "tsc --noEmit",
+    "verify": "eslint . && tsc --noEmit && vitest run && next build"
   },
   "dependencies": {
     "@radix-ui/react-scroll-area": "1.2.2",
@@ -34,6 +37,7 @@
     "@types/react-dom": "^19",
     "eslint": "^9.39.5",
     "eslint-config-next": "16.0.10",
+    "husky": "^9.1.7",
     "jsdom": "^30.1.1",
     "postcss": "^8.5",
     "tailwindcss": "^4.1.9",
