@@ -25,7 +25,8 @@ interface QuizResult {
 }
 
 const PRESET_COUNTS = [5, 10, 20]
-const MAX_QUESTIONS = 50
+// El backend acepta de 1 a 20 preguntas por quiz
+const MAX_QUESTIONS = 20
 
 
 export default function QuizPage() {

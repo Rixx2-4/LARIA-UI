@@ -472,8 +472,9 @@ export const lariaAPI = {
       callbacks.onDone?.()
     },
 
+    // Genera (y guarda) un quiz nuevo: es un POST, el backend responde 405 a un GET
     generateQuiz: (chatId: string, numQuestions: number = 5) =>
-      fetchAPI<QuizResponse>(`/chats/${segment(chatId)}/quiz?num_questions=${numQuestions}`),
+      fetchAPI<QuizResponse>(`/chats/${segment(chatId)}/quiz?num_questions=${numQuestions}`, { method: "POST" }),
 
     generateTitle: (messages: { role: string; content: string }[]) =>
       fetchAPI<{ title: string }>("/chats/generate-title", {
