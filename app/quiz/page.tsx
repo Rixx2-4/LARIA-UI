@@ -2,27 +2,15 @@
 
 import { Suspense, useState } from "react"
 import { useRouter, useSearchParams } from "next/navigation"
-import { Loader2, CheckCircle, XCircle, ArrowRight, RotateCcw } from "lucide-react"
+import { Loader2, RotateCcw } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { AppShell } from "../components/app-shell"
 import { RequireAuth } from "../components/require-auth"
 import { SelectSkeleton } from "../components/skeletons"
 import { useChat } from "@/app/contexts/chat-context"
-import { NEW_CHAT_HREF, chatHref, quizHref } from "@/lib/routes"
-import { lariaAPI, QuizQuestion, QuizAttemptQuestion } from "@/lib/laria-api"
-
-// "B. Cloroplasto" en lugar de solo "B" cuando se conoce el texto de la opción
-function answerLabel(question: QuizQuestion, letter: string): string {
-  const text = question.options[letter]
-  return text ? `${letter}. ${text}` : letter
-}
-
-interface QuizResult {
-  question: QuizQuestion
-  userAnswer: string
-  isCorrect: boolean
-  correctAnswer: string
-}
+import { NEW_CHAT_HREF, chatHref, placementHref, quizHref } from "@/lib/routes"
+import { lariaAPI, QuizQuestion } from "@/lib/laria-api"
+import { QuestionStep, ResultsList, toResults, type QuizResult } from "./quiz-parts"
 
 const PRESET_COUNTS = [5, 10, 20]
 // El backend acepta de 1 a 20 preguntas por quiz
@@ -72,6 +60,8 @@ function Quiz({ chatId }: { chatId: string | null }) {
   const [isLoading, setIsLoading] = useState(false)
   const [results, setResults] = useState<QuizResult[]>([])
   const [error, setError] = useState<string | null>(null)
+  // Tema para nivelarse sin material
+  const [topicDraft, setTopicDraft] = useState("")
 
   const generateQuiz = async () => {
     if (!chatId) return
@@ -126,15 +116,7 @@ function Quiz({ chatId }: { chatId: string | null }) {
     try {
       const data = await lariaAPI.quizzes.submitAttempt(quizId, answers)
 
-      const quizResults: QuizResult[] = data.questions.map((q: QuizAttemptQuestion) => {
-        const original = questions.find((oq) => oq.index === q.index)
-        return {
-          question: original || { index: q.index, text: q.text, options: {}, difficulty: "medium" },
-          userAnswer: q.selected,
-          isCorrect: q.is_correct,
-          correctAnswer: q.correct_answer,
-        }
-      })
+      const quizResults = toResults(questions, data.questions)
       setResults(quizResults)
       setStep("results")
     } catch (err) {
@@ -271,87 +253,48 @@ function Quiz({ chatId }: { chatId: string | null }) {
                   {generateBlockedReason}
                 </p>
               )}
+
+              <form
+                className="border-t border-border pt-6"
+                onSubmit={(e) => {
+                  e.preventDefault()
+                  if (topicDraft.trim().length >= 2) router.push(placementHref(topicDraft.trim(), chatId))
+                }}
+              >
+                <label htmlFor="placement-topic" className="text-sm font-medium block">
+                  ¿Sin material? Dime qué quieres aprender
+                </label>
+                <p className="mt-1 mb-3 text-sm text-muted-foreground">
+                  Te hago unas preguntas para ver por dónde empezar. No es un examen.
+                </p>
+                <div className="flex gap-2">
+                  <input
+                    id="placement-topic"
+                    value={topicDraft}
+                    onChange={(e) => setTopicDraft(e.target.value)}
+                    placeholder="Por ejemplo: ecuaciones, derivadas, la célula…"
+                    maxLength={120}
+                    className="min-w-0 flex-1 px-3 py-2 border border-border rounded-lg bg-background text-sm"
+                  />
+                  <Button type="submit" variant="outline" disabled={topicDraft.trim().length < 2}>
+                    Nivelarme
+                  </Button>
+                </div>
+              </form>
             </div>
           )}
 
           {step === "quiz" && current && (
-            <div className="space-y-6">
-              <div className="flex items-center justify-between">
-                <span className="text-sm text-muted-foreground">
-                  Pregunta {currentQuestion + 1} de {questions.length}
-                </span>
-                <span className="text-sm font-medium">
-                  {Math.round(((currentQuestion + 1) / questions.length) * 100)}%
-                </span>
-              </div>
-
-              <div className="h-2 bg-muted rounded-full overflow-hidden">
-                <div
-                  className="h-full bg-primary transition-all"
-                  style={{ width: `${((currentQuestion + 1) / questions.length) * 100}%` }}
-                />
-              </div>
-
-              <div className="p-6 bg-card border border-border rounded-xl">
-                <div className="flex items-center gap-2 mb-4">
-                  <span className={`text-xs px-2 py-0.5 rounded-full ${
-                    current.difficulty === "hard"
-                      ? "bg-red-100 text-red-700 dark:bg-red-500/15 dark:text-red-300"
-                      : current.difficulty === "medium"
-                      ? "bg-yellow-100 text-yellow-700 dark:bg-yellow-500/15 dark:text-yellow-300"
-                      : "bg-green-100 text-green-700 dark:bg-green-500/15 dark:text-green-300"
-                  }`}>
-                    {current.difficulty === "hard" ? "Difícil" :
-                     current.difficulty === "medium" ? "Medio" : "Fácil"}
-                  </span>
-                </div>
-
-                <h2 className="text-lg font-medium mb-4">{current.text}</h2>
-
-                <div className="space-y-3">
-                  {Object.entries(current.options).map(([key, value]) => (
-                    <button
-                      key={key}
-                      onClick={() => handleAnswer(current, key)}
-                      aria-pressed={answers[current.index] === key}
-                      className={`w-full text-left p-4 rounded-lg border transition-all ${
-                        answers[current.index] === key
-                          ? "border-primary bg-primary/5"
-                          : "border-border hover:border-primary/50"
-                      }`}
-                    >
-                      <span className="font-medium mr-2">{key}.</span>
-                      {value}
-                    </button>
-                  ))}
-                </div>
-              </div>
-
-              {error && (
-                <div role="alert" className="p-4 bg-destructive/10 border border-destructive/20 rounded-lg text-sm text-destructive">
-                  {error}
-                </div>
-              )}
-
-              <div className="flex gap-3">
-                <Button
-                  variant="outline"
-                  onClick={prevQuestion}
-                  disabled={currentQuestion === 0}
-                  className="flex-1"
-                >
-                  Anterior
-                </Button>
-                <Button
-                  onClick={nextQuestion}
-                  disabled={!answers[current.index] || isLoading}
-                  className="flex-1"
-                >
-                  {currentQuestion === questions.length - 1 ? "Finalizar" : "Siguiente"}
-                  <ArrowRight className="h-4 w-4 ml-2" />
-                </Button>
-              </div>
-            </div>
+            <QuestionStep
+              questions={questions}
+              current={currentQuestion}
+              answers={answers}
+              onAnswer={handleAnswer}
+              onPrev={prevQuestion}
+              onNext={nextQuestion}
+              isSubmitting={isLoading}
+              error={error}
+            />
           )}
 
           {step === "results" && (
@@ -364,41 +307,7 @@ function Quiz({ chatId }: { chatId: string | null }) {
                 </p>
               </div>
 
-              <div className="space-y-4">
-                {results.map((result, index) => (
-                  <div
-                    key={index}
-                    className={`p-4 rounded-xl border ${
-                      result.isCorrect
-                        ? "border-green-200 bg-green-50 dark:border-green-500/30 dark:bg-green-500/10"
-                        : "border-red-200 bg-red-50 dark:border-red-500/30 dark:bg-red-500/10"
-                    }`}
-                  >
-                    <div className="flex items-start gap-3">
-                      {result.isCorrect ? (
-                        <CheckCircle className="h-5 w-5 text-green-600 dark:text-green-400 mt-0.5 shrink-0" />
-                      ) : (
-                        <XCircle className="h-5 w-5 text-red-600 dark:text-red-400 mt-0.5 shrink-0" />
-                      )}
-                      <div className="flex-1">
-                        <p className="font-medium mb-2">{result.question.text}</p>
-                        <p className="text-sm text-muted-foreground">
-                          Tu respuesta:{" "}
-                          <span className="font-medium">
-                            {result.userAnswer ? answerLabel(result.question, result.userAnswer) : "Sin respuesta"}
-                          </span>
-                        </p>
-                        {!result.isCorrect && (
-                          <p className="text-sm text-green-700 dark:text-green-400">
-                            Respuesta correcta:{" "}
-                            <span className="font-medium">{answerLabel(result.question, result.correctAnswer)}</span>
-                          </p>
-                        )}
-                      </div>
-                    </div>
-                  </div>
-                ))}
-              </div>
+              <ResultsList results={results} />
 
               <div className="flex gap-3">
                 <Button variant="outline" onClick={restartQuiz} className="flex-1">

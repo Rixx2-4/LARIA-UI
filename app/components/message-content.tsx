@@ -41,6 +41,18 @@ const components: Components = {
   ),
 }
 
+// Un "$" seguido de número puede abrir una fórmula ("$2x + 3 = 7$") o ser dinero
+// ("cuesta $5 y el otro $10"). Es fórmula si se cierra en la misma línea y lo de
+// dentro no lleva espacios ("$3x+1$") o lleva algún símbolo matemático
+const MONEY_OR_MATH = /(?<![\\$])\$(?=\d)([^$\n]*)/g
+const MATH_SYMBOL = /[=+\-*/^_\\{}()<>]/
+
+function keepMathEscapeMoney(match: string, inside: string, offset: number, text: string): string {
+  const closed = text[offset + match.length] === "$"
+  const isMath = closed && (!/\s/.test(inside) || MATH_SYMBOL.test(inside))
+  return isMath ? match : "\\$" + inside
+}
+
 // Los modelos escriben las fórmulas de varias formas; remark-math solo entiende
 // $…$ y $$ en líneas propias. El código (en bloque o en línea) se deja tal cual.
 function normalizeMath(content: string): string {
@@ -53,8 +65,7 @@ function normalizeMath(content: string): string {
             .replace(/\\\[([\s\S]+?)\\\]/g, (_, tex) => `\n$$\n${tex.trim()}\n$$\n`)
             .replace(/\\\(([\s\S]+?)\\\)/g, (_, tex) => `$${tex.trim()}$`)
             .replace(/^[ \t]*\$\$(.+?)\$\$[ \t]*$/gm, (_, tex) => `$$\n${tex.trim()}\n$$`)
-            // "$5" es dinero, no el inicio de una fórmula (a cambio, $2x$ no se pinta)
-            .replace(/(?<![\\$])\$(?=\d)/g, "\\$"),
+            .replace(MONEY_OR_MATH, keepMathEscapeMoney),
     )
     .join("")
 }
