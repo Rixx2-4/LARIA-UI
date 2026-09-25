@@ -72,6 +72,9 @@ describe("ChatScreen", () => {
     expect(screen.getByText("¿Qué es un átomo?")).toBeTruthy()
     // Salir vive en el menú de Cuenta, no en la cabecera
     expect(screen.queryByRole("button", { name: /Salir/ })).toBeNull()
+    // La cabecera no lleva el nombre de la app (sale en la barra lateral desplegada)
+    expect(screen.queryByText("IA")).toBeNull()
+    expect(screen.queryByText("LARIA")).toBeNull()
   })
 
   it("mientras llega un chat existente no se presenta como un chat nuevo", async () => {
