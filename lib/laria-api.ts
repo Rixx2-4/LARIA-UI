@@ -10,7 +10,8 @@ interface TutorEnvelope {
 }
 
 interface ChatMessage {
-  role: "user" | "assistant"
+  // "system": notas y avisos que no son de nadie (el backend no responde a ellas)
+  role: "user" | "assistant" | "system"
   content: string
   timestamp?: string
   metadata?: {
@@ -274,23 +275,27 @@ async function responseError(response: Response, fallback: string, sentToken: st
   return new ApiError(describeErrorDetail(body.detail, `Error ${response.status}`), response.status)
 }
 
-async function fetchAPI<T>(endpoint: string, options?: RequestInit): Promise<T> {
-  const url = `${API_BASE_URL}${endpoint}`
+// Un id va siempre como un solo tramo de la ruta: uno manipulado en la URL
+// ("../users/me") no puede apuntar a otro endpoint
+const segment = (id: string) => encodeURIComponent(id)
+
+// Petición autenticada a la API; si falla, lanza un ApiError con el motivo en español
+async function request(endpoint: string, init: RequestInit = {}, fallback = "Error desconocido"): Promise<Response> {
   const token = getAuthToken()
   const headers: Record<string, string> = {
-    "Content-Type": "application/json",
-    ...((options?.headers as Record<string, string>) || {}),
+    ...((init.headers as Record<string, string>) || {}),
     ...authHeaders(token),
   }
+  // Solo con cuerpo JSON: así los GET no necesitan la petición previa de CORS
+  if (typeof init.body === "string") headers["Content-Type"] ??= "application/json"
 
-  const response = await fetch(url, {
-    ...options,
-    headers,
-  })
+  const response = await fetch(`${API_BASE_URL}${endpoint}`, { ...init, headers })
+  if (!response.ok) throw await responseError(response, fallback, token)
+  return response
+}
 
-  if (!response.ok) {
-    throw await responseError(response, "Error desconocido", token)
-  }
+async function fetchAPI<T>(endpoint: string, options?: RequestInit): Promise<T> {
+  const response = await request(endpoint, options)
 
   if (response.status === 204) {
     return undefined as T
@@ -341,7 +346,7 @@ export const lariaAPI = {
   chats: {
     list: () => fetchAPI<ChatListResponse>("/chats/"),
 
-    get: (chatId: string) => fetchAPI<Chat>(`/chats/${chatId}`),
+    get: (chatId: string) => fetchAPI<Chat>(`/chats/${segment(chatId)}`),
 
     create: (title?: string, documentId?: string) =>
       fetchAPI<Chat>("/chats/", {
@@ -350,18 +355,20 @@ export const lariaAPI = {
       }),
 
     update: (chatId: string, data: { title?: string; document_id?: string }) =>
-      fetchAPI<Chat>(`/chats/${chatId}`, {
+      fetchAPI<Chat>(`/chats/${segment(chatId)}`, {
         method: "PUT",
         body: JSON.stringify(data),
       }),
 
     delete: (chatId: string) =>
-      fetchAPI<void>(`/chats/${chatId}`, {
+      fetchAPI<void>(`/chats/${segment(chatId)}`, {
         method: "DELETE",
       }),
 
-    addMessage: (chatId: string, role: "user" | "assistant", content: string) =>
-      fetchAPI<Chat>(`/chats/${chatId}/messages`, {
+    // Ojo: con role "user" el backend ejecuta un turno completo del tutor;
+    // para dejar solo una nota en el chat, usar "system"
+    addMessage: (chatId: string, role: "user" | "assistant" | "system", content: string) =>
+      fetchAPI<Chat>(`/chats/${segment(chatId)}/messages`, {
         method: "POST",
         body: JSON.stringify({ role, content }),
       }),
@@ -373,43 +380,65 @@ export const lariaAPI = {
       callbacks: StreamCallbacks,
       options: { signal?: AbortSignal } = {}
     ): Promise<void> => {
-      const url = `${API_BASE_URL}/chats/${chatId}/stream`
-      const token = getAuthToken()
-      const headers = { "Content-Type": "application/json", ...authHeaders(token) }
-
       try {
-        const response = await fetch(url, {
-          method: "POST",
-          headers,
-          body: JSON.stringify({ role, content }),
-          signal: options.signal,
-        })
-
-        if (!response.ok) {
-          throw await responseError(response, "Error de streaming", token)
-        }
+        const response = await request(
+          `/chats/${segment(chatId)}/stream`,
+          { method: "POST", body: JSON.stringify({ role, content }), signal: options.signal },
+          "Error de streaming",
+        )
 
         const reader = response.body?.getReader()
         if (!reader) throw new Error("No se pudo leer el stream")
 
         const decoder = new TextDecoder()
         let buffer = ""
+        // El evento en curso: "event: token" + "data: {...}" hasta la línea en blanco
+        let eventName = ""
+        let dataLines: string[] = []
 
-        // Devuelve true cuando llega el [DONE]
-        const handleLine = (line: string): boolean => {
-          if (!line.startsWith("data:")) return false
-          const data = line.slice(5).replace(/^ /, "")
+        // Entrega un evento completo; devuelve true cuando la respuesta terminó.
+        // El backend nombra cada evento (thinking, token, envelope, done, error);
+        // sin nombre, se mira el "type" del JSON o el [DONE] del formato anterior.
+        const dispatch = (): boolean => {
+          const name = eventName
+          const data = dataLines.join("\n")
+          eventName = ""
+          dataLines = []
+          if (!data) return false
           if (data === "[DONE]") return true
+
+          let parsed: Record<string, unknown> | null = null
           try {
-            const parsed = JSON.parse(data)
-            if (parsed.type === "token") {
-              callbacks.onToken?.(parsed.content || "")
-            } else if (parsed.type === "envelope") {
-              callbacks.onEnvelope?.(parsed)
-            }
+            parsed = JSON.parse(data)
           } catch {
-            callbacks.onToken?.(data)
+            if (!name) callbacks.onToken?.(data)
+            return false
           }
+          switch (name || parsed?.type) {
+            case "token":
+              callbacks.onToken?.(typeof parsed?.content === "string" ? parsed.content : "")
+              return false
+            case "envelope":
+              callbacks.onEnvelope?.(parsed ?? {})
+              return false
+            case "done":
+              return true
+            case "error": {
+              const payload = parsed?.payload as { content?: unknown } | undefined
+              throw new Error(
+                typeof payload?.content === "string" ? payload.content : "No pude generar la respuesta. Intenta de nuevo.",
+              )
+            }
+            default:
+              return false
+          }
+        }
+
+        // Devuelve true cuando la respuesta terminó
+        const handleLine = (line: string): boolean => {
+          if (line === "") return dispatch()
+          if (line.startsWith("event:")) eventName = line.slice(6).trim()
+          else if (line.startsWith("data:")) dataLines.push(line.slice(5).replace(/^ /, ""))
           return false
         }
 
@@ -417,7 +446,8 @@ export const lariaAPI = {
           const { done, value } = await reader.read()
           if (done) {
             buffer += decoder.decode()
-            handleLine(buffer)
+            buffer.split(/\r?\n/).forEach(handleLine)
+            dispatch()
             break
           }
 
@@ -443,7 +473,7 @@ export const lariaAPI = {
     },
 
     generateQuiz: (chatId: string, numQuestions: number = 5) =>
-      fetchAPI<QuizResponse>(`/chats/${chatId}/quiz?num_questions=${numQuestions}`),
+      fetchAPI<QuizResponse>(`/chats/${segment(chatId)}/quiz?num_questions=${numQuestions}`),
 
     generateTitle: (messages: { role: string; content: string }[]) =>
       fetchAPI<{ title: string }>("/chats/generate-title", {
@@ -454,7 +484,7 @@ export const lariaAPI = {
 
   quizzes: {
     submitAttempt: (quizId: string, answers: Record<string, string>) =>
-      fetchAPI<QuizAttemptResponse>(`/quizzes/${quizId}/attempts`, {
+      fetchAPI<QuizAttemptResponse>(`/quizzes/${segment(quizId)}/attempts`, {
         method: "POST",
         body: JSON.stringify({ answers }),
       }),
@@ -473,45 +503,29 @@ export const lariaAPI = {
       formData.append("file", file)
       if (subject) formData.append("subject", subject)
 
-      const token = getAuthToken()
-      const response = await fetch(`${API_BASE_URL}/documents/upload`, {
-        method: "POST",
-        headers: authHeaders(token),
-        body: formData,
-      })
-
-      if (!response.ok) {
-        throw await responseError(response, "Error de subida", token)
-      }
-
+      const response = await request("/documents/upload", { method: "POST", body: formData }, "Error de subida")
       return response.json()
     },
 
     // El archivo original, para previsualizarlo o descargarlo
     content: async (documentId: string): Promise<Blob> => {
-      const token = getAuthToken()
-      const response = await fetch(`${API_BASE_URL}/documents/${documentId}/content`, {
-        headers: authHeaders(token),
-      })
-      if (!response.ok) {
-        throw await responseError(response, "Error al cargar el archivo", token)
-      }
+      const response = await request(`/documents/${segment(documentId)}/content`, {}, "Error al cargar el archivo")
       return response.blob()
     },
 
     analyze: (documentId: string) =>
-      fetchAPI<AnalysisResponse>(`/documents/${documentId}/analyze`, {
+      fetchAPI<AnalysisResponse>(`/documents/${segment(documentId)}/analyze`, {
         method: "POST",
       }),
 
     ask: (documentId: string, question: string) =>
-      fetchAPI<QuestionResponse>(`/documents/${documentId}/ask`, {
+      fetchAPI<QuestionResponse>(`/documents/${segment(documentId)}/ask`, {
         method: "POST",
         body: JSON.stringify({ question }),
       }),
 
     delete: (documentId: string) =>
-      fetchAPI<void>(`/documents/${documentId}`, {
+      fetchAPI<void>(`/documents/${segment(documentId)}`, {
         method: "DELETE",
       }),
   },

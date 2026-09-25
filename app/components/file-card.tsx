@@ -1,6 +1,7 @@
 "use client"
 
-import { FileText, Image as ImageIcon, FileSpreadsheet, FileCode, File, Presentation, X } from "lucide-react"
+import { X } from "lucide-react"
+import { FileTypeIcon } from "./file-type-icon"
 
 interface FileCardProps {
   filename: string
@@ -10,25 +11,6 @@ interface FileCardProps {
   previewDataUrl?: string
   onClick: () => void
   onRemove?: () => void
-}
-
-function getFileIcon(mimeType: string) {
-  if (mimeType.startsWith("image/")) return <ImageIcon className="h-5 w-5" />
-  if (mimeType === "application/pdf") return <FileText className="h-5 w-5" />
-  if (mimeType.includes("spreadsheet") || mimeType.includes("csv") || mimeType.includes("excel"))
-    return <FileSpreadsheet className="h-5 w-5" />
-  if (mimeType.includes("presentation") || mimeType.includes("powerpoint"))
-    return <Presentation className="h-5 w-5" />
-  if (
-    mimeType.startsWith("text/") ||
-    mimeType.includes("json") ||
-    mimeType.includes("xml") ||
-    mimeType.includes("javascript") ||
-    mimeType.includes("typescript") ||
-    mimeType.includes("python")
-  )
-    return <FileCode className="h-5 w-5" />
-  return <File className="h-5 w-5" />
 }
 
 function getFileTypeLabel(mimeType: string): string {
@@ -73,7 +55,7 @@ export function FileCard({ filename, size, mimeType, previewDataUrl, onClick, on
           </div>
         ) : (
           <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg bg-muted text-muted-foreground">
-            {getFileIcon(mimeType)}
+            <FileTypeIcon mimeType={mimeType} className="h-5 w-5" />
           </div>
         )}
         <div className="min-w-0 flex-1">

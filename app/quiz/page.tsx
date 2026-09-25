@@ -8,8 +8,14 @@ import { AppShell } from "../components/app-shell"
 import { RequireAuth } from "../components/require-auth"
 import { SelectSkeleton } from "../components/skeletons"
 import { useChat } from "@/app/contexts/chat-context"
-import { quizHref } from "@/lib/routes"
+import { NEW_CHAT_HREF, chatHref, quizHref } from "@/lib/routes"
 import { lariaAPI, QuizQuestion, QuizAttemptQuestion } from "@/lib/laria-api"
+
+// "B. Cloroplasto" en lugar de solo "B" cuando se conoce el texto de la opción
+function answerLabel(question: QuizQuestion, letter: string): string {
+  const text = question.options[letter]
+  return text ? `${letter}. ${text}` : letter
+}
 
 interface QuizResult {
   question: QuizQuestion
@@ -167,7 +173,7 @@ function Quiz({ chatId }: { chatId: string | null }) {
               </div>
 
               {error && (
-                <div className="p-4 bg-destructive/10 border border-destructive/20 rounded-lg text-sm text-destructive">
+                <div role="alert" className="p-4 bg-destructive/10 border border-destructive/20 rounded-lg text-sm text-destructive">
                   {error}
                 </div>
               )}
@@ -289,10 +295,10 @@ function Quiz({ chatId }: { chatId: string | null }) {
                 <div className="flex items-center gap-2 mb-4">
                   <span className={`text-xs px-2 py-0.5 rounded-full ${
                     current.difficulty === "hard"
-                      ? "bg-red-100 text-red-700"
+                      ? "bg-red-100 text-red-700 dark:bg-red-500/15 dark:text-red-300"
                       : current.difficulty === "medium"
-                      ? "bg-yellow-100 text-yellow-700"
-                      : "bg-green-100 text-green-700"
+                      ? "bg-yellow-100 text-yellow-700 dark:bg-yellow-500/15 dark:text-yellow-300"
+                      : "bg-green-100 text-green-700 dark:bg-green-500/15 dark:text-green-300"
                   }`}>
                     {current.difficulty === "hard" ? "Difícil" :
                      current.difficulty === "medium" ? "Medio" : "Fácil"}
@@ -306,6 +312,7 @@ function Quiz({ chatId }: { chatId: string | null }) {
                     <button
                       key={key}
                       onClick={() => handleAnswer(current, key)}
+                      aria-pressed={answers[current.index] === key}
                       className={`w-full text-left p-4 rounded-lg border transition-all ${
                         answers[current.index] === key
                           ? "border-primary bg-primary/5"
@@ -320,7 +327,7 @@ function Quiz({ chatId }: { chatId: string | null }) {
               </div>
 
               {error && (
-                <div className="p-4 bg-destructive/10 border border-destructive/20 rounded-lg text-sm text-destructive">
+                <div role="alert" className="p-4 bg-destructive/10 border border-destructive/20 rounded-lg text-sm text-destructive">
                   {error}
                 </div>
               )}
@@ -361,23 +368,29 @@ function Quiz({ chatId }: { chatId: string | null }) {
                   <div
                     key={index}
                     className={`p-4 rounded-xl border ${
-                      result.isCorrect ? "border-green-200 bg-green-50" : "border-red-200 bg-red-50"
+                      result.isCorrect
+                        ? "border-green-200 bg-green-50 dark:border-green-500/30 dark:bg-green-500/10"
+                        : "border-red-200 bg-red-50 dark:border-red-500/30 dark:bg-red-500/10"
                     }`}
                   >
                     <div className="flex items-start gap-3">
                       {result.isCorrect ? (
-                        <CheckCircle className="h-5 w-5 text-green-600 mt-0.5 shrink-0" />
+                        <CheckCircle className="h-5 w-5 text-green-600 dark:text-green-400 mt-0.5 shrink-0" />
                       ) : (
-                        <XCircle className="h-5 w-5 text-red-600 mt-0.5 shrink-0" />
+                        <XCircle className="h-5 w-5 text-red-600 dark:text-red-400 mt-0.5 shrink-0" />
                       )}
                       <div className="flex-1">
                         <p className="font-medium mb-2">{result.question.text}</p>
                         <p className="text-sm text-muted-foreground">
-                          Tu respuesta: <span className="font-medium">{result.userAnswer || "Sin respuesta"}</span>
+                          Tu respuesta:{" "}
+                          <span className="font-medium">
+                            {result.userAnswer ? answerLabel(result.question, result.userAnswer) : "Sin respuesta"}
+                          </span>
                         </p>
                         {!result.isCorrect && (
-                          <p className="text-sm text-green-600">
-                            Respuesta correcta: <span className="font-medium">{result.correctAnswer}</span>
+                          <p className="text-sm text-green-700 dark:text-green-400">
+                            Respuesta correcta:{" "}
+                            <span className="font-medium">{answerLabel(result.question, result.correctAnswer)}</span>
                           </p>
                         )}
                       </div>
@@ -391,7 +404,7 @@ function Quiz({ chatId }: { chatId: string | null }) {
                   <RotateCcw className="h-4 w-4 mr-2" />
                   Nuevo Quiz
                 </Button>
-                <Button onClick={() => router.push(chatId ? `/chat/${chatId}` : "/")} className="flex-1">
+                <Button onClick={() => router.push(chatId ? chatHref(chatId) : NEW_CHAT_HREF)} className="flex-1">
                   Volver al Chat
                 </Button>
               </div>

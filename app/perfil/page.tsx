@@ -8,7 +8,7 @@ import { AppShell } from "../components/app-shell"
 import { RequireAuth } from "../components/require-auth"
 import { ProfileSkeleton } from "../components/skeletons"
 import { useAuth } from "@/app/contexts/auth-context"
-import { lariaAPI, User, StudentProfile, LearningHistory, Document } from "@/lib/laria-api"
+import { lariaAPI, StudentProfile, LearningHistory, Document } from "@/lib/laria-api"
 
 interface MasteryItem {
   concepto: string
@@ -54,8 +54,8 @@ function timeAgo(iso: string): string {
 }
 
 function trendArrow(t: string) {
-  if (t === "up") return <span className="text-green-600 text-xs">↑ subiendo</span>
-  if (t === "down") return <span className="text-red-500 text-xs">↓ bajando</span>
+  if (t === "up") return <span className="text-green-700 dark:text-green-400 text-xs">↑ subiendo</span>
+  if (t === "down") return <span className="text-destructive text-xs">↓ bajando</span>
   return <span className="text-muted-foreground text-xs">→ estable</span>
 }
 
@@ -73,33 +73,78 @@ export default function PerfilPage() {
   )
 }
 
+// Dificultades y fortalezas que se leen del perfil, calculadas en un solo sitio
+function profileInsights(profile: StudentProfile | null): { struggle: StruggleItem[]; fortalezas: FortalezaItem[] } {
+  const struggleItems: StruggleItem[] = []
+  const strengthItems: FortalezaItem[] = []
+
+  if (profile) {
+    profile.mastery_by_concept
+      .filter((c) => c.mastery < 60 || c.error_streak >= 2)
+      .slice(0, 5)
+      .forEach((c) => {
+        struggleItems.push({
+          concepto: c.concept_key,
+          detalle: c.error_streak >= 2
+            ? `${c.error_streak} errores seguidos · ${c.help_requests} solicitudes de ayuda`
+            : `Dominio bajo (${Math.round(c.mastery)}%) en ${c.attempts} intento(s)`,
+          fecha: c.last_practiced_at ? timeAgo(c.last_practiced_at) : "reciente",
+        })
+      })
+
+    profile.mastery_by_concept
+      .filter((c) => c.mastery >= 75)
+      .slice(0, 4)
+      .forEach((c) => {
+        strengthItems.push({
+          texto: `Dominio sólido de "${c.concept_key}" (${Math.round(c.mastery)}%)`,
+        })
+      })
+
+    if (profile.frequent_errors.length > 0) {
+      profile.frequent_errors.slice(0, 3).forEach((e) => {
+        struggleItems.push({
+          concepto: "Error frecuente",
+          detalle: e,
+          fecha: "recurrente",
+        })
+      })
+    }
+
+    if (profile.total_attempts > 0) {
+      strengthItems.push({ texto: `${profile.total_attempts} intentos de quiz completados` })
+    }
+    if (profile.pedagogical_memory?.successful_examples?.length) {
+      strengthItems.push({
+        texto: `Ejemplos que funcionan: ${profile.pedagogical_memory.successful_examples[0]}`,
+      })
+    }
+  }
+
+  return { struggle: struggleItems, fortalezas: strengthItems }
+}
+
 function Perfil() {
   const { user: authUser } = useAuth()
   const [isLoading, setIsLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
 
-  const [userData, setUserData] = useState<User | null>(null)
   const [learningProfile, setLearningProfile] = useState<StudentProfile | null>(null)
   const [history, setHistory] = useState<LearningHistory | null>(null)
   const [documents, setDocuments] = useState<Document[]>([])
   const [documentsFailed, setDocumentsFailed] = useState(false)
 
-  const [struggle, setStruggle] = useState<StruggleItem[]>([])
-  const [fortalezas, setFortalezas] = useState<FortalezaItem[]>([])
-  const [recomendaciones, setRecomendaciones] = useState<string[]>([])
 
   const loadProfileData = useCallback(async () => {
     setIsLoading(true)
     setError(null)
     try {
-      const [me, lp, lh, docs] = await Promise.allSettled([
-        lariaAPI.auth.me(),
+      // El usuario ya lo tiene la sesión; aquí solo lo que es propio del perfil
+      const [lp, lh, docs] = await Promise.allSettled([
         lariaAPI.learning.profile(),
         lariaAPI.learning.history(),
         lariaAPI.documents.list(),
       ])
-
-      if (me.status === "fulfilled") setUserData(me.value)
 
       // Sin perfil ni historial, el panel mostraría ceros como si fueran datos reales
       if (lp.status === "rejected" || lh.status === "rejected") {
@@ -116,57 +161,6 @@ function Perfil() {
       setHistory(hist)
       setDocuments(docList)
 
-      const struggleItems: StruggleItem[] = []
-      const strengthItems: FortalezaItem[] = []
-
-      if (profile) {
-        profile.mastery_by_concept
-          .filter((c) => c.mastery < 60 || c.error_streak >= 2)
-          .slice(0, 5)
-          .forEach((c) => {
-            struggleItems.push({
-              concepto: c.concept_key,
-              detalle: c.error_streak >= 2
-                ? `${c.error_streak} errores seguidos · ${c.help_requests} solicitudes de ayuda`
-                : `Dominio bajo (${Math.round(c.mastery)}%) en ${c.attempts} intento(s)`,
-              fecha: c.last_practiced_at ? timeAgo(c.last_practiced_at) : "reciente",
-            })
-          })
-
-        profile.mastery_by_concept
-          .filter((c) => c.mastery >= 75)
-          .slice(0, 4)
-          .forEach((c) => {
-            strengthItems.push({
-              texto: `Dominio sólido de "${c.concept_key}" (${Math.round(c.mastery)}%)`,
-            })
-          })
-
-        if (profile.frequent_errors.length > 0) {
-          profile.frequent_errors.slice(0, 3).forEach((e) => {
-            struggleItems.push({
-              concepto: "Error frecuente",
-              detalle: e,
-              fecha: "recurrente",
-            })
-          })
-        }
-
-        if (profile.total_attempts > 0) {
-          strengthItems.push({ texto: `${profile.total_attempts} intentos de quiz completados` })
-        }
-        if (profile.pedagogical_memory?.successful_examples?.length) {
-          strengthItems.push({
-            texto: `Ejemplos que funcionan: ${profile.pedagogical_memory.successful_examples[0]}`,
-          })
-        }
-      }
-
-      setStruggle(struggleItems)
-      setFortalezas(strengthItems)
-
-      const recs = hist?.recommendations?.map((r) => r.message) || []
-      setRecomendaciones(recs)
     } catch (err) {
       console.error("Error loading profile:", err)
       setError("No se pudieron cargar los datos del perfil")
@@ -203,8 +197,8 @@ function Perfil() {
     )
   }
 
-  const username = userData?.username || authUser?.username || "Usuario"
-  const email = userData?.email || authUser?.email || ""
+  const username = authUser?.username || "Usuario"
+  const email = authUser?.email || ""
 
   const concepts = learningProfile?.mastery_by_concept || []
   const conceptsTotal = concepts.length
@@ -252,27 +246,11 @@ function Perfil() {
     ? (learningProfile.pace === "fast" ? "Avanzado" : learningProfile.pace === "slow" ? "Principiante" : "Intermedio")
     : "Sin datos"
 
-  const totalAttempts = learningProfile?.total_attempts || 0
   const errors = learningProfile?.frequent_errors || []
   const memory = learningProfile?.pedagogical_memory
 
-  const strongConcepts = concepts.filter((c) => c.mastery >= 75)
-  const struggleConcepts = concepts.filter((c) => c.mastery < 60)
-
-  const struggleList: StruggleItem[] = struggle.length > 0
-    ? struggle
-    : struggleConcepts.slice(0, 3).map((c) => ({
-        concepto: c.concept_key,
-        detalle: `Dominio bajo (${Math.round(c.mastery)}%) · ${c.help_requests} ayudas solicitadas`,
-        fecha: c.last_practiced_at ? formatDate(c.last_practiced_at) : "reciente",
-      }))
-
-  const fortalezasList: FortalezaItem[] = fortalezas.length > 0
-    ? fortalezas
-    : [
-        ...(totalAttempts > 0 ? [{ texto: `${totalAttempts} intentos de quiz completados` }] : []),
-        ...strongConcepts.slice(0, 3).map((c) => ({ texto: `Buen dominio de "${c.concept_key}" (${Math.round(c.mastery)}%)` })),
-      ]
+  const { struggle: struggleList, fortalezas: fortalezasList } = profileInsights(learningProfile)
+  const recomendaciones = history?.recommendations?.map((r) => r.message) ?? []
 
   const r = 56
   const circ = 2 * Math.PI * r

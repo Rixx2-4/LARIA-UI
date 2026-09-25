@@ -11,6 +11,8 @@ import { FileCard } from "./file-card"
 import { FileViewer } from "./file-viewer"
 import { MessageContent } from "./message-content"
 import { MessagesSkeleton } from "./skeletons"
+import { isTextMime, mimeFromFilename } from "@/lib/file-types"
+import { chatHref } from "@/lib/routes"
 import { useStreamingChat } from "@/hooks/use-streaming-chat"
 import { useDictation } from "@/hooks/use-dictation"
 
@@ -31,13 +33,6 @@ interface UploadedFile {
   dataUrl?: string
 }
 
-const MIME_BY_EXTENSION: Record<string, string> = {
-  pdf: "application/pdf", txt: "text/plain", md: "text/markdown", csv: "text/csv",
-  json: "application/json", xml: "text/xml", html: "text/html", css: "text/css",
-  js: "text/javascript", ts: "text/typescript", py: "text/x-python",
-  png: "image/png", jpg: "image/jpeg", jpeg: "image/jpeg", gif: "image/gif", webp: "image/webp",
-}
-
 // Cómo llama el tutor a cada tipo de respuesta; lo que no esté aquí se muestra tal cual
 const ENVELOPE_TYPE_LABEL: Record<string, string> = {
   explanation: "Explicación",
@@ -47,11 +42,6 @@ const ENVELOPE_TYPE_LABEL: Record<string, string> = {
   question: "Pregunta",
   quiz: "Quiz",
   summary: "Resumen",
-}
-
-function mimeFromFilename(filename: string): string {
-  const ext = filename.split(".").pop()?.toLowerCase() ?? ""
-  return MIME_BY_EXTENSION[ext] ?? "application/octet-stream"
 }
 
 export function SearchBar({ isOpeningChat = false }: { isOpeningChat?: boolean }) {
@@ -69,10 +59,9 @@ export function SearchBar({ isOpeningChat = false }: { isOpeningChat?: boolean }
   const fileInputRef = useRef<HTMLInputElement>(null)
   const messagesContainerRef = useRef<HTMLDivElement>(null)
   const isUserScrolledRef = useRef(false)
-  const lastScrollHeightRef = useRef(0)
 
   const router = useRouter()
-  const { messages, setMessages, activeChatId, activeDocumentId, createChat: ctxCreateChat, generateTitle } = useChat()
+  const { messages, setMessages, addMessage, activeChatId, activeDocumentId, createChat: ctxCreateChat, generateTitle } = useChat()
   const chatId = activeChatId
 
   const {
@@ -90,6 +79,15 @@ export function SearchBar({ isOpeningChat = false }: { isOpeningChat?: boolean }
     chatId,
   })
 
+  // Para lectores de pantalla: se anuncia el principio y el final de la respuesta,
+  // no cada fragmento que llega
+  const [wasStreaming, setWasStreaming] = useState(isStreaming)
+  const [streamAnnouncement, setStreamAnnouncement] = useState("")
+  if (wasStreaming !== isStreaming) {
+    setWasStreaming(isStreaming)
+    setStreamAnnouncement(isStreaming ? "LARIA está respondiendo…" : streamError ? "" : "Respuesta de LARIA lista.")
+  }
+
   const isAtBottom = useCallback(() => {
     const container = messagesContainerRef.current
     if (!container) return true
@@ -100,9 +98,10 @@ export function SearchBar({ isOpeningChat = false }: { isOpeningChat?: boolean }
   const scrollToBottom = useCallback((smooth = true) => {
     const container = messagesContainerRef.current
     if (!container) return
+    const reduceMotion = window.matchMedia?.("(prefers-reduced-motion: reduce)").matches
     container.scrollTo({
       top: container.scrollHeight,
-      behavior: smooth ? "smooth" : "instant",
+      behavior: smooth && !reduceMotion ? "smooth" : "instant",
     })
   }, [])
 
@@ -118,30 +117,16 @@ export function SearchBar({ isOpeningChat = false }: { isOpeningChat?: boolean }
     return () => container.removeEventListener("scroll", handleScroll)
   }, [isAtBottom])
 
+  // Mientras llega la respuesta se sigue el final, salvo que el usuario haya subido a leer
   useEffect(() => {
-    if (isStreaming && !isUserScrolledRef.current) {
-      scrollToBottom()
-    }
+    if (isStreaming && !isUserScrolledRef.current) scrollToBottom(false)
   }, [displayedContent, isStreaming, scrollToBottom])
 
   useEffect(() => {
-    if (isDone && !isUserScrolledRef.current) {
-      setTimeout(() => scrollToBottom(), 100)
-    }
+    if (!isDone || isUserScrolledRef.current) return
+    const timer = setTimeout(() => scrollToBottom(), 100)
+    return () => clearTimeout(timer)
   }, [isDone, scrollToBottom])
-
-  useEffect(() => {
-    const container = messagesContainerRef.current
-    if (!container) return
-
-    const newHeight = container.scrollHeight
-    if (lastScrollHeightRef.current !== newHeight) {
-      lastScrollHeightRef.current = newHeight
-      if (!isUserScrolledRef.current && isStreaming) {
-        scrollToBottom(false)
-      }
-    }
-  }, [displayedContent, isStreaming, scrollToBottom])
 
   // Al abrir otro chat, o cuando llegan sus mensajes, se muestra el final
   useEffect(() => {
@@ -156,7 +141,7 @@ export function SearchBar({ isOpeningChat = false }: { isOpeningChat?: boolean }
   const ensureChat = async (documentId?: string) => {
     if (chatId) return { id: chatId, isNew: false }
     const chat = await ctxCreateChat(undefined, documentId)
-    router.replace(`/chat/${chat.id}`)
+    router.replace(chatHref(chat.id))
     return { id: chat.id, isNew: true }
   }
 
@@ -167,14 +152,7 @@ export function SearchBar({ isOpeningChat = false }: { isOpeningChat?: boolean }
         reader.onload = (e) => resolve(e.target?.result as string)
         reader.onerror = () => resolve(undefined)
         reader.readAsDataURL(file)
-      } else if (
-        file.type.startsWith("text/") ||
-        file.type.includes("json") ||
-        file.type.includes("xml") ||
-        file.type.includes("javascript") ||
-        file.type.includes("typescript") ||
-        file.type.includes("python")
-      ) {
+      } else if (isTextMime(file.type)) {
         const reader = new FileReader()
         reader.onload = (e) => resolve(e.target?.result as string)
         reader.onerror = () => resolve(undefined)
@@ -210,10 +188,9 @@ export function SearchBar({ isOpeningChat = false }: { isOpeningChat?: boolean }
         await lariaAPI.chats.update(currentChatId, { document_id: doc.id })
       }
 
-      await lariaAPI.chats.addMessage(currentChatId, "user", `📎 Subí el archivo: ${file.name}`)
-
-      const chatFinal = await lariaAPI.chats.get(currentChatId)
-      setMessages(chatFinal.messages || [])
+      // Una nota, no una pregunta: con "user" el backend lanzaría un turno del tutor
+      // (llamada a la IA, respuesta fantasma y el perfil del alumno alterado)
+      await addMessage(currentChatId, "system", `📎 Subí el archivo: ${file.name}`)
 
       if (isNewChat) {
         generateTitle(currentChatId, [{ role: "user", content: `Archivo: ${file.name}` }])
@@ -286,6 +263,8 @@ export function SearchBar({ isOpeningChat = false }: { isOpeningChat?: boolean }
       }
     } catch (error) {
       console.error("Chat error:", error)
+      // Lo escrito no se pierde: vuelve al campo para reintentarlo
+      setQuery((current) => current || userMessage)
       toast.error("No se pudo enviar el mensaje")
     }
   }
@@ -328,8 +307,10 @@ export function SearchBar({ isOpeningChat = false }: { isOpeningChat?: boolean }
         />
       )}
 
+      <p aria-live="polite" className="sr-only">{streamAnnouncement}</p>
+
       {/* Chat Messages: siempre montado para que el scroll tenga a quién escuchar */}
-      <div ref={messagesContainerRef} className="min-h-0 flex-1 overflow-y-auto scroll-smooth">
+      <div ref={messagesContainerRef} className="min-h-0 flex-1 overflow-y-auto motion-safe:scroll-smooth">
         {messages.length === 0 && isOpeningChat ? (
           <MessagesSkeleton />
         ) : messages.length === 0 ? (
@@ -343,6 +324,14 @@ export function SearchBar({ isOpeningChat = false }: { isOpeningChat?: boolean }
             {messages.map((msg, index) => {
               // La respuesta que se está escribiendo ahora mismo
               const isLive = isStreaming && index === messages.length - 1 && msg.role === "assistant"
+              // Notas del sistema (archivo subido, avisos): una línea centrada, no una burbuja
+              if (msg.role === "system") {
+                return (
+                  <p key={`${index}-system`} className="text-center text-xs text-muted-foreground">
+                    {msg.content}
+                  </p>
+                )
+              }
               return (
                 <div
                   key={`${index}-${msg.role}`}
@@ -378,7 +367,7 @@ export function SearchBar({ isOpeningChat = false }: { isOpeningChat?: boolean }
                           </span>
                         )}
                         {msg.metadata?.envelope?.grounded !== undefined && (
-                          <span className={`px-1.5 py-0.5 rounded ${msg.metadata.envelope.grounded ? "bg-green-500/20 text-green-700" : "bg-yellow-500/20 text-yellow-700"}`}>
+                          <span className={`px-1.5 py-0.5 rounded ${msg.metadata.envelope.grounded ? "bg-green-500/20 text-green-700 dark:text-green-300" : "bg-yellow-500/20 text-yellow-700 dark:text-yellow-300"}`}>
                             {msg.metadata.envelope.grounded ? "Tutoría" : "Chat libre"}
                           </span>
                         )}
@@ -402,7 +391,7 @@ export function SearchBar({ isOpeningChat = false }: { isOpeningChat?: boolean }
 
             {streamError && (
               <div className="flex justify-start">
-                <div className="bg-destructive/10 border border-destructive/20 rounded-2xl px-4 py-3 max-w-[80%]">
+                <div role="alert" className="bg-destructive/10 border border-destructive/20 rounded-2xl px-4 py-3 max-w-[80%]">
                   <p className="text-sm text-destructive">{streamError}</p>
                 </div>
               </div>
@@ -461,7 +450,7 @@ export function SearchBar({ isOpeningChat = false }: { isOpeningChat?: boolean }
               placeholder={isStreaming ? "Generando respuesta…" : "Pregunta lo que quieras…"}
               aria-label="Mensaje"
               disabled={isStreaming}
-              className="w-full border-0 bg-transparent text-[14px] md:text-[15px] text-foreground placeholder:text-muted-foreground/60 focus:outline-none disabled:opacity-50"
+              className="w-full border-0 bg-transparent text-[14px] md:text-[15px] text-foreground placeholder:text-muted-foreground focus:outline-none disabled:opacity-50"
             />
           </div>
 

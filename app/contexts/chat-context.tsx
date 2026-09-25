@@ -24,7 +24,7 @@ interface ChatContextType {
   selectChat: (chatId: string) => Promise<void>
   deleteChat: (chatId: string) => Promise<void>
   renameChat: (chatId: string, title: string) => Promise<void>
-  addMessage: (chatId: string, role: "user" | "assistant", content: string) => Promise<void>
+  addMessage: (chatId: string, role: "user" | "assistant" | "system", content: string) => Promise<void>
   setMessages: (msgs: ChatMessage[]) => void
   clearActiveChat: () => void
   generateTitle: (chatId: string, messages: { role: string; content: string }[]) => Promise<void>
@@ -126,7 +126,7 @@ export function ChatProvider({ children }: { children: ReactNode }) {
     await loadChats()
   }, [activeChatId, loadChats])
 
-  const addMessage = useCallback(async (chatId: string, role: "user" | "assistant", content: string) => {
+  const addMessage = useCallback(async (chatId: string, role: "user" | "assistant" | "system", content: string) => {
     const chat = await lariaAPI.chats.addMessage(chatId, role, content)
     setMessages(chat.messages || [])
   }, [])
@@ -146,7 +146,8 @@ export function ChatProvider({ children }: { children: ReactNode }) {
       await lariaAPI.chats.update(chatId, { title: response.title })
       await loadChats()
     } catch (error) {
-      console.error("Error generating title:", error)
+      // Previsto: si la IA no da un título válido, se usa el primer mensaje
+      console.warn("Título generado no disponible; se usa el primer mensaje:", error)
       if (msgs.length > 0 && msgs[0].content) {
         const fallbackTitle = msgs[0].content.length > 50
           ? msgs[0].content.substring(0, 50).trim() + "..."
@@ -155,7 +156,7 @@ export function ChatProvider({ children }: { children: ReactNode }) {
           await lariaAPI.chats.update(chatId, { title: fallbackTitle })
           await loadChats()
         } catch (updateError) {
-          console.error("Error updating fallback title:", updateError)
+          console.warn("No se pudo guardar el título de respaldo:", updateError)
         }
       }
     }

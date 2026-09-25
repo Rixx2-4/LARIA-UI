@@ -4,7 +4,8 @@ import "katex/dist/katex.min.css"
 import "./globals.css"
 import { ChatProvider } from "./contexts/chat-context"
 import { AuthProvider } from "./contexts/auth-context"
-import { Toaster } from "sonner"
+import { ThemeProvider } from "next-themes"
+import { ThemedToaster } from "./components/themed-toaster"
 
 export const metadata: Metadata = {
   title: { default: "LARIA", template: "%s · LARIA" },
@@ -41,14 +42,17 @@ export default function RootLayout({
   children: React.ReactNode
 }>) {
   return (
-    <html lang="es">
+    // next-themes pone la clase del tema en <html> antes de hidratar
+    <html lang="es" suppressHydrationWarning>
       <body className={`font-sans antialiased`}>
-        <AuthProvider>
-          <ChatProvider>
-            {children}
-            <Toaster position="top-center" richColors style={{ fontFamily: "inherit" }} />
-          </ChatProvider>
-        </AuthProvider>
+        <ThemeProvider attribute="class" defaultTheme="system" enableSystem disableTransitionOnChange>
+          <AuthProvider>
+            <ChatProvider>
+              {children}
+              <ThemedToaster />
+            </ChatProvider>
+          </AuthProvider>
+        </ThemeProvider>
       </body>
     </html>
   )

@@ -3,10 +3,12 @@ import { useState } from "react"
 import { renderHook, act, waitFor } from "@testing-library/react"
 import { useStreamingChat } from "./use-streaming-chat"
 import type { ChatMessage } from "@/lib/laria-api"
-import { controllableSSE, tokenEvent } from "@/test/sse"
+import { controllableSSE, doneEvent, tokenEvent } from "@/test/sse"
+import { preferReducedMotion } from "@/test/media"
 
 afterEach(() => {
   vi.unstubAllGlobals()
+  vi.restoreAllMocks()
 })
 
 // Simula el servidor de chats: cada POST /stream abre el siguiente SSE de la lista;
@@ -60,6 +62,21 @@ describe("useStreamingChat", () => {
     expect(result.current.isStreaming).toBe(true)
   })
 
+  it("con «reducir movimiento» muestra cada fragmento tal cual llega, sin efecto de escritura", async () => {
+    preferReducedMotion()
+    const frames = vi.spyOn(window, "requestAnimationFrame")
+    const sse = network()
+    const { result } = renderChat()
+
+    act(() => {
+      result.current.startStreaming("hola")
+    })
+    sse.push(tokenEvent("Una respuesta larga que llega de golpe"))
+
+    await waitFor(() => expect(last(result.current.messages).content).toBe("Una respuesta larga que llega de golpe"))
+    expect(frames).not.toHaveBeenCalled()
+  })
+
   it("parar corta la conexión y deja lo que ya se había escrito", async () => {
     const sse = network()
     const { result } = renderChat()
@@ -107,7 +124,7 @@ describe("useStreamingChat", () => {
       result.current.startStreaming("¿Qué es la fotosíntesis?")
     })
     sse.push(tokenEvent(answer))
-    sse.push("data: [DONE]\n\n")
+    sse.push(doneEvent())
     sse.close()
 
     await waitFor(() => expect(result.current.isDone).toBe(true))
@@ -142,9 +159,9 @@ describe("useStreamingChat", () => {
       result.current.startStreaming("primera")
     })
     first.push(tokenEvent("Uno"))
-    first.push("data: [DONE]\n\n")
+    first.push(doneEvent())
     first.close()
-    await sleep(20) // ya llegó el [DONE], el vaciado final está pendiente
+    await sleep(20) // ya llegó el "done", el vaciado final está pendiente
     act(() => result.current.cancelStreaming())
 
     act(() => {

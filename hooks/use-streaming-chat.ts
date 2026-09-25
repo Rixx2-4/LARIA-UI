@@ -3,6 +3,11 @@
 import { useState, useCallback, useRef, useEffect } from "react"
 import { lariaAPI, ChatMessage } from "@/lib/laria-api"
 
+// Con "reducir movimiento" el texto se muestra tal cual llega, sin efecto de escritura
+function prefersReducedMotion(): boolean {
+  return typeof window !== "undefined" && !!window.matchMedia?.("(prefers-reduced-motion: reduce)").matches
+}
+
 interface StreamingState {
   isStreaming: boolean
   isThinking: boolean
@@ -41,9 +46,8 @@ export function useStreamingChat({
   })
 
   const abortControllerRef = useRef<AbortController | null>(null)
-  const displayQueueRef = useRef<string[]>([])
   const animationFrameRef = useRef<number | null>(null)
-  const lastDisplayTimeRef = useRef<number>(0)
+  // Lo que ya llegó de la red pero aún no se ha mostrado
   const pendingContentRef = useRef<string>("")
   const displayedRef = useRef<string>("")
   const baseMessagesRef = useRef<ChatMessage[]>([])
@@ -65,72 +69,39 @@ export function useStreamingChat({
     }
   }, [])
 
-  const calculateRenderSpeed = useCallback(() => {
-    const pending = pendingContentRef.current.length
-    const pendingChars = pending
-
-    if (pendingChars < 50) {
-      return 30
-    } else if (pendingChars < 200) {
-      return 16
-    } else if (pendingChars < 500) {
-      return 8
-    } else {
-      return 4
-    }
-  }, [])
-
+  // Efecto de escritura que nunca se queda atrás: cada fotograma muestra una
+  // parte proporcional a lo pendiente, así que alcanza a la red en ~12 fotogramas
   const processDisplayQueue = useCallback(function tick() {
-    if (displayQueueRef.current.length === 0) {
+    const pending = pendingContentRef.current
+    if (!pending) {
       animationFrameRef.current = null
       return
     }
 
-    const now = Date.now()
-    const timeSinceLastDisplay = now - lastDisplayTimeRef.current
-    const targetInterval = calculateRenderSpeed()
+    const take = Math.max(2, Math.ceil(pending.length / 12))
+    pendingContentRef.current = pending.slice(take)
+    showAssistantText(displayedRef.current + pending.slice(0, take))
+    setState((prev) => ({
+      ...prev,
+      isThinking: false,
+      displayedContent: displayedRef.current,
+    }))
 
-    if (timeSinceLastDisplay < targetInterval) {
-      animationFrameRef.current = requestAnimationFrame(tick)
-      return
-    }
-
-    const chunk = displayQueueRef.current.shift()
-    if (chunk) {
-      pendingContentRef.current = pendingContentRef.current.slice(chunk.length)
-
-      showAssistantText(displayedRef.current + chunk)
-      setState((prev) => ({
-        ...prev,
-        isThinking: false,
-        displayedContent: displayedRef.current,
-      }))
-
-      lastDisplayTimeRef.current = now
-    }
-
-    if (displayQueueRef.current.length > 0) {
-      animationFrameRef.current = requestAnimationFrame(tick)
-    } else {
-      animationFrameRef.current = null
-    }
-  }, [calculateRenderSpeed, showAssistantText])
+    animationFrameRef.current = pendingContentRef.current ? requestAnimationFrame(tick) : null
+  }, [showAssistantText])
 
   const queueDisplay = useCallback((content: string) => {
-    const chunkSize = pendingContentRef.current.length > 200 ? 10 : 
-                     pendingContentRef.current.length > 50 ? 5 : 1
-
-    for (let i = 0; i < content.length; i += chunkSize) {
-      displayQueueRef.current.push(content.slice(i, i + chunkSize))
+    if (prefersReducedMotion()) {
+      showAssistantText(displayedRef.current + content)
+      setState((prev) => ({ ...prev, isThinking: false, displayedContent: displayedRef.current }))
+      return
     }
 
     pendingContentRef.current += content
-
     if (!animationFrameRef.current) {
-      lastDisplayTimeRef.current = Date.now()
       animationFrameRef.current = requestAnimationFrame(processDisplayQueue)
     }
-  }, [processDisplayQueue])
+  }, [processDisplayQueue, showAssistantText])
 
   const startStreaming = useCallback(async (content: string, targetChatId?: string) => {
     const activeId = targetChatId || chatId
@@ -151,7 +122,6 @@ export function useStreamingChat({
       isDone: false,
     })
 
-    displayQueueRef.current = []
     pendingContentRef.current = ""
     displayedRef.current = ""
 
@@ -181,8 +151,7 @@ export function useStreamingChat({
           flushTimerRef.current = null
           if (!isCurrent()) return
           stopAnimation()
-          const allPending = displayQueueRef.current.join("")
-          displayQueueRef.current = []
+          const allPending = pendingContentRef.current
           pendingContentRef.current = ""
           if (allPending) showAssistantText(displayedRef.current + allPending)
 
@@ -230,7 +199,6 @@ export function useStreamingChat({
     }
     stopAnimation()
 
-    displayQueueRef.current = []
     pendingContentRef.current = ""
 
     setState((prev) => ({

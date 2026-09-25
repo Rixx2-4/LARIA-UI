@@ -39,6 +39,9 @@
   --sidebar-accent-foreground: oklch(0.3 0.07 286);
   --sidebar-border: oklch(0.91 0.008 286);
   --sidebar-ring: oklch(0.55 0.16 286);
+  /* Página de presentación: papel cálido y un subrayador */
+  --paper: oklch(0.975 0.012 85);
+  --marker: oklch(0.91 0.17 102);
 }
 
 .dark {
@@ -56,8 +59,9 @@
   --muted-foreground: oklch(0.72 0.012 286);
   --accent: oklch(0.27 0.045 286);
   --accent-foreground: oklch(0.94 0.03 286);
-  --destructive: oklch(0.396 0.141 25.723);
-  --destructive-foreground: oklch(0.85 0.12 25);
+  /* Legible como texto sobre el fondo oscuro (6.85:1); el anterior daba 1.97:1 */
+  --destructive: oklch(0.704 0.191 22.216);
+  --destructive-foreground: oklch(0.145 0.012 286);
   --border: oklch(0.27 0.012 286);
   --input: oklch(0.27 0.012 286);
   --ring: oklch(0.7 0.14 286);
@@ -74,6 +78,9 @@
   --sidebar-accent-foreground: oklch(0.94 0.03 286);
   --sidebar-border: oklch(0.27 0.012 286);
   --sidebar-ring: oklch(0.7 0.14 286);
+  --paper: oklch(0.165 0.008 70);
+  /* Translúcido: el texto claro sigue leyéndose encima */
+  --marker: oklch(0.8 0.15 100 / 0.32);
 }
 
 @theme inline {
@@ -115,6 +122,9 @@
   --color-sidebar-accent-foreground: var(--sidebar-accent-foreground);
   --color-sidebar-border: var(--sidebar-border);
   --color-sidebar-ring: var(--sidebar-ring);
+  --color-paper: var(--paper);
+  --color-marker: var(--marker);
+  --font-display: var(--font-instrument-serif), Georgia, serif;
 }
 
 @layer base {
@@ -124,9 +134,16 @@
   body {
     @apply bg-background text-foreground;
   }
-  /* Added smooth scroll behavior for better UX */
-  html {
-    scroll-behavior: smooth;
+  /* El desplazamiento suave, solo si no se pidió reducir el movimiento */
+  @media (prefers-reduced-motion: no-preference) {
+    html {
+      scroll-behavior: smooth;
+    }
+  }
+  /* Foco visible con teclado en todo lo que no dibuje el suyo propio */
+  :focus-visible {
+    outline: 2px solid var(--ring);
+    outline-offset: 2px;
   }
 }
 

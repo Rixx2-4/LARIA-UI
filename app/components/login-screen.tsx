@@ -16,7 +16,11 @@ const PASSWORD_RULES = [
 
 export function LoginScreen() {
   const { login, register } = useAuth()
-  const [isLogin, setIsLogin] = useState(true)
+  // "Crear cuenta" en la página de presentación llega con ?modo=registro.
+  // Esta pantalla solo se pinta en el navegador (antes va el skeleton de sesión)
+  const [isLogin, setIsLogin] = useState(
+    () => typeof window === "undefined" || new URLSearchParams(window.location.search).get("modo") !== "registro",
+  )
   const [username, setUsername] = useState("")
   const [email, setEmail] = useState("")
   const [password, setPassword] = useState("")
@@ -89,7 +93,7 @@ export function LoginScreen() {
                   const met = rule.test(password)
                   return (
                     <li key={rule.label} className={`flex items-center gap-1.5 transition-colors ${met ? "text-foreground" : "text-muted-foreground"}`}>
-                      {met ? <Check className="h-3.5 w-3.5 text-green-600" /> : <Circle className="h-3 w-3" />}
+                      {met ? <Check className="h-3.5 w-3.5 text-green-600 dark:text-green-400" /> : <Circle className="h-3 w-3" />}
                       {rule.label}
                       <span className="sr-only">{met ? "(cumplido)" : "(pendiente)"}</span>
                     </li>

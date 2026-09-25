@@ -20,7 +20,7 @@ import { AccountMenu } from "./account-menu"
 import { ChatListSkeleton, DocumentListSkeleton } from "./skeletons"
 import { useChat } from "@/app/contexts/chat-context"
 import { useAuth } from "@/app/contexts/auth-context"
-import { quizHref } from "@/lib/routes"
+import { NEW_CHAT_HREF, chatHref, quizHref } from "@/lib/routes"
 import { useDocuments, documentState, type DocumentState } from "@/hooks/use-documents"
 
 const DOCUMENT_STATE_LABEL: Record<DocumentState, string> = {
@@ -47,14 +47,14 @@ export function Sidebar({ onNavigate }: { onNavigate?: () => void } = {}) {
     onNavigate?.()
   }
 
-  const handleNewChat = () => navigate("/")
+  const handleNewChat = () => navigate(NEW_CHAT_HREF)
 
-  const handleSelectChat = (chatId: string) => navigate(`/chat/${chatId}`)
+  const handleSelectChat = (chatId: string) => navigate(chatHref(chatId))
 
   const handleDeleteChat = async (chatId: string) => {
     try {
       await deleteChat(chatId)
-      if (chatId === activeChatId) router.push("/")
+      if (chatId === activeChatId) router.push(NEW_CHAT_HREF)
     } catch {
       toast.error("No se pudo borrar el chat")
     }
@@ -95,7 +95,7 @@ export function Sidebar({ onNavigate }: { onNavigate?: () => void } = {}) {
       <div className="flex flex-col h-full w-[72px] shrink-0 items-center">
         {/* Logo */}
         <div className="mb-6 flex h-10 w-10 shrink-0 items-center justify-center">
-          <Image src="/images/robot.png" alt="LARIA" width={32} height={32} className="object-contain" />
+          <Image src="/images/robot.png" alt="LARIA" width={32} height={32} className="rounded-lg object-contain" />
         </div>
 
         <Button
@@ -112,6 +112,7 @@ export function Sidebar({ onNavigate }: { onNavigate?: () => void } = {}) {
             <Button
               variant="ghost"
               onClick={() => handlePanelChange("history")}
+              aria-expanded={openPanel === "history"}
               aria-label="Historial"
               className={`h-10 w-10 shrink-0 mx-auto transition-colors ${
                 openPanel === "history"
@@ -121,7 +122,7 @@ export function Sidebar({ onNavigate }: { onNavigate?: () => void } = {}) {
             >
               <Clock className="h-5 w-5" />
             </Button>
-            <div className="text-[9px] text-muted-foreground text-center mt-1 font-medium">Historial</div>
+            <div aria-hidden className="text-[11px] leading-tight text-muted-foreground text-center mt-1 font-medium">Historial</div>
           </div>
 
           <div className="relative mb-2 flex flex-col items-center">
@@ -133,7 +134,7 @@ export function Sidebar({ onNavigate }: { onNavigate?: () => void } = {}) {
             >
               <ClipboardList className="h-5 w-5" />
             </Button>
-            <div className="text-[9px] text-muted-foreground text-center mt-1 font-medium">Quiz</div>
+            <div aria-hidden className="text-[11px] leading-tight text-muted-foreground text-center mt-1 font-medium">Quiz</div>
           </div>
 
           <div className="relative mb-2 flex flex-col items-center">
@@ -145,13 +146,14 @@ export function Sidebar({ onNavigate }: { onNavigate?: () => void } = {}) {
             >
               <Brain className="h-5 w-5" />
             </Button>
-            <div className="text-[9px] text-muted-foreground text-center mt-1 font-medium">Perfil</div>
+            <div aria-hidden className="text-[11px] leading-tight text-muted-foreground text-center mt-1 font-medium">Perfil</div>
           </div>
 
           <div className="relative mb-2 flex flex-col items-center">
             <Button
               variant="ghost"
               onClick={() => handlePanelChange("documents")}
+              aria-expanded={openPanel === "documents"}
               aria-label="Documentos"
               className={`h-10 w-10 shrink-0 mx-auto transition-colors ${
                 openPanel === "documents"
@@ -161,7 +163,7 @@ export function Sidebar({ onNavigate }: { onNavigate?: () => void } = {}) {
             >
               <FileText className="h-5 w-5" />
             </Button>
-            <div className="text-[9px] text-muted-foreground text-center mt-1 font-medium">Documentos</div>
+            <div aria-hidden className="text-[11px] leading-tight text-muted-foreground text-center mt-1 font-medium">Documentos</div>
           </div>
 
           {/* El menú de cuenta se despliega al lado de este botón */}
@@ -178,7 +180,7 @@ export function Sidebar({ onNavigate }: { onNavigate?: () => void } = {}) {
                 {user?.username?.charAt(0).toUpperCase() ?? "?"}
               </span>
             </Button>
-            <div className="text-[9px] text-muted-foreground text-center mt-1 font-medium">Cuenta</div>
+            <div aria-hidden className="text-[11px] leading-tight text-muted-foreground text-center mt-1 font-medium">Cuenta</div>
             <AccountMenu isOpen={showAccountMenu} onClose={() => setShowAccountMenu(false)} onNavigate={onNavigate} />
           </div>
         </nav>
@@ -266,7 +268,7 @@ export function Sidebar({ onNavigate }: { onNavigate?: () => void } = {}) {
                           <FileText className="h-4 w-4 shrink-0 text-muted-foreground" />
                           <div className="min-w-0 flex-1">
                             <div className="truncate font-medium">{doc.filename}</div>
-                            <div className="text-[10.5px] text-muted-foreground truncate">
+                            <div className="text-[11px] text-muted-foreground truncate">
                               {DOCUMENT_STATE_LABEL[documentState(doc)]}
                             </div>
                           </div>
@@ -330,6 +332,7 @@ function ChatHistoryItem({ title, isActive, mode, onModeChange, onSelect, onRena
         <input
           autoFocus
           aria-label="Nuevo título"
+          maxLength={200}
           value={draft}
           onChange={(e) => setDraft(e.target.value)}
           onBlur={() => finishRename(true)}
@@ -359,7 +362,7 @@ function ChatHistoryItem({ title, isActive, mode, onModeChange, onSelect, onRena
               onModeChange("view")
               onDelete()
             }}
-            className="rounded bg-destructive px-1.5 py-0.5 text-white hover:bg-destructive/90"
+            className="rounded bg-destructive px-1.5 py-0.5 text-destructive-foreground hover:bg-destructive/90"
           >
             Borrar
           </button>
@@ -370,29 +373,29 @@ function ChatHistoryItem({ title, isActive, mode, onModeChange, onSelect, onRena
 
   return (
     <div
-      onClick={onSelect}
-      className={`group relative flex w-full cursor-pointer items-center justify-between rounded px-2 py-1.5 text-left text-[13px] leading-tight text-foreground transition-all duration-200 ${
+      className={`group relative flex w-full items-center justify-between rounded text-[13px] leading-tight text-foreground transition-all duration-200 ${
         isActive ? "bg-accent" : "hover:bg-accent"
       }`}
     >
-      <span className="block flex-1 truncate pr-2">{title}</span>
-      <div className="flex shrink-0 transition-opacity md:opacity-0 md:group-hover:opacity-100 md:focus-within:opacity-100">
+      {/* Un botón de verdad: se abre también con el teclado */}
+      <button
+        onClick={onSelect}
+        aria-current={isActive ? "page" : undefined}
+        className="min-w-0 flex-1 truncate rounded px-2 py-1.5 pr-2 text-left"
+      >
+        {title}
+      </button>
+      <div className="flex shrink-0 pr-1 transition-opacity md:opacity-0 md:group-hover:opacity-100 md:group-focus-within:opacity-100">
         <button
           aria-label={`Renombrar chat «${title}»`}
-          onClick={(e) => {
-            e.stopPropagation()
-            startRename()
-          }}
+          onClick={startRename}
           className="p-1 hover:text-foreground"
         >
           <Pencil className="h-3 w-3" />
         </button>
         <button
           aria-label={`Borrar chat «${title}»`}
-          onClick={(e) => {
-            e.stopPropagation()
-            onModeChange("confirm-delete")
-          }}
+          onClick={() => onModeChange("confirm-delete")}
           className="p-1 hover:text-destructive"
         >
           <Trash2 className="h-3 w-3" />

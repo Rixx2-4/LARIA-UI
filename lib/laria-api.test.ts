@@ -1,6 +1,6 @@
 import { describe, it, expect, vi, afterEach } from "vitest"
 import { lariaAPI, getAuthToken, onUnauthorized, setAuthToken, describeErrorDetail } from "./laria-api"
-import { controllableSSE, tokenEvent } from "@/test/sse"
+import { controllableSSE, doneEvent, errorEvent, tokenEvent } from "@/test/sse"
 
 afterEach(() => {
   vi.unstubAllGlobals()
@@ -20,6 +20,35 @@ function recorder() {
 }
 
 describe("lariaAPI.chats.stream", () => {
+  it("entiende el formato del backend: thinking → token(n) → envelope → done", async () => {
+    const sse = controllableSSE()
+    vi.stubGlobal("fetch", sse.fetchMock)
+    const { events, callbacks } = recorder()
+
+    const done = lariaAPI.chats.stream("c1", "user", "hola", callbacks)
+    sse.push("event: thinking\ndata: {}\n\n")
+    sse.push(tokenEvent("Hola"))
+    sse.push(tokenEvent(" mundo"))
+    sse.push('event: envelope\ndata: {"type": "answer", "payload": {"content": "Hola mundo"}}\n\n')
+    sse.push(doneEvent())
+    await done
+
+    expect(events).toEqual(["token:Hola", "token: mundo", "envelope:answer", "done"])
+  })
+
+  it("un evento de error del tutor llega como error con su texto, no como respuesta vacía", async () => {
+    const sse = controllableSSE()
+    vi.stubGlobal("fetch", sse.fetchMock)
+    const { events, callbacks } = recorder()
+
+    const done = lariaAPI.chats.stream("c1", "user", "hola", callbacks)
+    sse.push(tokenEvent("Hol"))
+    sse.push(errorEvent("No pude generar la respuesta. Intenta de nuevo."))
+    await done
+
+    expect(events).toEqual(["token:Hol", "error:No pude generar la respuesta. Intenta de nuevo."])
+  })
+
   it("termina con [DONE] aunque el servidor use saltos de línea CRLF", async () => {
     const sse = controllableSSE()
     vi.stubGlobal("fetch", sse.fetchMock)
@@ -217,5 +246,32 @@ describe("errores de validación del backend", () => {
     ).toBe("El nombre de usuario es obligatorio. El email no es válido.")
     expect(describeErrorDetail("La contraseña es demasiado débil", "fallo")).toBe("La contraseña es demasiado débil")
     expect(describeErrorDetail(undefined, "fallo")).toBe("fallo")
+  })
+})
+
+describe("peticiones a la API", () => {
+  it("un id manipulado queda dentro de su tramo de la ruta", async () => {
+    const urls: string[] = []
+    vi.stubGlobal("fetch", async (url: string) => {
+      urls.push(url)
+      return new Response(JSON.stringify({ id: "x", title: "t", messages: [] }), { status: 200 })
+    })
+
+    await lariaAPI.chats.get("../users/me")
+
+    expect(urls[0]).toMatch(/\/chats\/\.\.%2Fusers%2Fme$/)
+  })
+
+  it("solo las peticiones con cuerpo JSON llevan Content-Type (los GET no piden permiso de CORS)", async () => {
+    const seen: (string | undefined)[] = []
+    vi.stubGlobal("fetch", async (_url: string, init?: RequestInit) => {
+      seen.push((init?.headers as Record<string, string>)["Content-Type"])
+      return new Response(JSON.stringify({ chats: [] }), { status: 200 })
+    })
+
+    await lariaAPI.chats.list()
+    await lariaAPI.chats.create("Nuevo")
+
+    expect(seen).toEqual([undefined, "application/json"])
   })
 })
