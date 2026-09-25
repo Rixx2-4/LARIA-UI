@@ -95,7 +95,7 @@ export function Sidebar({ onNavigate }: { onNavigate?: () => void } = {}) {
       <div className="flex flex-col h-full w-[72px] shrink-0 items-center">
         {/* Logo */}
         <div className="mb-6 flex h-10 w-10 shrink-0 items-center justify-center">
-          <Image src="/images/robot.png" alt="LARIA" width={32} height={32} className="object-contain" />
+          <Image src="/images/robot.png" alt="LARIA" width={32} height={32} className="rounded-lg object-contain" />
         </div>
 
         <Button
@@ -112,6 +112,7 @@ export function Sidebar({ onNavigate }: { onNavigate?: () => void } = {}) {
             <Button
               variant="ghost"
               onClick={() => handlePanelChange("history")}
+              aria-expanded={openPanel === "history"}
               aria-label="Historial"
               className={`h-10 w-10 shrink-0 mx-auto transition-colors ${
                 openPanel === "history"
@@ -121,7 +122,7 @@ export function Sidebar({ onNavigate }: { onNavigate?: () => void } = {}) {
             >
               <Clock className="h-5 w-5" />
             </Button>
-            <div className="text-[9px] text-muted-foreground text-center mt-1 font-medium">Historial</div>
+            <div aria-hidden className="text-[11px] leading-tight text-muted-foreground text-center mt-1 font-medium">Historial</div>
           </div>
 
           <div className="relative mb-2 flex flex-col items-center">
@@ -133,7 +134,7 @@ export function Sidebar({ onNavigate }: { onNavigate?: () => void } = {}) {
             >
               <ClipboardList className="h-5 w-5" />
             </Button>
-            <div className="text-[9px] text-muted-foreground text-center mt-1 font-medium">Quiz</div>
+            <div aria-hidden className="text-[11px] leading-tight text-muted-foreground text-center mt-1 font-medium">Quiz</div>
           </div>
 
           <div className="relative mb-2 flex flex-col items-center">
@@ -145,13 +146,14 @@ export function Sidebar({ onNavigate }: { onNavigate?: () => void } = {}) {
             >
               <Brain className="h-5 w-5" />
             </Button>
-            <div className="text-[9px] text-muted-foreground text-center mt-1 font-medium">Perfil</div>
+            <div aria-hidden className="text-[11px] leading-tight text-muted-foreground text-center mt-1 font-medium">Perfil</div>
           </div>
 
           <div className="relative mb-2 flex flex-col items-center">
             <Button
               variant="ghost"
               onClick={() => handlePanelChange("documents")}
+              aria-expanded={openPanel === "documents"}
               aria-label="Documentos"
               className={`h-10 w-10 shrink-0 mx-auto transition-colors ${
                 openPanel === "documents"
@@ -161,7 +163,7 @@ export function Sidebar({ onNavigate }: { onNavigate?: () => void } = {}) {
             >
               <FileText className="h-5 w-5" />
             </Button>
-            <div className="text-[9px] text-muted-foreground text-center mt-1 font-medium">Documentos</div>
+            <div aria-hidden className="text-[11px] leading-tight text-muted-foreground text-center mt-1 font-medium">Documentos</div>
           </div>
 
           {/* El menú de cuenta se despliega al lado de este botón */}
@@ -178,7 +180,7 @@ export function Sidebar({ onNavigate }: { onNavigate?: () => void } = {}) {
                 {user?.username?.charAt(0).toUpperCase() ?? "?"}
               </span>
             </Button>
-            <div className="text-[9px] text-muted-foreground text-center mt-1 font-medium">Cuenta</div>
+            <div aria-hidden className="text-[11px] leading-tight text-muted-foreground text-center mt-1 font-medium">Cuenta</div>
             <AccountMenu isOpen={showAccountMenu} onClose={() => setShowAccountMenu(false)} onNavigate={onNavigate} />
           </div>
         </nav>
@@ -261,7 +263,7 @@ export function Sidebar({ onNavigate }: { onNavigate?: () => void } = {}) {
                         <FileText className="h-4 w-4 shrink-0 text-muted-foreground" />
                         <div className="min-w-0 flex-1">
                           <div className="truncate font-medium">{doc.filename}</div>
-                          <div className="text-[10.5px] text-muted-foreground truncate">
+                          <div className="text-[11px] text-muted-foreground truncate">
                             {DOCUMENT_STATE_LABEL[documentState(doc)]}
                           </div>
                         </div>
@@ -353,7 +355,7 @@ function ChatHistoryItem({ title, isActive, mode, onModeChange, onSelect, onRena
               onModeChange("view")
               onDelete()
             }}
-            className="rounded bg-destructive px-1.5 py-0.5 text-white hover:bg-destructive/90"
+            className="rounded bg-destructive px-1.5 py-0.5 text-destructive-foreground hover:bg-destructive/90"
           >
             Borrar
           </button>

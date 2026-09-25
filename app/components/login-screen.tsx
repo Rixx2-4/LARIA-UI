@@ -89,7 +89,7 @@ export function LoginScreen() {
                   const met = rule.test(password)
                   return (
                     <li key={rule.label} className={`flex items-center gap-1.5 transition-colors ${met ? "text-foreground" : "text-muted-foreground"}`}>
-                      {met ? <Check className="h-3.5 w-3.5 text-green-600" /> : <Circle className="h-3 w-3" />}
+                      {met ? <Check className="h-3.5 w-3.5 text-green-600 dark:text-green-400" /> : <Circle className="h-3 w-3" />}
                       {rule.label}
                       <span className="sr-only">{met ? "(cumplido)" : "(pendiente)"}</span>
                     </li>
