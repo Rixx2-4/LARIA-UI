@@ -1,7 +1,8 @@
 "use client"
 
 import { FormEvent, useState } from "react"
-import { Loader2, ArrowRight, Check, Circle } from "lucide-react"
+import Link from "next/link"
+import { Loader2, ArrowRight, Check, Circle, X } from "lucide-react"
 import { useAuth } from "@/app/contexts/auth-context"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
@@ -47,13 +48,23 @@ export function LoginScreen() {
   }
 
   return (
-    <main className="flex min-h-screen w-full items-center justify-center bg-background px-6 py-12">
+    <main className="relative flex min-h-screen w-full items-center justify-center bg-background px-6 py-12">
+      {/* Salir sin entrar: de vuelta a la página de presentación */}
+      {/* Bien visible: botón con borde y, desde tablet, con texto; en móvil solo la X (44 px) */}
+      <Link
+        href="/"
+        aria-label="Cerrar y volver a la página de inicio"
+        className="absolute right-3 top-3 z-10 flex h-11 min-w-11 items-center justify-center gap-2 rounded-full border border-border bg-background px-3 text-sm font-medium text-foreground shadow-sm transition-colors hover:bg-accent sm:right-6 sm:top-6 sm:px-4"
+      >
+        <X className="h-5 w-5 shrink-0" aria-hidden />
+        <span className="hidden sm:inline">Volver al inicio</span>
+      </Link>
       <section className="flex w-full max-w-md flex-col items-center gap-8 text-center">
         <div className="flex flex-col items-center gap-5">
-          <div className="flex items-center gap-1.5">
+          <Link href="/" aria-label="LARIA, página de inicio" className="flex items-center gap-1.5">
             <span className="text-3xl font-bold tracking-tight text-foreground">LARIA</span>
             <span className="rounded-full bg-primary px-2.5 py-1 text-xs font-semibold text-primary-foreground">IA</span>
-          </div>
+          </Link>
           <div className="flex flex-col gap-2">
             <h1 className="text-2xl font-semibold tracking-tight text-foreground">
               {isLogin ? "Bienvenido de nuevo" : "Crea tu cuenta"}

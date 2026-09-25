@@ -1,11 +1,17 @@
 const API_BASE_URL = process.env.NEXT_PUBLIC_LARIA_API_URL || "http://localhost:8000/api/v1"
 
-// Metadatos que el tutor adjunta a cada respuesta
+// Metadatos que el tutor adjunta a cada respuesta. El backend los guarda tal cual
+// en `metadata` del mensaje: { type, emotion, payload: { content, intent, grounded, … } }
 interface TutorEnvelope {
   type?: string
   emotion?: string
-  grounded?: boolean
-  quiz_id?: string
+  payload?: {
+    content?: string
+    // "learn" cuando el estudiante dice que quiere aprender algo
+    intent?: string
+    grounded?: boolean
+    [key: string]: unknown
+  }
   [key: string]: unknown
 }
 
@@ -14,13 +20,7 @@ interface ChatMessage {
   role: "user" | "assistant" | "system"
   content: string
   timestamp?: string
-  metadata?: {
-    source?: string
-    type?: string
-    emotion?: string
-    envelope?: TutorEnvelope
-    [key: string]: unknown
-  }
+  metadata?: TutorEnvelope | null
 }
 
 interface Chat {
@@ -55,7 +55,8 @@ interface AuthResponse {
 interface QuizAttemptSummary {
   attempt_id: string
   quiz_id: string
-  document_id: string
+  // null en una ronda de nivelación, que no nace de un documento
+  document_id: string | null
   score: number
   total_points: number
   completed_at: string
@@ -63,7 +64,7 @@ interface QuizAttemptSummary {
 
 interface TutorInteraction {
   id: string
-  document_id: string
+  document_id: string | null
   question: string
   answer: string
   asked_at: string
@@ -124,6 +125,8 @@ interface StudentProfile {
   pedagogical_memory: PedagogicalMemory | null
   mastery_by_document: DocumentMastery[]
   mastery_by_concept: ConceptMastery[]
+  // Nivel alcanzado en cada tema nivelado; aún no lo envía el backend
+  level_by_topic?: Record<string, PlacementLevel>
 }
 
 interface Document {
@@ -156,7 +159,12 @@ interface QuizQuestion {
 
 interface QuizResponse {
   id: string
-  document_id: string
+  // null en una ronda de nivelación
+  document_id: string | null
+  // El tema nivelado, con el nombre canónico del backend ("ecuaciones" → "ecuaciones lineales")
+  topic?: string | null
+  // El tema como lo escribió el estudiante, con tildes, para mostrarlo (aún no en Render)
+  topic_label?: string | null
   questions: QuizQuestion[]
   total_points: number
   created_at: string
@@ -165,14 +173,31 @@ interface QuizResponse {
 interface QuizAttemptQuestion {
   index: number
   text: string
-  selected: string
+  selected: string | null
   correct_answer: string
   is_correct: boolean
+}
+
+type PlacementLevel = "basico" | "intermedio" | "avanzado"
+
+// Veredicto de una ronda de nivelación
+interface PlacementResult {
+  topic: string
+  // Para mostrar; `topic` es la clave canónica (aún no en Render)
+  topic_label?: string | null
+  round: "base" | "avanzada"
+  level: PlacementLevel
+  passed: boolean
+  // Si hay otra ronda que ofrecer: se pide con el mismo tema, el backend sabe cuál toca
+  has_next_round: boolean
 }
 
 interface QuizAttemptResponse {
   attempt_id: string
   quiz_id: string
+  document_id?: string | null
+  // Solo en rondas de nivelación
+  placement?: PlacementResult | null
   score: number
   total_points: number
   questions: QuizAttemptQuestion[]
@@ -472,8 +497,9 @@ export const lariaAPI = {
       callbacks.onDone?.()
     },
 
+    // Genera (y guarda) un quiz nuevo: es un POST, el backend responde 405 a un GET
     generateQuiz: (chatId: string, numQuestions: number = 5) =>
-      fetchAPI<QuizResponse>(`/chats/${segment(chatId)}/quiz?num_questions=${numQuestions}`),
+      fetchAPI<QuizResponse>(`/chats/${segment(chatId)}/quiz?num_questions=${numQuestions}`, { method: "POST" }),
 
     generateTitle: (messages: { role: string; content: string }[]) =>
       fetchAPI<{ title: string }>("/chats/generate-title", {
@@ -483,6 +509,13 @@ export const lariaAPI = {
   },
 
   quizzes: {
+    // Una ronda de nivelación sobre un tema; el backend decide si toca la base o la avanzada
+    diagnostic: (topic: string) =>
+      fetchAPI<QuizResponse>("/quizzes/diagnostic", {
+        method: "POST",
+        body: JSON.stringify({ topic }),
+      }),
+
     submitAttempt: (quizId: string, answers: Record<string, string>) =>
       fetchAPI<QuizAttemptResponse>(`/quizzes/${segment(quizId)}/attempts`, {
         method: "POST",
@@ -537,5 +570,5 @@ export type {
   QuizAttemptSummary, TutorInteraction, LearningRecommendation,
   PedagogicalMemory, DocumentMastery, ConceptMastery,
   QuizResponse, QuizQuestion, QuizAttemptResponse, QuizAttemptQuestion,
-  StreamCallbacks, TutorEnvelope,
+  StreamCallbacks, TutorEnvelope, PlacementResult, PlacementLevel,
 }

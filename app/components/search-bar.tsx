@@ -11,8 +11,10 @@ import { FileCard } from "./file-card"
 import { FileViewer } from "./file-viewer"
 import { MessageContent } from "./message-content"
 import { MessagesSkeleton } from "./skeletons"
+import { PlacementOffer } from "./placement-offer"
 import { isTextMime, mimeFromFilename } from "@/lib/file-types"
 import { chatHref } from "@/lib/routes"
+import { envelopeGrounded, envelopeLabel, tutorEnvelope } from "@/lib/tutor-envelope"
 import { useStreamingChat } from "@/hooks/use-streaming-chat"
 import { useDictation } from "@/hooks/use-dictation"
 
@@ -33,16 +35,6 @@ interface UploadedFile {
   dataUrl?: string
 }
 
-// Cómo llama el tutor a cada tipo de respuesta; lo que no esté aquí se muestra tal cual
-const ENVELOPE_TYPE_LABEL: Record<string, string> = {
-  explanation: "Explicación",
-  example: "Ejemplo",
-  hint: "Pista",
-  feedback: "Corrección",
-  question: "Pregunta",
-  quiz: "Quiz",
-  summary: "Resumen",
-}
 
 export function SearchBar({ isOpeningChat = false }: { isOpeningChat?: boolean }) {
   const [query, setQuery] = useState("")
@@ -61,7 +53,17 @@ export function SearchBar({ isOpeningChat = false }: { isOpeningChat?: boolean }
   const isUserScrolledRef = useRef(false)
 
   const router = useRouter()
-  const { messages, setMessages, addMessage, activeChatId, activeDocumentId, createChat: ctxCreateChat, generateTitle } = useChat()
+  const {
+    messages,
+    setMessages,
+    addMessage,
+    activeChatId,
+    activeDocumentId,
+    createChat: ctxCreateChat,
+    generateTitle,
+    takeFirstMessage,
+    loadedChatId,
+  } = useChat()
   const chatId = activeChatId
 
   const {
@@ -244,8 +246,9 @@ export function SearchBar({ isOpeningChat = false }: { isOpeningChat?: boolean }
   })
   const shownQuery = interimText ? (query.trim() ? `${query.trimEnd()} ${interimText}` : interimText) : query
 
-  const handleSend = async () => {
-    const userMessage = shownQuery.trim()
+  const handleSend = () => sendMessage(shownQuery.trim())
+
+  const sendMessage = async (userMessage: string) => {
     if (!userMessage || isStreaming) return
 
     setQuery("")
@@ -269,6 +272,19 @@ export function SearchBar({ isOpeningChat = false }: { isOpeningChat?: boolean }
     }
   }
 
+  // Un chat recién creado con un primer mensaje en cola (la clase tras nivelarse)
+  // lo envía en cuanto sus mensajes llegan del servidor: antes, la recarga del
+  // chat al abrirse pisaría la respuesta que se está escribiendo
+  const sendMessageRef = useRef(sendMessage)
+  useEffect(() => {
+    sendMessageRef.current = sendMessage
+  })
+  useEffect(() => {
+    if (!chatId || loadedChatId !== chatId) return
+    const text = takeFirstMessage(chatId)
+    if (text) sendMessageRef.current(text)
+  }, [chatId, loadedChatId, takeFirstMessage])
+
   const copyToClipboard = async (text: string) => {
     try {
       await navigator.clipboard.writeText(text)
@@ -281,6 +297,12 @@ export function SearchBar({ isOpeningChat = false }: { isOpeningChat?: boolean }
   const handleStopGeneration = () => {
     cancelStreaming()
   }
+
+  // El tutor detectó "quiero aprender X" en la última respuesta: se ofrece nivelarse
+  const lastMessage = messages[messages.length - 1]
+  const offerPlacement =
+    !isStreaming && !!chatId && lastMessage?.role === "assistant" && tutorEnvelope(lastMessage)?.payload?.intent === "learn"
+  const lastUserQuestion = [...messages].reverse().find((m) => m.role === "user")?.content ?? ""
 
   const renderMessageContent = (msg: typeof messages[0], isLive: boolean) =>
     msg.role === "user" ? (
@@ -324,6 +346,9 @@ export function SearchBar({ isOpeningChat = false }: { isOpeningChat?: boolean }
             {messages.map((msg, index) => {
               // La respuesta que se está escribiendo ahora mismo
               const isLive = isStreaming && index === messages.length - 1 && msg.role === "assistant"
+              const envelope = tutorEnvelope(msg)
+              const label = envelopeLabel(envelope)
+              const grounded = envelopeGrounded(envelope)
               // Notas del sistema (archivo subido, avisos): una línea centrada, no una burbuja
               if (msg.role === "system") {
                 return (
@@ -356,19 +381,10 @@ export function SearchBar({ isOpeningChat = false }: { isOpeningChat?: boolean }
                           <Copy className="h-3 w-3" />
                           Copiar
                         </button>
-                        {msg.metadata?.envelope?.type && (
-                          <span className="px-1.5 py-0.5 rounded bg-secondary/50">
-                            {ENVELOPE_TYPE_LABEL[msg.metadata.envelope.type] ?? msg.metadata.envelope.type}
-                          </span>
-                        )}
-                        {msg.metadata?.envelope?.emotion && (
-                          <span className="px-1.5 py-0.5 rounded bg-secondary/50">
-                            {msg.metadata.envelope.emotion}
-                          </span>
-                        )}
-                        {msg.metadata?.envelope?.grounded !== undefined && (
-                          <span className={`px-1.5 py-0.5 rounded ${msg.metadata.envelope.grounded ? "bg-green-500/20 text-green-700 dark:text-green-300" : "bg-yellow-500/20 text-yellow-700 dark:text-yellow-300"}`}>
-                            {msg.metadata.envelope.grounded ? "Tutoría" : "Chat libre"}
+                        {label && <span className="px-1.5 py-0.5 rounded bg-secondary/50">{label}</span>}
+                        {grounded !== null && (
+                          <span className={`px-1.5 py-0.5 rounded ${grounded ? "bg-green-500/20 text-green-700 dark:text-green-300" : "bg-yellow-500/20 text-yellow-700 dark:text-yellow-300"}`}>
+                            {grounded ? "Tutoría" : "Chat libre"}
                           </span>
                         )}
                       </div>
@@ -387,6 +403,10 @@ export function SearchBar({ isOpeningChat = false }: { isOpeningChat?: boolean }
                   </div>
                 </div>
               </div>
+            )}
+
+            {offerPlacement && chatId && (
+              <PlacementOffer key={chatId} chatId={chatId} userQuestion={lastUserQuestion} />
             )}
 
             {streamError && (
