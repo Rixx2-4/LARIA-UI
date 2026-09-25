@@ -90,6 +90,15 @@ export function SearchBar({ isOpeningChat = false }: { isOpeningChat?: boolean }
     chatId,
   })
 
+  // Para lectores de pantalla: se anuncia el principio y el final de la respuesta,
+  // no cada fragmento que llega
+  const [wasStreaming, setWasStreaming] = useState(isStreaming)
+  const [streamAnnouncement, setStreamAnnouncement] = useState("")
+  if (wasStreaming !== isStreaming) {
+    setWasStreaming(isStreaming)
+    setStreamAnnouncement(isStreaming ? "LARIA está respondiendo…" : streamError ? "" : "Respuesta de LARIA lista.")
+  }
+
   const isAtBottom = useCallback(() => {
     const container = messagesContainerRef.current
     if (!container) return true
@@ -100,9 +109,10 @@ export function SearchBar({ isOpeningChat = false }: { isOpeningChat?: boolean }
   const scrollToBottom = useCallback((smooth = true) => {
     const container = messagesContainerRef.current
     if (!container) return
+    const reduceMotion = window.matchMedia?.("(prefers-reduced-motion: reduce)").matches
     container.scrollTo({
       top: container.scrollHeight,
-      behavior: smooth ? "smooth" : "instant",
+      behavior: smooth && !reduceMotion ? "smooth" : "instant",
     })
   }, [])
 
@@ -328,8 +338,10 @@ export function SearchBar({ isOpeningChat = false }: { isOpeningChat?: boolean }
         />
       )}
 
+      <p aria-live="polite" className="sr-only">{streamAnnouncement}</p>
+
       {/* Chat Messages: siempre montado para que el scroll tenga a quién escuchar */}
-      <div ref={messagesContainerRef} className="min-h-0 flex-1 overflow-y-auto scroll-smooth">
+      <div ref={messagesContainerRef} className="min-h-0 flex-1 overflow-y-auto motion-safe:scroll-smooth">
         {messages.length === 0 && isOpeningChat ? (
           <MessagesSkeleton />
         ) : messages.length === 0 ? (
@@ -378,7 +390,7 @@ export function SearchBar({ isOpeningChat = false }: { isOpeningChat?: boolean }
                           </span>
                         )}
                         {msg.metadata?.envelope?.grounded !== undefined && (
-                          <span className={`px-1.5 py-0.5 rounded ${msg.metadata.envelope.grounded ? "bg-green-500/20 text-green-700" : "bg-yellow-500/20 text-yellow-700"}`}>
+                          <span className={`px-1.5 py-0.5 rounded ${msg.metadata.envelope.grounded ? "bg-green-500/20 text-green-700 dark:text-green-300" : "bg-yellow-500/20 text-yellow-700 dark:text-yellow-300"}`}>
                             {msg.metadata.envelope.grounded ? "Tutoría" : "Chat libre"}
                           </span>
                         )}
@@ -402,7 +414,7 @@ export function SearchBar({ isOpeningChat = false }: { isOpeningChat?: boolean }
 
             {streamError && (
               <div className="flex justify-start">
-                <div className="bg-destructive/10 border border-destructive/20 rounded-2xl px-4 py-3 max-w-[80%]">
+                <div role="alert" className="bg-destructive/10 border border-destructive/20 rounded-2xl px-4 py-3 max-w-[80%]">
                   <p className="text-sm text-destructive">{streamError}</p>
                 </div>
               </div>
@@ -461,7 +473,7 @@ export function SearchBar({ isOpeningChat = false }: { isOpeningChat?: boolean }
               placeholder={isStreaming ? "Generando respuesta…" : "Pregunta lo que quieras…"}
               aria-label="Mensaje"
               disabled={isStreaming}
-              className="w-full border-0 bg-transparent text-[14px] md:text-[15px] text-foreground placeholder:text-muted-foreground/60 focus:outline-none disabled:opacity-50"
+              className="w-full border-0 bg-transparent text-[14px] md:text-[15px] text-foreground placeholder:text-muted-foreground focus:outline-none disabled:opacity-50"
             />
           </div>
 

@@ -54,8 +54,8 @@ function timeAgo(iso: string): string {
 }
 
 function trendArrow(t: string) {
-  if (t === "up") return <span className="text-green-600 text-xs">↑ subiendo</span>
-  if (t === "down") return <span className="text-red-500 text-xs">↓ bajando</span>
+  if (t === "up") return <span className="text-green-700 dark:text-green-400 text-xs">↑ subiendo</span>
+  if (t === "down") return <span className="text-destructive text-xs">↓ bajando</span>
   return <span className="text-muted-foreground text-xs">→ estable</span>
 }
 

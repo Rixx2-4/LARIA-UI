@@ -86,11 +86,13 @@ describe("QuizPage", () => {
     const requests = stubServer()
     renderQuiz("chat=c1")
 
-    fireEvent.click(await screen.findByRole("button", { name: "Generar Quiz" }))
-    fireEvent.click(await screen.findByRole("button", { name: /Cloroplasto/ }))
-    fireEvent.click(screen.getByRole("button", { name: /Siguiente/ }))
-    fireEvent.click(await screen.findByRole("button", { name: /Nitrógeno/ }))
-    fireEvent.click(screen.getByRole("button", { name: /Finalizar/ }))
+    // Por texto y no por rol: getByRole recorre el árbol de accesibilidad de toda
+    // la página en cada búsqueda y hacía este test lento (se pasaba de tiempo)
+    fireEvent.click(await screen.findByText("Generar Quiz"))
+    fireEvent.click(await screen.findByText(/Cloroplasto/))
+    fireEvent.click(screen.getByText(/Siguiente/))
+    fireEvent.click(await screen.findByText(/Nitrógeno/))
+    fireEvent.click(screen.getByText(/Finalizar/))
 
     expect(await screen.findByText("1 de 2 respuestas correctas")).toBeTruthy()
     expect(requests[0].url).toMatch(/\/chats\/c1\/quiz\?num_questions=5$/)

@@ -6,6 +6,7 @@ import { ChatScreen } from "./chat-screen"
 import { setAuthToken } from "@/lib/laria-api"
 import { controllableSSE, tokenEvent } from "@/test/sse"
 import { FakeSpeechRecognition } from "@/test/speech"
+import { preferReducedMotion } from "@/test/media"
 
 // El router de Next: la URL actual y las navegaciones que pide la pantalla
 const nav = vi.hoisted(() => ({
@@ -35,6 +36,8 @@ function renderAt(id?: string) {
 }
 
 beforeEach(() => {
+  // Estos tests van de rutas y anuncios, no del efecto de escritura: sin él, no dependen del reloj
+  preferReducedMotion()
   setAuthToken("token")
   nav.replace.mockReset()
   nav.push.mockReset()
@@ -43,6 +46,7 @@ afterEach(() => {
   cleanup()
   setAuthToken(null)
   vi.unstubAllGlobals()
+  vi.restoreAllMocks()
 })
 
 describe("ChatScreen", () => {
@@ -117,6 +121,34 @@ describe("ChatScreen", () => {
     sse.push(tokenEvent("Es un proceso"))
     expect(await screen.findByText("Es un proceso")).toBeTruthy()
     expect(screen.getByText("¿Qué es la fotosíntesis?")).toBeTruthy()
+  })
+
+  it("a los lectores de pantalla les anuncia el principio y el final de la respuesta, no cada fragmento", async () => {
+    const sse = controllableSSE()
+    vi.stubGlobal("fetch", async (url: string, init?: RequestInit) => {
+      const method = init?.method ?? "GET"
+      if (url.endsWith("/users/me")) return json({ id: "u1", username: "ana", email: "a@a.a" })
+      if (url.endsWith("/chats/") && method === "GET") return json({ chats: [] })
+      if (url.endsWith("/chats/") && method === "POST") return json({ id: "c2", title: "Nuevo chat" })
+      if (url.endsWith("/chats/c2/stream")) return sse.fetchMock(url, init)
+      if (url.endsWith("/chats/generate-title")) return json({ title: "Fotosíntesis" })
+      if (url.endsWith("/chats/c2")) return json({ id: "c2", title: "Fotosíntesis", messages: [] })
+      throw new Error(`Petición inesperada: ${method} ${url}`)
+    })
+    renderAt()
+    const live = () => document.querySelector("[aria-live=polite]")?.textContent
+
+    const input = await screen.findByRole("textbox")
+    fireEvent.change(input, { target: { value: "¿Qué es la fotosíntesis?" } })
+    fireEvent.keyDown(input, { key: "Enter" })
+
+    await waitFor(() => expect(live()).toBe("LARIA está respondiendo…"))
+    sse.push(tokenEvent("Es un proceso"))
+    expect(await screen.findByText("Es un proceso")).toBeTruthy()
+    expect(live()).toBe("LARIA está respondiendo…")
+
+    sse.push("data: [DONE]\n\n")
+    await waitFor(() => expect(live()).toBe("Respuesta de LARIA lista."))
   })
 
   it("un chat que no existe lo dice y ofrece empezar uno nuevo", async () => {
