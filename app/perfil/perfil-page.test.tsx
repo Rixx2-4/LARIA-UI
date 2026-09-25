@@ -72,6 +72,9 @@ describe("PerfilPage", () => {
 
     expect(await screen.findByText("Aún no hay actividad de aprendizaje")).toBeTruthy()
     expect(screen.getByRole("link", { name: "Hacer un quiz" }).getAttribute("href")).toBe("/quiz")
+    // El ritmo "normal" por defecto no es un nivel medido
+    expect(screen.getByText("Sin actividad todavía")).toBeTruthy()
+    expect(screen.queryByText(/Nivel:/)).toBeNull()
   })
 
   it("si falla la lista de documentos, lo avisa sin ocultar el resto del perfil", async () => {

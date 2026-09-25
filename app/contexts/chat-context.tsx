@@ -15,6 +15,8 @@ interface ChatContextType {
   // El documento vinculado al chat activo, según el servidor
   activeDocumentId: string | null
   messages: ChatMessage[]
+  // true mientras llegan los mensajes del chat que se está abriendo
+  messagesLoading: boolean
   // Por qué no se pudo abrir el chat activo
   chatError: ChatLoadError | null
   loadChats: () => Promise<void>
@@ -37,6 +39,7 @@ export function ChatProvider({ children }: { children: ReactNode }) {
   const [activeChatId, setActiveChatId] = useState<string | null>(null)
   const [activeDocumentId, setActiveDocumentId] = useState<string | null>(null)
   const [messages, setMessages] = useState<ChatMessage[]>([])
+  const [messagesLoading, setMessagesLoading] = useState(false)
   const [chatError, setChatError] = useState<ChatLoadError | null>(null)
   const requestedChatIdRef = useRef<string | null>(null)
 
@@ -50,6 +53,7 @@ export function ChatProvider({ children }: { children: ReactNode }) {
       setActiveDocumentId(null)
       setChatError(null)
       setMessages([])
+      setMessagesLoading(false)
     }
   }
 
@@ -81,6 +85,7 @@ export function ChatProvider({ children }: { children: ReactNode }) {
     setActiveDocumentId(chat.document_id ?? documentId ?? null)
     setChatError(null)
     setMessages([])
+    setMessagesLoading(false)
     return chat
   }, [loadChats])
 
@@ -90,6 +95,7 @@ export function ChatProvider({ children }: { children: ReactNode }) {
     setChatError(null)
     setActiveDocumentId(null)
     setMessages([])
+    setMessagesLoading(true)
     try {
       const chat = await lariaAPI.chats.get(chatId)
       // Si mientras tanto se abrió otro chat, esta respuesta ya no interesa
@@ -100,6 +106,8 @@ export function ChatProvider({ children }: { children: ReactNode }) {
       if (requestedChatIdRef.current !== chatId) return
       const notFound = error instanceof ApiError && (error.status === 404 || error.status === 403)
       setChatError(notFound ? "not-found" : "load-failed")
+    } finally {
+      if (requestedChatIdRef.current === chatId) setMessagesLoading(false)
     }
   }, [])
 
@@ -129,6 +137,7 @@ export function ChatProvider({ children }: { children: ReactNode }) {
     setActiveDocumentId(null)
     setChatError(null)
     setMessages([])
+    setMessagesLoading(false)
   }, [])
 
   const generateTitle = useCallback(async (chatId: string, msgs: { role: string; content: string }[]) => {
@@ -160,6 +169,7 @@ export function ChatProvider({ children }: { children: ReactNode }) {
         activeChatId,
         activeDocumentId,
         messages,
+        messagesLoading,
         chatError,
         loadChats,
         createChat,

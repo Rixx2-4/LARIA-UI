@@ -10,7 +10,9 @@ import { Button } from "@/components/ui/button"
 export function ChatScreen() {
   const router = useRouter()
   const { id: urlChatId } = useParams<{ id?: string }>()
-  const { activeChatId, chatError, selectChat, clearActiveChat } = useChat()
+  const { activeChatId, chatError, messagesLoading, selectChat, clearActiveChat } = useChat()
+  // Hasta que llegan sus mensajes, un chat existente no debe parecer uno nuevo
+  const isOpeningChat = !!urlChatId && (messagesLoading || urlChatId !== activeChatId)
   const hasSyncedRef = useRef(false)
 
   useEffect(() => {
@@ -41,7 +43,7 @@ export function ChatScreen() {
           </Button>
         </div>
       ) : (
-        <SearchBar />
+        <SearchBar isOpeningChat={isOpeningChat} />
       )}
     </AppShell>
   )

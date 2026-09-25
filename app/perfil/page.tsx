@@ -6,6 +6,7 @@ import { Loader2, RefreshCw } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { AppShell } from "../components/app-shell"
 import { RequireAuth } from "../components/require-auth"
+import { ProfileSkeleton } from "../components/skeletons"
 import { useAuth } from "@/app/contexts/auth-context"
 import { lariaAPI, User, StudentProfile, LearningHistory, Document } from "@/lib/laria-api"
 
@@ -183,9 +184,7 @@ function Perfil() {
   if (isLoading) {
     return (
       <AppShell>
-        <div className="flex h-full items-center justify-center">
-          <Loader2 className="h-8 w-8 animate-spin text-muted-foreground" />
-        </div>
+        <ProfileSkeleton />
       </AppShell>
     )
   }
@@ -310,9 +309,16 @@ function Perfil() {
             <h1 className="text-xl font-medium mb-1">{username}</h1>
             <p className="text-xs text-muted-foreground mb-1.5">{email}</p>
             <div className="flex gap-2.5 items-center flex-wrap">
-              <span className="text-xs font-semibold px-2.5 py-1 rounded-full bg-primary text-primary-foreground">Nivel: {nivel}</span>
-              <span className="text-xs font-medium px-2.5 py-1 rounded-full bg-muted text-muted-foreground border border-border">Ritmo: {ritmo}%</span>
-              <span className="text-xs font-medium px-2.5 py-1 rounded-full bg-muted text-muted-foreground border border-border">Última actividad: {lastActivity}</span>
+              {/* Sin actividad, el nivel y el ritmo serían valores por defecto, no una medida */}
+              {hasNoActivity ? (
+                <span className="text-xs font-medium px-2.5 py-1 rounded-full bg-muted text-muted-foreground border border-border">Sin actividad todavía</span>
+              ) : (
+                <>
+                  <span className="text-xs font-semibold px-2.5 py-1 rounded-full bg-primary text-primary-foreground">Nivel: {nivel}</span>
+                  <span className="text-xs font-medium px-2.5 py-1 rounded-full bg-muted text-muted-foreground border border-border">Ritmo: {ritmo}%</span>
+                  <span className="text-xs font-medium px-2.5 py-1 rounded-full bg-muted text-muted-foreground border border-border">Última actividad: {lastActivity}</span>
+                </>
+              )}
             </div>
           </div>
         </div>

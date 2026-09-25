@@ -4,6 +4,7 @@ import { useState, useEffect, useRef } from "react"
 import { X, Download, ZoomIn, ZoomOut, RotateCw, FileText, FileCode, FileSpreadsheet } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { lariaAPI } from "@/lib/laria-api"
+import { FilePreviewSkeleton } from "./skeletons"
 
 interface FileViewerProps {
   filename: string
@@ -204,9 +205,7 @@ export function FileViewer({ filename, mimeType, documentId, previewDataUrl, onC
     const needsSource = kind === "image" || kind === "pdf"
     if (isLoading || (needsSource && documentId && !sourceUrl && !error)) {
       return (
-        <div className="flex items-center justify-center h-full text-muted-foreground">
-          Cargando...
-        </div>
+        <FilePreviewSkeleton />
       )
     }
 

@@ -6,6 +6,7 @@ import { Loader2, CheckCircle, XCircle, ArrowRight, RotateCcw } from "lucide-rea
 import { Button } from "@/components/ui/button"
 import { AppShell } from "../components/app-shell"
 import { RequireAuth } from "../components/require-auth"
+import { SelectSkeleton } from "../components/skeletons"
 import { useChat } from "@/app/contexts/chat-context"
 import { quizHref } from "@/lib/routes"
 import { lariaAPI, QuizQuestion, QuizAttemptQuestion } from "@/lib/laria-api"
@@ -44,6 +45,13 @@ function Quiz({ chatId }: { chatId: string | null }) {
   const { chats, chatsLoaded } = useChat()
   const selectedChat = chats.find((c) => c.id === chatId)
   const chatMissing = chatsLoaded && !!chatId && !selectedChat
+  // Por qué no se puede generar todavía; sin chats ya lo dice el aviso de arriba
+  const generateBlockedReason =
+    !chatsLoaded || chats.length === 0 || chatMissing || chatId
+      ? null
+      : chats.some((c) => c.document_id)
+        ? "Elige un chat para generar el quiz."
+        : "Ninguno de tus chats tiene un documento. Sube uno en un chat para generar un quiz."
   const [step, setStep] = useState<"config" | "quiz" | "results">("config")
   const [questionCount, setQuestionCount] = useState(5)
   const [isCustomCount, setIsCustomCount] = useState(false)
@@ -167,7 +175,7 @@ function Quiz({ chatId }: { chatId: string | null }) {
               <div>
                 <label htmlFor="quiz-chat" className="text-sm font-medium mb-2 block">Chat</label>
                 {!chatsLoaded ? (
-                  <p className="text-sm text-muted-foreground">Cargando tus chats…</p>
+                  <SelectSkeleton label="Cargando tus chats…" />
                 ) : chats.length > 0 ? (
                   <select
                     id="quiz-chat"
@@ -243,6 +251,7 @@ function Quiz({ chatId }: { chatId: string | null }) {
               <Button
                 onClick={generateQuiz}
                 disabled={isLoading || !chatId || chatMissing}
+                aria-describedby={generateBlockedReason ? "quiz-blocked-reason" : undefined}
                 className="w-full h-12"
               >
                 {isLoading ? (
@@ -250,6 +259,11 @@ function Quiz({ chatId }: { chatId: string | null }) {
                 ) : null}
                 Generar Quiz
               </Button>
+              {generateBlockedReason && (
+                <p id="quiz-blocked-reason" className="-mt-3 text-center text-sm text-muted-foreground">
+                  {generateBlockedReason}
+                </p>
+              )}
             </div>
           )}
 

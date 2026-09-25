@@ -17,6 +17,7 @@ import {
 import { ScrollArea } from "@/components/ui/scroll-area"
 import Image from "next/image"
 import { AccountMenu } from "./account-menu"
+import { ChatListSkeleton, DocumentListSkeleton } from "./skeletons"
 import { useChat } from "@/app/contexts/chat-context"
 import { useAuth } from "@/app/contexts/auth-context"
 import { quizHref } from "@/lib/routes"
@@ -31,14 +32,14 @@ const DOCUMENT_STATE_LABEL: Record<DocumentState, string> = {
 // onNavigate avisa de que el usuario eligió un destino (el cajón móvil se cierra)
 export function Sidebar({ onNavigate }: { onNavigate?: () => void } = {}) {
   const router = useRouter()
-  const { chats, activeChatId, deleteChat, renameChat } = useChat()
+  const { chats, chatsLoaded, activeChatId, deleteChat, renameChat } = useChat()
   const { isAuthenticated, user } = useAuth()
   const [openPanel, setOpenPanel] = useState<string | null>(null)
   const [pinnedPanel, setPinnedPanel] = useState<string | null>(null)
   // Solo una fila del historial puede estar renombrándose o pidiendo confirmación
   const [editing, setEditing] = useState<{ chatId: string; mode: RowMode } | null>(null)
   const [showAccountMenu, setShowAccountMenu] = useState(false)
-  const { documents, loadFailed: documentsLoadFailed } = useDocuments(openPanel === "documents" && isAuthenticated)
+  const { documents, loadFailed: documentsLoadFailed, loaded: documentsLoaded } = useDocuments(openPanel === "documents" && isAuthenticated)
 
   // El chat nuevo se crea al enviar el primer mensaje
   const navigate = (path: string) => {
@@ -211,7 +212,9 @@ export function Sidebar({ onNavigate }: { onNavigate?: () => void } = {}) {
                 </div>
                 <ScrollArea className="flex-1 px-1.5">
                   <div className="space-y-0 pb-2">
-                    {chats.length > 0 ? (
+                    {!chatsLoaded ? (
+                      <ChatListSkeleton />
+                    ) : chats.length > 0 ? (
                       chats.map((chat) => (
                         <ChatHistoryItem
                           key={chat.id}
@@ -252,7 +255,9 @@ export function Sidebar({ onNavigate }: { onNavigate?: () => void } = {}) {
                 </div>
                 <ScrollArea className="flex-1 px-1.5">
                   <div className="space-y-0 pb-2">
-                    {documents.length > 0 ? (
+                    {!documentsLoaded ? (
+                      <DocumentListSkeleton />
+                    ) : documents.length > 0 ? (
                       documents.map((doc) => (
                         <div
                           key={doc.id}

@@ -10,6 +10,7 @@ import { lariaAPI, Document } from "@/lib/laria-api"
 import { FileCard } from "./file-card"
 import { FileViewer } from "./file-viewer"
 import { MessageContent } from "./message-content"
+import { MessagesSkeleton } from "./skeletons"
 import { useStreamingChat } from "@/hooks/use-streaming-chat"
 import { useDictation } from "@/hooks/use-dictation"
 
@@ -53,7 +54,7 @@ function mimeFromFilename(filename: string): string {
   return MIME_BY_EXTENSION[ext] ?? "application/octet-stream"
 }
 
-export function SearchBar() {
+export function SearchBar({ isOpeningChat = false }: { isOpeningChat?: boolean }) {
   const [query, setQuery] = useState("")
   const [isFocused, setIsFocused] = useState(false)
   const [isUploading, setIsUploading] = useState(false)
@@ -329,7 +330,9 @@ export function SearchBar() {
 
       {/* Chat Messages: siempre montado para que el scroll tenga a quién escuchar */}
       <div ref={messagesContainerRef} className="min-h-0 flex-1 overflow-y-auto scroll-smooth">
-        {messages.length === 0 ? (
+        {messages.length === 0 && isOpeningChat ? (
+          <MessagesSkeleton />
+        ) : messages.length === 0 ? (
           <div className="flex h-full items-center justify-center px-4">
             <h1 className="text-center text-2xl md:text-3xl font-semibold tracking-tight text-foreground">
               ¿Qué quieres aprender hoy?

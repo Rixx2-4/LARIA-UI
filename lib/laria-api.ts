@@ -224,6 +224,45 @@ export function onUnauthorized(listener: () => void): () => void {
   }
 }
 
+const FIELD_NAMES: Record<string, string> = {
+  username: "El nombre de usuario",
+  email: "El email",
+  password: "La contraseña",
+}
+
+interface ValidationIssue {
+  type?: string
+  loc?: (string | number)[]
+  msg?: string
+  ctx?: { min_length?: number; max_length?: number }
+}
+
+// Un error de validación del backend (en inglés y con jerga) contado en español
+function describeIssue(issue: ValidationIssue): string {
+  const key = String(issue.loc?.[issue.loc.length - 1] ?? "")
+  const field = FIELD_NAMES[key] ?? "Un campo"
+  switch (issue.type) {
+    case "missing":
+      return `${field} es obligatorio.`
+    case "string_too_short":
+      return `${field} debe tener al menos ${issue.ctx?.min_length} caracteres.`
+    case "string_too_long":
+      return `${field} no puede tener más de ${issue.ctx?.max_length} caracteres.`
+  }
+  if (key === "email") return "El email no es válido."
+  // Los validadores propios del backend ya escriben en español
+  return (issue.msg ?? "").replace(/^Value error, /, "") || `${field} no es válido.`
+}
+
+// El "detail" de FastAPI puede ser un texto o una lista de errores de validación
+export function describeErrorDetail(detail: unknown, fallback: string): string {
+  if (typeof detail === "string" && detail) return detail
+  if (Array.isArray(detail) && detail.length > 0) {
+    return detail.map((issue: ValidationIssue) => describeIssue(issue)).join(" ")
+  }
+  return fallback
+}
+
 // Convierte una respuesta fallida en ApiError; un 401 además cierra la sesión,
 // salvo que la petición se hiciera con un token que ya no es el actual
 async function responseError(response: Response, fallback: string, sentToken: string | null): Promise<ApiError> {
@@ -232,7 +271,7 @@ async function responseError(response: Response, fallback: string, sentToken: st
     setAuthToken(null)
     unauthorizedListeners.forEach((listener) => listener())
   }
-  return new ApiError(body.detail || `Error ${response.status}`, response.status)
+  return new ApiError(describeErrorDetail(body.detail, `Error ${response.status}`), response.status)
 }
 
 async function fetchAPI<T>(endpoint: string, options?: RequestInit): Promise<T> {
@@ -278,7 +317,7 @@ export const lariaAPI = {
         if (response.status === 401) throw new Error("Email o contraseña incorrectos")
         if (response.status === 429) throw new Error("Demasiados intentos. Espera un momento y vuelve a probar")
         const error = await response.json().catch(() => ({ detail: "Error de autenticación" }))
-        throw new Error(error.detail || "Error de autenticación")
+        throw new Error(describeErrorDetail(error.detail, "Error de autenticación"))
       }
 
       const data = await response.json()

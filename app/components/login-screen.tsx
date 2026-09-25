@@ -1,10 +1,18 @@
 "use client"
 
 import { FormEvent, useState } from "react"
-import { Loader2, ArrowRight } from "lucide-react"
+import { Loader2, ArrowRight, Check, Circle } from "lucide-react"
 import { useAuth } from "@/app/contexts/auth-context"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
+
+// Las mismas reglas que exige el backend al registrarse
+const PASSWORD_RULES = [
+  { label: "Al menos 12 caracteres", test: (p: string) => p.length >= 12 },
+  { label: "Una mayúscula", test: (p: string) => /\p{Lu}/u.test(p) },
+  { label: "Una minúscula", test: (p: string) => /\p{Ll}/u.test(p) },
+  { label: "Un número", test: (p: string) => /\d/.test(p) },
+]
 
 export function LoginScreen() {
   const { login, register } = useAuth()
@@ -18,6 +26,10 @@ export function LoginScreen() {
   const handleSubmit = async (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault()
     setError("")
+    if (!isLogin && !PASSWORD_RULES.every((rule) => rule.test(password))) {
+      setError("La contraseña no cumple todos los requisitos.")
+      return
+    }
     setIsLoading(true)
 
     try {
@@ -60,8 +72,31 @@ export function LoginScreen() {
             </label>
             <label className="flex flex-col gap-2 text-sm font-medium">
               Contraseña
-              <Input type="password" value={password} onChange={(event) => setPassword(event.target.value)} placeholder="Mínimo 8 caracteres" minLength={8} required className="h-11 rounded-xl border-0 bg-muted/50 shadow-none" />
+              <Input
+                type="password"
+                value={password}
+                onChange={(event) => setPassword(event.target.value)}
+                placeholder={isLogin ? "Tu contraseña" : "Mínimo 12 caracteres"}
+                autoComplete={isLogin ? "current-password" : "new-password"}
+                aria-describedby={isLogin ? undefined : "password-rules"}
+                required
+                className="h-11 rounded-xl border-0 bg-muted/50 shadow-none"
+              />
             </label>
+            {!isLogin && (
+              <ul id="password-rules" className="-mt-2 grid grid-cols-2 gap-x-3 gap-y-1.5 text-xs">
+                {PASSWORD_RULES.map((rule) => {
+                  const met = rule.test(password)
+                  return (
+                    <li key={rule.label} className={`flex items-center gap-1.5 transition-colors ${met ? "text-foreground" : "text-muted-foreground"}`}>
+                      {met ? <Check className="h-3.5 w-3.5 text-green-600" /> : <Circle className="h-3 w-3" />}
+                      {rule.label}
+                      <span className="sr-only">{met ? "(cumplido)" : "(pendiente)"}</span>
+                    </li>
+                  )
+                })}
+              </ul>
+            )}
             {error && <p role="alert" className="text-sm text-destructive">{error}</p>}
             <Button type="submit" disabled={isLoading} className="h-11 rounded-full transition-all duration-200">
               {isLoading ? <Loader2 className="animate-spin" data-icon="inline-start" /> : <ArrowRight data-icon="inline-end" />}

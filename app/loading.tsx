@@ -1,3 +1,5 @@
+import { AppShellSkeleton } from "./components/skeletons"
+
 export default function Loading() {
-  return null
+  return <AppShellSkeleton />
 }

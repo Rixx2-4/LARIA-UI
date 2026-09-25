@@ -20,6 +20,8 @@ export function documentState(doc: Document): DocumentState {
 export function useDocuments(enabled: boolean) {
   const [documents, setDocuments] = useState<Document[]>([])
   const [loadFailed, setLoadFailed] = useState(false)
+  // false hasta la primera respuesta, buena o mala
+  const [loaded, setLoaded] = useState(false)
 
   useEffect(() => {
     if (!enabled) return
@@ -35,6 +37,7 @@ export function useDocuments(enabled: boolean) {
         if (cancelled) return
         setDocuments(docs)
         setLoadFailed(false)
+        setLoaded(true)
         retryMs = POLL_MS
         if (docs.some((d) => documentState(d) === "processing") && polls < MAX_POLLS) {
           timer = setTimeout(load, POLL_MS)
@@ -43,6 +46,7 @@ export function useDocuments(enabled: boolean) {
         if (cancelled) return
         // Se conserva la última lista; con un 401 la sesión ya se está cerrando
         setLoadFailed(true)
+        setLoaded(true)
         if (!(error instanceof ApiError && error.status === 401) && polls < MAX_POLLS) {
           timer = setTimeout(load, retryMs)
           retryMs = Math.min(retryMs * 2, MAX_RETRY_MS)
@@ -57,5 +61,5 @@ export function useDocuments(enabled: boolean) {
     }
   }, [enabled])
 
-  return { documents, loadFailed }
+  return { documents, loadFailed, loaded }
 }
