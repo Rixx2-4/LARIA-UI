@@ -10,7 +10,8 @@ interface TutorEnvelope {
 }
 
 interface ChatMessage {
-  role: "user" | "assistant"
+  // "system": notas y avisos que no son de nadie (el backend no responde a ellas)
+  role: "user" | "assistant" | "system"
   content: string
   timestamp?: string
   metadata?: {
@@ -364,7 +365,9 @@ export const lariaAPI = {
         method: "DELETE",
       }),
 
-    addMessage: (chatId: string, role: "user" | "assistant", content: string) =>
+    // Ojo: con role "user" el backend ejecuta un turno completo del tutor;
+    // para dejar solo una nota en el chat, usar "system"
+    addMessage: (chatId: string, role: "user" | "assistant" | "system", content: string) =>
       fetchAPI<Chat>(`/chats/${segment(chatId)}/messages`, {
         method: "POST",
         body: JSON.stringify({ role, content }),

@@ -187,7 +187,9 @@ export function SearchBar({ isOpeningChat = false }: { isOpeningChat?: boolean }
         await lariaAPI.chats.update(currentChatId, { document_id: doc.id })
       }
 
-      await addMessage(currentChatId, "user", `📎 Subí el archivo: ${file.name}`)
+      // Una nota, no una pregunta: con "user" el backend lanzaría un turno del tutor
+      // (llamada a la IA, respuesta fantasma y el perfil del alumno alterado)
+      await addMessage(currentChatId, "system", `📎 Subí el archivo: ${file.name}`)
 
       if (isNewChat) {
         generateTitle(currentChatId, [{ role: "user", content: `Archivo: ${file.name}` }])
@@ -321,6 +323,14 @@ export function SearchBar({ isOpeningChat = false }: { isOpeningChat?: boolean }
             {messages.map((msg, index) => {
               // La respuesta que se está escribiendo ahora mismo
               const isLive = isStreaming && index === messages.length - 1 && msg.role === "assistant"
+              // Notas del sistema (archivo subido, avisos): una línea centrada, no una burbuja
+              if (msg.role === "system") {
+                return (
+                  <p key={`${index}-system`} className="text-center text-xs text-muted-foreground">
+                    {msg.content}
+                  </p>
+                )
+              }
               return (
                 <div
                   key={`${index}-${msg.role}`}

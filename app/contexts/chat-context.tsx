@@ -24,7 +24,7 @@ interface ChatContextType {
   selectChat: (chatId: string) => Promise<void>
   deleteChat: (chatId: string) => Promise<void>
   renameChat: (chatId: string, title: string) => Promise<void>
-  addMessage: (chatId: string, role: "user" | "assistant", content: string) => Promise<void>
+  addMessage: (chatId: string, role: "user" | "assistant" | "system", content: string) => Promise<void>
   setMessages: (msgs: ChatMessage[]) => void
   clearActiveChat: () => void
   generateTitle: (chatId: string, messages: { role: string; content: string }[]) => Promise<void>
@@ -126,7 +126,7 @@ export function ChatProvider({ children }: { children: ReactNode }) {
     await loadChats()
   }, [activeChatId, loadChats])
 
-  const addMessage = useCallback(async (chatId: string, role: "user" | "assistant", content: string) => {
+  const addMessage = useCallback(async (chatId: string, role: "user" | "assistant" | "system", content: string) => {
     const chat = await lariaAPI.chats.addMessage(chatId, role, content)
     setMessages(chat.messages || [])
   }, [])
