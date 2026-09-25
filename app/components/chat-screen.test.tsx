@@ -17,7 +17,7 @@ const nav = vi.hoisted(() => ({
 vi.mock("next/navigation", () => ({
   useParams: () => nav.params,
   useRouter: () => ({ replace: nav.replace, push: nav.push }),
-  usePathname: () => (nav.params.id ? `/chat/${nav.params.id}` : "/"),
+  usePathname: () => (nav.params.id ? `/chat/${nav.params.id}` : "/chat"),
 }))
 
 const json = (body: unknown, status = 200) => new Response(JSON.stringify(body), { status })
@@ -93,7 +93,7 @@ describe("ChatScreen", () => {
     expect(screen.queryByRole("status", { name: "Cargando la conversación" })).toBeNull()
   })
 
-  it("en / el primer mensaje crea el chat, lleva a /chat/<id> y la respuesta no se corta", async () => {
+  it("en /chat el primer mensaje crea el chat, lleva a /chat/<id> y la respuesta no se corta", async () => {
     const sse = controllableSSE()
     vi.stubGlobal("fetch", async (url: string, init?: RequestInit) => {
       const method = init?.method ?? "GET"
@@ -160,7 +160,7 @@ describe("ChatScreen", () => {
 
     expect(await screen.findByText("Este chat no existe")).toBeTruthy()
     fireEvent.click(screen.getByRole("button", { name: "Empezar un chat nuevo" }))
-    expect(nav.push).toHaveBeenCalledWith("/")
+    expect(nav.push).toHaveBeenCalledWith("/chat")
   })
 
   it("al volver a un chat desde otra página, lo recarga del servidor", async () => {

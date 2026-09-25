@@ -46,4 +46,16 @@ describe("LoginScreen", () => {
     expect(password.getAttribute("minlength")).toBeNull()
     expect(screen.queryByText("Al menos 12 caracteres")).toBeNull()
   })
+
+  it("desde «Crear cuenta» de la presentación (?modo=registro) abre directamente el registro", () => {
+    window.history.replaceState(null, "", "/chat?modo=registro")
+    render(
+      <AuthProvider>
+        <LoginScreen />
+      </AuthProvider>,
+    )
+
+    expect(screen.getByText("Crea tu cuenta")).toBeTruthy()
+    window.history.replaceState(null, "", "/")
+  })
 })

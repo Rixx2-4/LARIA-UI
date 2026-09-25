@@ -16,7 +16,11 @@ const PASSWORD_RULES = [
 
 export function LoginScreen() {
   const { login, register } = useAuth()
-  const [isLogin, setIsLogin] = useState(true)
+  // "Crear cuenta" en la página de presentación llega con ?modo=registro.
+  // Esta pantalla solo se pinta en el navegador (antes va el skeleton de sesión)
+  const [isLogin, setIsLogin] = useState(
+    () => typeof window === "undefined" || new URLSearchParams(window.location.search).get("modo") !== "registro",
+  )
   const [username, setUsername] = useState("")
   const [email, setEmail] = useState("")
   const [password, setPassword] = useState("")

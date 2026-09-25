@@ -5,7 +5,8 @@ export function preferReducedMotion() {
   vi.spyOn(window, "matchMedia").mockImplementation(
     (query: string) =>
       ({
-        matches: query.includes("prefers-reduced-motion: reduce"),
+        // "(prefers-reduced-motion)" a secas también coincide, como en los navegadores
+        matches: query.includes("prefers-reduced-motion") && !query.includes("no-preference"),
         media: query,
         onchange: null,
         addEventListener() {},

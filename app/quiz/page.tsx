@@ -8,7 +8,7 @@ import { AppShell } from "../components/app-shell"
 import { RequireAuth } from "../components/require-auth"
 import { SelectSkeleton } from "../components/skeletons"
 import { useChat } from "@/app/contexts/chat-context"
-import { quizHref } from "@/lib/routes"
+import { NEW_CHAT_HREF, chatHref, quizHref } from "@/lib/routes"
 import { lariaAPI, QuizQuestion, QuizAttemptQuestion } from "@/lib/laria-api"
 
 // "B. Cloroplasto" en lugar de solo "B" cuando se conoce el texto de la opción
@@ -404,7 +404,7 @@ function Quiz({ chatId }: { chatId: string | null }) {
                   <RotateCcw className="h-4 w-4 mr-2" />
                   Nuevo Quiz
                 </Button>
-                <Button onClick={() => router.push(chatId ? `/chat/${chatId}` : "/")} className="flex-1">
+                <Button onClick={() => router.push(chatId ? chatHref(chatId) : NEW_CHAT_HREF)} className="flex-1">
                   Volver al Chat
                 </Button>
               </div>

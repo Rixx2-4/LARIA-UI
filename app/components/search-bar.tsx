@@ -12,6 +12,7 @@ import { FileViewer } from "./file-viewer"
 import { MessageContent } from "./message-content"
 import { MessagesSkeleton } from "./skeletons"
 import { isTextMime, mimeFromFilename } from "@/lib/file-types"
+import { chatHref } from "@/lib/routes"
 import { useStreamingChat } from "@/hooks/use-streaming-chat"
 import { useDictation } from "@/hooks/use-dictation"
 
@@ -140,7 +141,7 @@ export function SearchBar({ isOpeningChat = false }: { isOpeningChat?: boolean }
   const ensureChat = async (documentId?: string) => {
     if (chatId) return { id: chatId, isNew: false }
     const chat = await ctxCreateChat(undefined, documentId)
-    router.replace(`/chat/${chat.id}`)
+    router.replace(chatHref(chat.id))
     return { id: chat.id, isNew: true }
   }
 

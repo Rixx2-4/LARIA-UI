@@ -5,8 +5,9 @@ import { AppShell } from "./app-shell"
 import { SearchBar } from "./search-bar"
 import { useChat } from "@/app/contexts/chat-context"
 import { Button } from "@/components/ui/button"
+import { NEW_CHAT_HREF } from "@/lib/routes"
 
-// La URL manda: "/" es un chat nuevo y "/chat/[id]" abre ese chat
+// La URL manda: "/chat" es un chat nuevo y "/chat/[id]" abre ese chat
 export function ChatScreen() {
   const router = useRouter()
   const { id: urlChatId } = useParams<{ id?: string }>()
@@ -31,7 +32,7 @@ export function ChatScreen() {
       {chatError === "not-found" ? (
         <div className="flex h-full flex-col items-center justify-center gap-4 px-4 text-center">
           <p className="text-muted-foreground">Este chat no existe</p>
-          <Button variant="outline" onClick={() => router.push("/")}>
+          <Button variant="outline" onClick={() => router.push(NEW_CHAT_HREF)}>
             Empezar un chat nuevo
           </Button>
         </div>

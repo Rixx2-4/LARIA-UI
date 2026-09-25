@@ -7,7 +7,7 @@ import { setAuthToken } from "@/lib/laria-api"
 
 vi.mock("next/navigation", () => ({
   useRouter: () => ({ push: vi.fn(), replace: vi.fn() }),
-  usePathname: () => "/",
+  usePathname: () => "/chat",
   useParams: () => ({}),
 }))
 

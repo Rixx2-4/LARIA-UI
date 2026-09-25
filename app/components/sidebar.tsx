@@ -20,7 +20,7 @@ import { AccountMenu } from "./account-menu"
 import { ChatListSkeleton, DocumentListSkeleton } from "./skeletons"
 import { useChat } from "@/app/contexts/chat-context"
 import { useAuth } from "@/app/contexts/auth-context"
-import { quizHref } from "@/lib/routes"
+import { NEW_CHAT_HREF, chatHref, quizHref } from "@/lib/routes"
 import { useDocuments, documentState, type DocumentState } from "@/hooks/use-documents"
 
 const DOCUMENT_STATE_LABEL: Record<DocumentState, string> = {
@@ -47,14 +47,14 @@ export function Sidebar({ onNavigate }: { onNavigate?: () => void } = {}) {
     onNavigate?.()
   }
 
-  const handleNewChat = () => navigate("/")
+  const handleNewChat = () => navigate(NEW_CHAT_HREF)
 
-  const handleSelectChat = (chatId: string) => navigate(`/chat/${chatId}`)
+  const handleSelectChat = (chatId: string) => navigate(chatHref(chatId))
 
   const handleDeleteChat = async (chatId: string) => {
     try {
       await deleteChat(chatId)
-      if (chatId === activeChatId) router.push("/")
+      if (chatId === activeChatId) router.push(NEW_CHAT_HREF)
     } catch {
       toast.error("No se pudo borrar el chat")
     }
