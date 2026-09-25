@@ -1,7 +1,8 @@
+import { useState } from "react"
 import { describe, it, expect, vi, afterEach, beforeEach } from "vitest"
 import { render, screen, cleanup, fireEvent, waitFor, act } from "@testing-library/react"
 import { AuthProvider } from "@/app/contexts/auth-context"
-import { ChatProvider } from "@/app/contexts/chat-context"
+import { ChatProvider, useChat } from "@/app/contexts/chat-context"
 import { ChatScreen } from "./chat-screen"
 import { setAuthToken } from "@/lib/laria-api"
 import { controllableSSE, doneEvent, tokenEvent } from "@/test/sse"
@@ -205,6 +206,51 @@ describe("ChatScreen", () => {
       await screen.findByText("Una ecuación es una igualdad con una incógnita.")
       expect(screen.queryByLabelText("Tema de la nivelación")).toBeNull()
     })
+  })
+
+  it("un chat con un primer mensaje en cola (la clase tras nivelarse) lo envía solo, tras cargar el chat", async () => {
+    const sse = controllableSSE()
+    const order: string[] = []
+    let sent: { role: string; content: string } | null = null
+    vi.stubGlobal("fetch", async (url: string, init?: RequestInit) => {
+      if (url.endsWith("/users/me")) return json({ id: "u1", username: "ana", email: "a@a.a" })
+      if (url.endsWith("/chats/")) return json({ chats: [{ id: "c9", title: "Clase: ecuaciones lineales" }] })
+      if (url.endsWith("/chats/c9")) {
+        order.push("cargar chat")
+        return json({ id: "c9", title: "Clase: ecuaciones lineales", messages: [] })
+      }
+      if (url.endsWith("/chats/c9/stream")) {
+        order.push("enviar")
+        sent = JSON.parse(String(init?.body))
+        return sse.fetchMock(url, init)
+      }
+      throw new Error(`Petición inesperada: ${url}`)
+    })
+    // Lo que hace la nivelación antes de abrir el chat
+    function Queue() {
+      const { queueFirstMessage } = useChat()
+      const [queued, setQueued] = useState(false)
+      if (!queued) {
+        queueFirstMessage("c9", "Empecemos la clase de ecuaciones lineales.")
+        setQueued(true)
+      }
+      return queued ? <ChatScreen /> : null
+    }
+    nav.params = { id: "c9" }
+    render(
+      <AuthProvider>
+        <ChatProvider>
+          <Queue />
+        </ChatProvider>
+      </AuthProvider>,
+    )
+
+    expect(await screen.findByText("Empecemos la clase de ecuaciones lineales.")).toBeTruthy()
+    sse.push(tokenEvent("Una ecuación lineal"))
+    expect(await screen.findByText("Una ecuación lineal")).toBeTruthy()
+    expect(sent).toEqual({ role: "user", content: "Empecemos la clase de ecuaciones lineales." })
+    // Primero se carga el chat y después se envía: si no, la carga pisaría la respuesta
+    expect(order).toEqual(["cargar chat", "enviar"])
   })
 
   it("un chat que no existe lo dice y ofrece empezar uno nuevo", async () => {

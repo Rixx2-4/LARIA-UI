@@ -53,7 +53,17 @@ export function SearchBar({ isOpeningChat = false }: { isOpeningChat?: boolean }
   const isUserScrolledRef = useRef(false)
 
   const router = useRouter()
-  const { messages, setMessages, addMessage, activeChatId, activeDocumentId, createChat: ctxCreateChat, generateTitle } = useChat()
+  const {
+    messages,
+    setMessages,
+    addMessage,
+    activeChatId,
+    activeDocumentId,
+    createChat: ctxCreateChat,
+    generateTitle,
+    takeFirstMessage,
+    loadedChatId,
+  } = useChat()
   const chatId = activeChatId
 
   const {
@@ -236,8 +246,9 @@ export function SearchBar({ isOpeningChat = false }: { isOpeningChat?: boolean }
   })
   const shownQuery = interimText ? (query.trim() ? `${query.trimEnd()} ${interimText}` : interimText) : query
 
-  const handleSend = async () => {
-    const userMessage = shownQuery.trim()
+  const handleSend = () => sendMessage(shownQuery.trim())
+
+  const sendMessage = async (userMessage: string) => {
     if (!userMessage || isStreaming) return
 
     setQuery("")
@@ -260,6 +271,19 @@ export function SearchBar({ isOpeningChat = false }: { isOpeningChat?: boolean }
       toast.error("No se pudo enviar el mensaje")
     }
   }
+
+  // Un chat recién creado con un primer mensaje en cola (la clase tras nivelarse)
+  // lo envía en cuanto sus mensajes llegan del servidor: antes, la recarga del
+  // chat al abrirse pisaría la respuesta que se está escribiendo
+  const sendMessageRef = useRef(sendMessage)
+  useEffect(() => {
+    sendMessageRef.current = sendMessage
+  })
+  useEffect(() => {
+    if (!chatId || loadedChatId !== chatId) return
+    const text = takeFirstMessage(chatId)
+    if (text) sendMessageRef.current(text)
+  }, [chatId, loadedChatId, takeFirstMessage])
 
   const copyToClipboard = async (text: string) => {
     try {

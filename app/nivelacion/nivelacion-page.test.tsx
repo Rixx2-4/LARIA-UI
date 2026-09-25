@@ -1,14 +1,14 @@
 import { describe, it, expect, vi, afterEach, beforeEach } from "vitest"
-import { render, screen, cleanup, fireEvent } from "@testing-library/react"
+import { render, screen, cleanup, fireEvent, waitFor } from "@testing-library/react"
 import { AuthProvider } from "@/app/contexts/auth-context"
 import { ChatProvider } from "@/app/contexts/chat-context"
 import PlacementPage from "./page"
 import { setAuthToken, type PlacementResult } from "@/lib/laria-api"
 
-const nav = vi.hoisted(() => ({ search: "" }))
+const nav = vi.hoisted(() => ({ search: "", push: vi.fn() }))
 vi.mock("next/navigation", () => ({
   useSearchParams: () => new URLSearchParams(nav.search),
-  useRouter: () => ({ replace: vi.fn(), push: vi.fn() }),
+  useRouter: () => ({ replace: vi.fn(), push: nav.push }),
   usePathname: () => "/nivelacion",
   useParams: () => ({}),
 }))
@@ -37,10 +37,15 @@ function round(id: string, count: number) {
 function stubServer(verdicts: PlacementResult[]) {
   const diagnostics: string[] = []
   const attempts: Record<string, string>[] = []
+  const createdChats: string[] = []
   let served = 0
   vi.stubGlobal("fetch", async (url: string, init?: RequestInit) => {
     const method = init?.method ?? "GET"
     if (url.endsWith("/users/me")) return json({ id: "u1", username: "ana", email: "a@a.a" })
+    if (url.endsWith("/chats/") && method === "POST") {
+      createdChats.push(JSON.parse(String(init?.body)).title)
+      return json({ id: "c9", title: "Clase" }, 201)
+    }
     if (url.endsWith("/chats/")) return json({ chats: [] })
     if (url.endsWith("/quizzes/diagnostic") && method === "POST") {
       diagnostics.push(JSON.parse(String(init?.body)).topic)
@@ -62,7 +67,7 @@ function stubServer(verdicts: PlacementResult[]) {
     }
     throw new Error(`Petición inesperada: ${method} ${url}`)
   })
-  return { diagnostics, attempts }
+  return { diagnostics, attempts, createdChats }
 }
 
 // Responde todas las preguntas de la ronda con la misma opción y la envía.
@@ -97,7 +102,11 @@ const base = (passed: boolean, level: PlacementResult["level"]): PlacementResult
   topic: "ecuaciones lineales", round: "base", level, passed, has_next_round: passed,
 })
 
-beforeEach(() => setAuthToken("token"))
+beforeEach(() => {
+  setAuthToken("token")
+  nav.push.mockReset()
+  localStorage.clear()
+})
 afterEach(() => {
   cleanup()
   setAuthToken(null)
@@ -118,19 +127,23 @@ describe("Nivelación", () => {
     await answerRound("C")
 
     expect(await screen.findByText("La base de ecuaciones lineales, superada")).toBeTruthy()
+    expect(screen.getByText("Acertaste 6 de 6")).toBeTruthy()
     fireEvent.click(screen.getByRole("button", { name: "Seguir" }))
     await answerRound("C")
 
-    expect(await screen.findByText("Vas por delante")).toBeTruthy()
+    // Después de la última ronda: pasos reales y la clase en un chat nuevo
+    expect(await screen.findByText("Preparando tu clase de ecuaciones lineales")).toBeTruthy()
+    expect(await screen.findByText("Ajustando la clase a tu nivel (avanzado)")).toBeTruthy()
+    await waitFor(() => expect(nav.push).toHaveBeenCalledWith("/chat/c9"))
+    expect(server.createdChats).toEqual(["Clase: ecuaciones lineales"])
     // La segunda ronda se pide con el mismo tema (el canónico) y sin decir cuál toca
     expect(server.diagnostics).toEqual(["ecuaciones", "ecuaciones lineales"])
     // Respuestas por índice, empezando en 0
     expect(Object.keys(server.attempts[0])).toEqual(["0", "1", "2", "3", "4", "5"])
     expect(Object.keys(server.attempts[1])).toHaveLength(8)
-    expect(screen.getByRole("link", { name: "Volver al chat" }).getAttribute("href")).toBe("/chat/c1")
   })
 
-  it("si no supera la base, termina en básico sin tono de suspenso ni otra ronda", async () => {
+  it("si no supera la base, empieza la clase en básico, sin tono de suspenso ni otra ronda", async () => {
     const server = stubServer([base(false, "basico")])
     renderPage("tema=ecuaciones")
 
@@ -138,20 +151,23 @@ describe("Nivelación", () => {
     await answerRound("A")
 
     expect(await screen.findByText("Empezamos por lo básico")).toBeTruthy()
+    expect(screen.getByText("Ajustando la clase a tu nivel (básico)")).toBeTruthy()
     expect(screen.queryByText(/suspend|reprob/i)).toBeNull()
     expect(screen.queryByRole("button", { name: "Seguir" })).toBeNull()
+    await waitFor(() => expect(nav.push).toHaveBeenCalledWith("/chat/c9"))
     expect(server.diagnostics).toHaveLength(1)
   })
 
-  it("«Lo dejo aquí» tras la base se queda con el nivel que ya dio el backend", async () => {
+  it("«Lo dejo aquí» tras la base empieza la clase con el nivel que ya dio el backend", async () => {
     const server = stubServer([base(true, "intermedio")])
     renderPage("tema=ecuaciones")
 
     fireEvent.click(await screen.findByRole("button", { name: "Empezar" }))
     await answerRound("C")
-    fireEvent.click(await screen.findByRole("button", { name: "Lo dejo aquí" }))
+    fireEvent.click(await screen.findByRole("button", { name: "Lo dejo aquí y empiezo la clase" }))
 
     expect(await screen.findByText("Tienes la base")).toBeTruthy()
+    await waitFor(() => expect(nav.push).toHaveBeenCalledWith("/chat/c9"))
     expect(server.diagnostics).toHaveLength(1)
   })
 
