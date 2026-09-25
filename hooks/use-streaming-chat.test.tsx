@@ -3,7 +3,7 @@ import { useState } from "react"
 import { renderHook, act, waitFor } from "@testing-library/react"
 import { useStreamingChat } from "./use-streaming-chat"
 import type { ChatMessage } from "@/lib/laria-api"
-import { controllableSSE, tokenEvent } from "@/test/sse"
+import { controllableSSE, doneEvent, tokenEvent } from "@/test/sse"
 import { preferReducedMotion } from "@/test/media"
 
 afterEach(() => {
@@ -124,7 +124,7 @@ describe("useStreamingChat", () => {
       result.current.startStreaming("¿Qué es la fotosíntesis?")
     })
     sse.push(tokenEvent(answer))
-    sse.push("data: [DONE]\n\n")
+    sse.push(doneEvent())
     sse.close()
 
     await waitFor(() => expect(result.current.isDone).toBe(true))
@@ -159,9 +159,9 @@ describe("useStreamingChat", () => {
       result.current.startStreaming("primera")
     })
     first.push(tokenEvent("Uno"))
-    first.push("data: [DONE]\n\n")
+    first.push(doneEvent())
     first.close()
-    await sleep(20) // ya llegó el [DONE], el vaciado final está pendiente
+    await sleep(20) // ya llegó el "done", el vaciado final está pendiente
     act(() => result.current.cancelStreaming())
 
     act(() => {

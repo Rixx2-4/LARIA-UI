@@ -57,6 +57,15 @@ afterEach(() => {
 })
 
 describe("Sidebar", () => {
+  it("cada chat del historial es un botón: se puede abrir con el teclado", async () => {
+    stubServer()
+    await openHistory()
+
+    const row = screen.getByRole("button", { name: "Átomos" })
+    row.focus()
+    expect(document.activeElement).toBe(row)
+  })
+
   it("mientras cargan los chats no dice que no hay ninguno", async () => {
     let answer: (response: Response) => void = () => {}
     vi.stubGlobal("fetch", async (url: string) => {

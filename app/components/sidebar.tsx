@@ -332,6 +332,7 @@ function ChatHistoryItem({ title, isActive, mode, onModeChange, onSelect, onRena
         <input
           autoFocus
           aria-label="Nuevo título"
+          maxLength={200}
           value={draft}
           onChange={(e) => setDraft(e.target.value)}
           onBlur={() => finishRename(true)}
@@ -372,29 +373,29 @@ function ChatHistoryItem({ title, isActive, mode, onModeChange, onSelect, onRena
 
   return (
     <div
-      onClick={onSelect}
-      className={`group relative flex w-full cursor-pointer items-center justify-between rounded px-2 py-1.5 text-left text-[13px] leading-tight text-foreground transition-all duration-200 ${
+      className={`group relative flex w-full items-center justify-between rounded text-[13px] leading-tight text-foreground transition-all duration-200 ${
         isActive ? "bg-accent" : "hover:bg-accent"
       }`}
     >
-      <span className="block flex-1 truncate pr-2">{title}</span>
-      <div className="flex shrink-0 transition-opacity md:opacity-0 md:group-hover:opacity-100 md:focus-within:opacity-100">
+      {/* Un botón de verdad: se abre también con el teclado */}
+      <button
+        onClick={onSelect}
+        aria-current={isActive ? "page" : undefined}
+        className="min-w-0 flex-1 truncate rounded px-2 py-1.5 pr-2 text-left"
+      >
+        {title}
+      </button>
+      <div className="flex shrink-0 pr-1 transition-opacity md:opacity-0 md:group-hover:opacity-100 md:group-focus-within:opacity-100">
         <button
           aria-label={`Renombrar chat «${title}»`}
-          onClick={(e) => {
-            e.stopPropagation()
-            startRename()
-          }}
+          onClick={startRename}
           className="p-1 hover:text-foreground"
         >
           <Pencil className="h-3 w-3" />
         </button>
         <button
           aria-label={`Borrar chat «${title}»`}
-          onClick={(e) => {
-            e.stopPropagation()
-            onModeChange("confirm-delete")
-          }}
+          onClick={() => onModeChange("confirm-delete")}
           className="p-1 hover:text-destructive"
         >
           <Trash2 className="h-3 w-3" />

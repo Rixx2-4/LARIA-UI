@@ -4,7 +4,7 @@ import { AuthProvider } from "@/app/contexts/auth-context"
 import { ChatProvider } from "@/app/contexts/chat-context"
 import { ChatScreen } from "./chat-screen"
 import { setAuthToken } from "@/lib/laria-api"
-import { controllableSSE, tokenEvent } from "@/test/sse"
+import { controllableSSE, doneEvent, tokenEvent } from "@/test/sse"
 import { FakeSpeechRecognition } from "@/test/speech"
 import { preferReducedMotion } from "@/test/media"
 
@@ -147,7 +147,7 @@ describe("ChatScreen", () => {
     expect(await screen.findByText("Es un proceso")).toBeTruthy()
     expect(live()).toBe("LARIA está respondiendo…")
 
-    sse.push("data: [DONE]\n\n")
+    sse.push(doneEvent())
     await waitFor(() => expect(live()).toBe("Respuesta de LARIA lista."))
   })
 
@@ -241,6 +241,35 @@ describe("ChatScreen", () => {
     expect(screen.getByText("tema1.txt")).toBeTruthy()
   })
 
+  it("la nota de archivo subido va como mensaje de sistema: no dispara un turno del tutor", async () => {
+    const sent: { role: string; content: string }[] = []
+    vi.stubGlobal("fetch", async (url: string, init?: RequestInit) => {
+      const method = init?.method ?? "GET"
+      if (url.endsWith("/users/me")) return json({ id: "u1", username: "ana", email: "a@a.a" })
+      if (url.endsWith("/chats/")) return json({ chats: [] })
+      if (url.endsWith("/documents/upload"))
+        return json({ id: "d1", owner_id: "u1", filename: "tema1.txt", subject: "", status: "processing", uploaded_at: "", has_analysis: false, error_message: null })
+      if (method === "PUT") return json({ id: "c1", title: "t", messages: [] })
+      if (url.endsWith("/messages")) {
+        const body = JSON.parse(String(init?.body))
+        sent.push(body)
+        return json({ id: "c1", title: "t", messages: [{ role: "user", content: "Hola" }, body] })
+      }
+      if (url.endsWith("/chats/c1")) return json({ id: "c1", title: "t", messages: [{ role: "user", content: "Hola" }] })
+      throw new Error(`Petición inesperada: ${method} ${url}`)
+    })
+    const { container } = renderAt("c1")
+    await screen.findByText("Hola")
+
+    const fileInput = container.querySelector<HTMLInputElement>('input[type="file"]')!
+    fireEvent.change(fileInput, { target: { files: [new File(["apuntes"], "tema1.txt", { type: "text/plain" })] } })
+
+    const note = await screen.findByText("📎 Subí el archivo: tema1.txt")
+    expect(sent).toEqual([{ role: "system", content: "📎 Subí el archivo: tema1.txt" }])
+    // Una línea de aviso, no una burbuja del tutor
+    expect(note.tagName).toBe("P")
+  })
+
   it("al abrir un chat con documento vinculado (p. ej. tras recargar), muestra su archivo", async () => {
     vi.stubGlobal("fetch", async (url: string) => {
       if (url.endsWith("/users/me")) return json({ id: "u1", username: "ana", email: "a@a.a" })
@@ -326,7 +355,7 @@ describe("ChatScreen", () => {
         if (url.endsWith("/chats/") && method === "POST") return json({ id: "c2", title: "Nuevo" })
         if (url.endsWith("/stream")) {
           sent.push(JSON.parse(String(init?.body)).content)
-          return new Response("data: [DONE]\n\n", { status: 200 })
+          return new Response(doneEvent(), { status: 200 })
         }
         return json({ id: "c2", title: "t", messages: [] })
       })
@@ -356,7 +385,7 @@ describe("ChatScreen", () => {
         if (url.endsWith("/users/me")) return json({ id: "u1", username: "ana", email: "a@a.a" })
         if (url.endsWith("/chats/") && method === "GET") return json({ chats: [] })
         if (url.endsWith("/chats/") && method === "POST") return json({ id: "c2", title: "Nuevo" })
-        if (url.endsWith("/stream")) return new Response("data: [DONE]\n\n", { status: 200 })
+        if (url.endsWith("/stream")) return new Response(doneEvent(), { status: 200 })
         return json({ id: "c2", title: "t", messages: [] })
       })
       renderAt()
