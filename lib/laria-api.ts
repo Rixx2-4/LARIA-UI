@@ -163,6 +163,8 @@ interface QuizResponse {
   document_id: string | null
   // El tema nivelado, con el nombre canónico del backend ("ecuaciones" → "ecuaciones lineales")
   topic?: string | null
+  // El tema como lo escribió el estudiante, con tildes, para mostrarlo (aún no en Render)
+  topic_label?: string | null
   questions: QuizQuestion[]
   total_points: number
   created_at: string
@@ -181,6 +183,8 @@ type PlacementLevel = "basico" | "intermedio" | "avanzado"
 // Veredicto de una ronda de nivelación
 interface PlacementResult {
   topic: string
+  // Para mostrar; `topic` es la clave canónica (aún no en Render)
+  topic_label?: string | null
   round: "base" | "avanzada"
   level: PlacementLevel
   passed: boolean

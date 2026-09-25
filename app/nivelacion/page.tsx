@@ -2,18 +2,22 @@
 
 import { Suspense, useState, type FormEvent } from "react"
 import Link from "next/link"
-import { useSearchParams } from "next/navigation"
-import { Loader2 } from "lucide-react"
+import { useRouter, useSearchParams } from "next/navigation"
+import { Check, Loader2 } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { AppShell } from "../components/app-shell"
 import { RequireAuth } from "../components/require-auth"
 import { QuestionStep, ResultsList, toResults, type QuizResult } from "../quiz/quiz-parts"
 import { lariaAPI, type PlacementLevel, type PlacementResult, type QuizQuestion } from "@/lib/laria-api"
-import { NEW_CHAT_HREF, chatHref, placementHref } from "@/lib/routes"
+import { NEW_CHAT_HREF, chatHref } from "@/lib/routes"
+import { markPlacementOffered } from "@/lib/placement"
+import { useChat } from "../contexts/chat-context"
 
 // Nivelación por rondas: una base de 6 preguntas y, si se supera, una avanzada de 8.
 // El cliente no lleva la cuenta de la ronda: pide siempre la siguiente con el mismo
 // tema y el backend sabe cuál toca. El veredicto no es una nota: es el punto de partida.
+// Al terminar se prepara la primera clase: un chat nuevo en el que el tutor empieza
+// a explicar el tema. Cada paso de la animación corresponde a algo que ocurre de verdad.
 
 const LEVEL_NAME: Record<PlacementLevel, string> = {
   basico: "básico",
@@ -21,22 +25,27 @@ const LEVEL_NAME: Record<PlacementLevel, string> = {
   avanzado: "avanzado",
 }
 
-const LEVEL_COPY: Record<PlacementLevel, { title: string; text: (topic: string) => string }> = {
-  basico: {
-    title: "Empezamos por lo básico",
-    text: (topic) => `Es un buen sitio para arrancar. LARIA tendrá en cuenta tu nivel cuando le preguntes por ${topic}.`,
-  },
-  intermedio: {
-    title: "Tienes la base",
-    text: (topic) => `LARIA tendrá en cuenta que ya dominas lo fundamental de ${topic}.`,
-  },
-  avanzado: {
-    title: "Vas por delante",
-    text: (topic) => `LARIA tendrá en cuenta que ya manejas ${topic} a buen nivel.`,
-  },
+// Cómo se nombra cada punto de partida: sin tono de aprobado o suspenso
+const LEVEL_COPY: Record<PlacementLevel, { title: string }> = {
+  basico: { title: "Empezamos por lo básico" },
+  intermedio: { title: "Tienes la base" },
+  avanzado: { title: "Vas por delante" },
 }
 
-type Phase = "intro" | "loading" | "questions" | "next-offer" | "final"
+type Phase = "intro" | "loading" | "questions" | "preparing"
+type StepStatus = "pending" | "active" | "done"
+
+interface Preparation {
+  review: StepStatus
+  // Superó la base: se pregunta si sigue con la avanzada antes de preparar la clase
+  offerNext: boolean
+  level: StepStatus
+  lesson: StepStatus
+}
+
+const pause = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms))
+// Lo justo para que cada paso se pueda leer; el ritmo lo marca el trabajo real
+const STEP_PAUSE_MS = 600
 
 export default function PlacementPage() {
   return (
@@ -66,6 +75,9 @@ function Placement({ initialTopic, chatId }: { initialTopic: string; chatId: str
   const [results, setResults] = useState<QuizResult[]>([])
   const [placement, setPlacement] = useState<PlacementResult | null>(null)
   const [error, setError] = useState<string | null>(null)
+  const [prep, setPrep] = useState<Preparation>({ review: "pending", offerNext: false, level: "pending", lesson: "pending" })
+  const router = useRouter()
+  const { createChat, queueFirstMessage } = useChat()
 
   const backHref = chatId ? chatHref(chatId) : NEW_CHAT_HREF
 
@@ -89,20 +101,52 @@ function Placement({ initialTopic, chatId }: { initialTopic: string; chatId: str
     }
   }
 
+  // Envía la ronda; si no queda otra, sigue sola hasta la clase
   const submit = async () => {
     if (!quizId) return
     setIsSubmitting(true)
     setError(null)
+    setPhase("preparing")
+    setPrep({ review: "active", offerNext: false, level: "pending", lesson: "pending" })
     try {
       const data = await lariaAPI.quizzes.submitAttempt(quizId, answers)
+      const verdict = data.placement ?? null
+      const shownTopic = verdict?.topic_label || verdict?.topic || topic
       setResults(toResults(questions, data.questions))
-      setPlacement(data.placement ?? null)
-      if (data.placement?.topic) setTopic(data.placement.topic)
-      setPhase(data.placement?.has_next_round ? "next-offer" : "final")
+      setPlacement(verdict)
+      setTopic(shownTopic)
+      setPrep((p) => ({ ...p, review: "done", offerNext: !!verdict?.has_next_round }))
+      if (!verdict?.has_next_round) await prepareLesson(verdict, shownTopic)
     } catch (err) {
       setError(err instanceof Error ? err.message : "No se pudieron enviar tus respuestas")
+      setPhase("questions")
     } finally {
       setIsSubmitting(false)
+    }
+  }
+
+  // Ajusta al nivel y crea el chat de la clase; el primer mensaje lo envía el chat al abrirse
+  const prepareLesson = async (verdict: PlacementResult | null, lessonTopic: string) => {
+    setError(null)
+    setPrep((p) => ({ ...p, offerNext: false, level: "active", lesson: "pending" }))
+    await pause(STEP_PAUSE_MS)
+    setPrep((p) => ({ ...p, level: "done", lesson: "active" }))
+    try {
+      const chat = await createChat(`Clase: ${lessonTopic}`)
+      // Este chat ya viene de una nivelación: no se vuelve a ofrecer
+      markPlacementOffered(chat.id)
+      queueFirstMessage(
+        chat.id,
+        verdict
+          ? `Empecemos la clase de ${lessonTopic}. En la nivelación quedé en nivel ${LEVEL_NAME[verdict.level]}.`
+          : `Empecemos la clase de ${lessonTopic}.`,
+      )
+      setPrep((p) => ({ ...p, lesson: "done" }))
+      await pause(STEP_PAUSE_MS / 2)
+      router.push(chatHref(chat.id))
+    } catch {
+      setError("No se pudo preparar la clase. Prueba de nuevo.")
+      setPrep((p) => ({ ...p, lesson: "pending" }))
     }
   }
 
@@ -142,53 +186,20 @@ function Placement({ initialTopic, chatId }: { initialTopic: string; chatId: str
             </div>
           )}
 
-          {phase === "next-offer" && (
-            <div className="space-y-6">
-              <div>
-                <h1 className="text-2xl font-semibold">La base de {topic}, superada</h1>
-                <p className="mt-2 text-muted-foreground">
-                  Acertaste {score} de {results.length}. ¿Seguimos con 8 preguntas algo más difíciles? Así LARIA afina
-                  más tu nivel.
-                </p>
-              </div>
-              {error && <ErrorBox message={error} />}
-              <div className="flex flex-wrap gap-3">
-                <Button onClick={() => startRound("next-offer")}>Seguir</Button>
-                <Button variant="outline" onClick={() => setPhase("final")}>
-                  Lo dejo aquí
-                </Button>
-              </div>
-              <Answers results={results} />
-            </div>
-          )}
-
-          {phase === "final" && (
-            <div className="space-y-6">
-              {placement ? (
-                <div>
-                  <p className="text-sm text-muted-foreground">
-                    Tu nivel en <span className="font-medium text-foreground">{topic}</span>:{" "}
-                    <span className="font-medium text-foreground">{LEVEL_NAME[placement.level]}</span>
-                  </p>
-                  <h1 className="mt-2 text-2xl font-semibold">{LEVEL_COPY[placement.level].title}</h1>
-                  <p className="mt-2 text-muted-foreground">{LEVEL_COPY[placement.level].text(topic)}</p>
-                  <p className="mt-2 text-sm text-muted-foreground">Queda guardado en tu perfil.</p>
-                </div>
-              ) : (
-                <h1 className="text-2xl font-semibold">
-                  Acertaste {score} de {results.length}
-                </h1>
-              )}
-              <div className="flex flex-wrap gap-3">
-                <Button asChild>
-                  <Link href={backHref}>Volver al chat</Link>
-                </Button>
-                <Button asChild variant="outline">
-                  <Link href={placementHref(undefined, chatId)}>Nivelarme en otro tema</Link>
-                </Button>
-              </div>
-              <Answers results={results} />
-            </div>
+          {phase === "preparing" && (
+            <PreparingLesson
+              topic={topic}
+              prep={prep}
+              score={score}
+              total={results.length}
+              placement={placement}
+              error={error}
+              results={results}
+              onContinue={() => startRound("preparing")}
+              onStop={() => prepareLesson(placement, topic)}
+              onRetry={() => prepareLesson(placement, topic)}
+              backHref={backHref}
+            />
           )}
         </div>
       </div>
@@ -253,6 +264,130 @@ function Intro({
         </Button>
       </div>
     </form>
+  )
+}
+
+function StepRow({ status, label, detail }: { status: StepStatus; label: string; detail?: string | null }) {
+  return (
+    <li className={`flex gap-3 transition-opacity duration-300 ${status === "pending" ? "opacity-40" : "opacity-100"}`}>
+      <span className="mt-0.5 flex h-6 w-6 shrink-0 items-center justify-center" aria-hidden>
+        {status === "done" ? (
+          <span className="flex h-6 w-6 items-center justify-center rounded-full bg-primary text-primary-foreground animate-in zoom-in-50 duration-300">
+            <Check className="h-3.5 w-3.5" />
+          </span>
+        ) : status === "active" ? (
+          <Loader2 className="h-5 w-5 animate-spin text-foreground motion-reduce:animate-none" />
+        ) : (
+          <span className="h-4 w-4 rounded-full border-2 border-muted-foreground/40" />
+        )}
+      </span>
+      <div>
+        <p className={status === "active" ? "font-medium" : undefined}>
+          {label}
+          <span className="sr-only">{status === "done" ? " (hecho)" : status === "active" ? " (en curso)" : " (pendiente)"}</span>
+        </p>
+        {detail && <p className="text-sm text-muted-foreground animate-in fade-in duration-300">{detail}</p>}
+      </div>
+    </li>
+  )
+}
+
+// Lo que pasa entre la última respuesta y la clase, paso a paso y con lo que ocurre de verdad
+function PreparingLesson({
+  topic,
+  prep,
+  score,
+  total,
+  placement,
+  error,
+  results,
+  onContinue,
+  onStop,
+  onRetry,
+  backHref,
+}: {
+  topic: string
+  prep: Preparation
+  score: number
+  total: number
+  placement: PlacementResult | null
+  error: string | null
+  results: QuizResult[]
+  onContinue: () => void
+  onStop: () => void
+  onRetry: () => void
+  backHref: string
+}) {
+  const working = [prep.review, prep.level, prep.lesson].includes("active")
+  const level = placement ? LEVEL_COPY[placement.level] : null
+
+  return (
+    <div className="space-y-8">
+      <div>
+        <p className={`flex items-center gap-2 text-sm text-muted-foreground transition-opacity ${working ? "opacity-100" : "opacity-0"}`} aria-hidden>
+          <span className="flex gap-1">
+            {[0, 1, 2].map((i) => (
+              <span
+                key={i}
+                className="h-1.5 w-1.5 rounded-full bg-muted-foreground animate-pulse motion-reduce:animate-none"
+                style={{ animationDelay: `${i * 150}ms` }}
+              />
+            ))}
+          </span>
+          Pensando…
+        </p>
+        <h1 className="mt-2 text-2xl font-semibold">
+          {prep.offerNext ? `La base de ${topic}, superada` : `Preparando tu clase de ${topic}`}
+        </h1>
+      </div>
+
+      <ol className="space-y-5" aria-live="polite">
+        <StepRow
+          status={prep.review}
+          label="Revisando tus respuestas"
+          detail={prep.review === "done" ? `Acertaste ${score} de ${total}` : null}
+        />
+
+        {prep.offerNext && (
+          <li className="ml-9 space-y-3 rounded-lg border border-border p-4 animate-in fade-in slide-in-from-bottom-2 duration-300">
+            <p>¿Seguimos con 8 preguntas algo más difíciles? Así LARIA afina más tu nivel.</p>
+            <div className="flex flex-wrap gap-3">
+              <Button onClick={onContinue}>Seguir</Button>
+              <Button variant="outline" onClick={onStop}>
+                Lo dejo aquí y empiezo la clase
+              </Button>
+            </div>
+          </li>
+        )}
+
+        <StepRow
+          status={prep.level}
+          label={placement ? `Ajustando la clase a tu nivel (${LEVEL_NAME[placement.level]})` : "Ajustando la clase a tu nivel"}
+          detail={prep.level !== "pending" && level ? level.title : null}
+        />
+        <StepRow
+          status={prep.lesson}
+          label="Preparando tu primera clase"
+          detail={prep.lesson === "done" ? "Abriendo el chat…" : null}
+        />
+      </ol>
+
+      {/* Si falló la ronda avanzada, "Seguir" ya es el reintento */}
+      {error && prep.offerNext && <ErrorBox message={error} />}
+      {error && !prep.offerNext && (
+        <div className="space-y-3">
+          <ErrorBox message={error} />
+          <div className="flex flex-wrap gap-3">
+            <Button onClick={onRetry}>Reintentar</Button>
+            <Button asChild variant="outline">
+              <Link href={backHref}>Volver al chat</Link>
+            </Button>
+          </div>
+        </div>
+      )}
+
+      {prep.review === "done" && <Answers results={results} />}
+    </div>
   )
 }
 
