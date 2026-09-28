@@ -7,6 +7,7 @@ import { Button } from "@/components/ui/button"
 import { AppShell } from "../components/app-shell"
 import { RequireAuth } from "../components/require-auth"
 import { ProfileSkeleton } from "../components/skeletons"
+import { LEVEL_NAME } from "../quiz/quiz-parts"
 import { useAuth } from "@/app/contexts/auth-context"
 import { lariaAPI, StudentProfile, LearningHistory, Document } from "@/lib/laria-api"
 
@@ -270,6 +271,13 @@ function Perfil() {
   })
   const repeated = Object.entries(struggleSameConcept).find(([, n]) => n >= 2)
 
+  // Clave interna del tema → lo que se muestra: su nombre con tildes, o la clave si es antigua
+  const levelsByTopic = Object.entries(learningProfile?.level_by_topic ?? {}).map(([key, level]) => ({
+    key,
+    level,
+    label: learningProfile?.topic_labels?.[key] ?? key,
+  }))
+
   const hasNoActivity =
     !learningProfile?.total_attempts &&
     !learningProfile?.mastery_by_concept.length &&
@@ -301,6 +309,20 @@ function Perfil() {
             </div>
           </div>
         </div>
+
+        {levelsByTopic.length > 0 && (
+          <section className="mx-4 md:mx-6 mb-5 rounded-xl border border-border p-4" aria-labelledby="niveles-por-tema">
+            <h2 id="niveles-por-tema" className="text-sm font-semibold">Tu nivel por tema</h2>
+            <p className="mb-3 text-xs text-muted-foreground">Según tus nivelaciones. Es tu punto de partida, no una nota.</p>
+            <ul className="flex flex-wrap gap-2">
+              {levelsByTopic.map(({ key, label, level }) => (
+                <li key={key} className="rounded-full border border-border px-3 py-1 text-sm">
+                  {label} · <span className="font-medium">{LEVEL_NAME[level] ?? level}</span>
+                </li>
+              ))}
+            </ul>
+          </section>
+        )}
 
         {repeated && repeated.length > 0 && (
           <div className="mx-6 mb-5 p-3 px-4 bg-destructive/10 border border-destructive/20 rounded-[10px] text-sm text-destructive flex gap-2.5 items-start leading-relaxed">

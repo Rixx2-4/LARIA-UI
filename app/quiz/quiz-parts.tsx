@@ -1,8 +1,8 @@
 "use client"
 
-import { ArrowRight, CheckCircle, XCircle } from "lucide-react"
+import { ArrowRight, Check, CheckCircle, Loader2, XCircle } from "lucide-react"
 import { Button } from "@/components/ui/button"
-import type { QuizAttemptQuestion, QuizQuestion } from "@/lib/laria-api"
+import type { PlacementLevel, QuizAttemptQuestion, QuizQuestion } from "@/lib/laria-api"
 
 // Piezas comunes del quiz sobre material y de la nivelación
 
@@ -150,5 +150,46 @@ export function ResultsList({ results }: { results: QuizResult[] }) {
         </div>
       ))}
     </div>
+  )
+}
+
+export const LEVEL_NAME: Record<PlacementLevel, string> = {
+  basico: "básico",
+  intermedio: "intermedio",
+  avanzado: "avanzado",
+}
+
+// Cómo se nombra cada punto de partida: sin tono de aprobado o suspenso
+export const LEVEL_COPY: Record<PlacementLevel, { title: string }> = {
+  basico: { title: "Empezamos por lo básico" },
+  intermedio: { title: "Tienes la base" },
+  avanzado: { title: "Vas por delante" },
+}
+
+export type StepStatus = "pending" | "active" | "done"
+
+// Un paso de la preparación de la clase: pendiente, en curso o hecho
+export function StepRow({ status, label, detail }: { status: StepStatus; label: string; detail?: string | null }) {
+  return (
+    <li className={`flex gap-3 transition-opacity duration-300 ${status === "pending" ? "opacity-40" : "opacity-100"}`}>
+      <span className="mt-0.5 flex h-6 w-6 shrink-0 items-center justify-center" aria-hidden>
+        {status === "done" ? (
+          <span className="flex h-6 w-6 items-center justify-center rounded-full bg-primary text-primary-foreground animate-in zoom-in-50 duration-300">
+            <Check className="h-3.5 w-3.5" />
+          </span>
+        ) : status === "active" ? (
+          <Loader2 className="h-5 w-5 animate-spin text-foreground motion-reduce:animate-none" />
+        ) : (
+          <span className="h-4 w-4 rounded-full border-2 border-muted-foreground/40" />
+        )}
+      </span>
+      <div>
+        <p className={status === "active" ? "font-medium" : undefined}>
+          {label}
+          <span className="sr-only">{status === "done" ? " (hecho)" : status === "active" ? " (en curso)" : " (pendiente)"}</span>
+        </p>
+        {detail && <p className="text-sm text-muted-foreground animate-in fade-in duration-300">{detail}</p>}
+      </div>
+    </li>
   )
 }

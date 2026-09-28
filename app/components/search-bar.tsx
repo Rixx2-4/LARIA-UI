@@ -1,6 +1,6 @@
 "use client"
 
-import { useState, useRef, useEffect, useCallback } from "react"
+import { Fragment, useState, useRef, useEffect, useCallback } from "react"
 import { useRouter } from "next/navigation"
 import { toast } from "sonner"
 import { Button } from "@/components/ui/button"
@@ -11,7 +11,8 @@ import { FileCard } from "./file-card"
 import { FileViewer } from "./file-viewer"
 import { MessageContent } from "./message-content"
 import { MessagesSkeleton } from "./skeletons"
-import { PlacementOffer } from "./placement-offer"
+import { ChatQuiz, type ChatQuizRequest } from "./chat-quiz"
+import { markPlacementOffered, wasPlacementOffered } from "@/lib/placement"
 import { isTextMime, mimeFromFilename } from "@/lib/file-types"
 import { chatHref } from "@/lib/routes"
 import { envelopeGrounded, envelopeLabel, tutorEnvelope } from "@/lib/tutor-envelope"
@@ -298,11 +299,44 @@ export function SearchBar({ isOpeningChat = false }: { isOpeningChat?: boolean }
     cancelStreaming()
   }
 
-  // El tutor detectó "quiero aprender X" en la última respuesta: se ofrece nivelarse
-  const lastMessage = messages[messages.length - 1]
-  const offerPlacement =
-    !isStreaming && !!chatId && lastMessage?.role === "assistant" && tutorEnvelope(lastMessage)?.payload?.intent === "learn"
-  const lastUserQuestion = [...messages].reverse().find((m) => m.role === "user")?.content ?? ""
+  // Quiz dentro de la conversación, bajo la respuesta del tutor que lo propone:
+  // - suggest_placement: pidió aprender un tema → nivelación con el tema del backend
+  // - offer_quiz: pidió un quiz → práctica sobre el documento del chat o, sin él, sobre
+  //   el tema que nombró (sin tema, el tutor se lo pregunta y no se abre nada)
+  const lastIndex = messages.length - 1
+  const lastEnvelope = lastIndex >= 0 && messages[lastIndex].role === "assistant" ? tutorEnvelope(messages[lastIndex]) : null
+  const offeredQuiz: ChatQuizRequest | null =
+    isStreaming || !chatId || !lastEnvelope
+      ? null
+      : lastEnvelope.payload?.suggest_placement && !wasPlacementOffered(chatId)
+        ? { kind: "placement", topic: lastEnvelope.payload.topic_hint ?? "" }
+        : lastEnvelope.payload?.offer_quiz && activeDocumentId
+          ? { kind: "practice" }
+          : lastEnvelope.payload?.offer_quiz && lastEnvelope.payload.topic_hint
+            ? { kind: "practice", topic: lastEnvelope.payload.topic_hint }
+            : null
+
+  // La tarjeta se queda anclada a su mensaje: cuando empieza la clase o llegan más
+  // mensajes, sigue en su sitio con el resumen
+  const [quizCard, setQuizCard] = useState<{ chatId: string; anchor: number; request: ChatQuizRequest } | null>(null)
+  const [dismissedQuizzes, setDismissedQuizzes] = useState<string[]>([])
+  const offerKey = `${chatId}:${lastIndex}`
+  if (
+    offeredQuiz &&
+    chatId &&
+    !dismissedQuizzes.includes(offerKey) &&
+    (quizCard?.chatId !== chatId || quizCard.anchor !== lastIndex)
+  ) {
+    setQuizCard({ chatId, anchor: lastIndex, request: offeredQuiz })
+  }
+  const visibleQuiz = quizCard && quizCard.chatId === chatId && quizCard.anchor <= lastIndex ? quizCard : null
+
+  const dismissQuiz = () => {
+    if (!visibleQuiz) return
+    if (visibleQuiz.request.kind === "placement") markPlacementOffered(visibleQuiz.chatId)
+    setDismissedQuizzes((prev) => [...prev, `${visibleQuiz.chatId}:${visibleQuiz.anchor}`])
+    setQuizCard(null)
+  }
 
   const renderMessageContent = (msg: typeof messages[0], isLive: boolean) =>
     msg.role === "user" ? (
@@ -358,10 +392,8 @@ export function SearchBar({ isOpeningChat = false }: { isOpeningChat?: boolean }
                 )
               }
               return (
-                <div
-                  key={`${index}-${msg.role}`}
-                  className={`flex ${msg.role === "user" ? "justify-end" : "justify-start"}`}
-                >
+                <Fragment key={`${index}-${msg.role}`}>
+                <div className={`flex ${msg.role === "user" ? "justify-end" : "justify-start"}`}>
                   <div
                     className={`max-w-[80%] rounded-2xl px-4 py-3 ${
                       msg.role === "user"
@@ -391,6 +423,19 @@ export function SearchBar({ isOpeningChat = false }: { isOpeningChat?: boolean }
                     )}
                   </div>
                 </div>
+                {visibleQuiz && visibleQuiz.anchor === index && chatId && (
+                  <ChatQuiz
+                    key={`${visibleQuiz.chatId}:${visibleQuiz.anchor}`}
+                    chatId={chatId}
+                    request={visibleQuiz.request}
+                    onDismiss={dismissQuiz}
+                    onStartLesson={(message) => {
+                      markPlacementOffered(chatId)
+                      sendMessage(message)
+                    }}
+                  />
+                )}
+                </Fragment>
               )
             })}
 
@@ -403,10 +448,6 @@ export function SearchBar({ isOpeningChat = false }: { isOpeningChat?: boolean }
                   </div>
                 </div>
               </div>
-            )}
-
-            {offerPlacement && chatId && (
-              <PlacementOffer key={chatId} chatId={chatId} userQuestion={lastUserQuestion} />
             )}
 
             {streamError && (

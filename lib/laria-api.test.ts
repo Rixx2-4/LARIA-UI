@@ -290,3 +290,17 @@ describe("lariaAPI.quizzes.diagnostic", () => {
     expect(quiz.topic).toBe("ecuaciones lineales")
   })
 })
+
+describe("lariaAPI.quizzes.practice", () => {
+  it("pide la práctica sobre un tema con un POST y el número de preguntas", async () => {
+    const seen: { url: string; method?: string; body?: string }[] = []
+    vi.stubGlobal("fetch", async (url: string, init?: RequestInit) => {
+      seen.push({ url, method: init?.method, body: String(init?.body) })
+      return new Response(JSON.stringify({ id: "q1", document_id: null, questions: [], total_points: 0, created_at: "" }), { status: 201 })
+    })
+
+    await lariaAPI.quizzes.practice("fracciones")
+
+    expect(seen[0]).toEqual({ url: expect.stringMatching(/\/quizzes\/practice$/), method: "POST", body: '{"topic":"fracciones","num_questions":5}' })
+  })
+})
