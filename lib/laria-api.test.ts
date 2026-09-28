@@ -275,3 +275,18 @@ describe("peticiones a la API", () => {
     expect(seen).toEqual([undefined, "application/json"])
   })
 })
+
+describe("lariaAPI.quizzes.diagnostic", () => {
+  it("pide la ronda con un POST y solo el tema (la ronda la decide el backend)", async () => {
+    const seen: { url: string; method?: string; body?: string }[] = []
+    vi.stubGlobal("fetch", async (url: string, init?: RequestInit) => {
+      seen.push({ url, method: init?.method, body: String(init?.body) })
+      return new Response(JSON.stringify({ id: "q1", document_id: null, topic: "ecuaciones lineales", questions: [], total_points: 0, created_at: "" }), { status: 201 })
+    })
+
+    const quiz = await lariaAPI.quizzes.diagnostic("ecuaciones")
+
+    expect(seen[0]).toEqual({ url: expect.stringMatching(/\/quizzes\/diagnostic$/), method: "POST", body: '{"topic":"ecuaciones"}' })
+    expect(quiz.topic).toBe("ecuaciones lineales")
+  })
+})

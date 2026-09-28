@@ -28,8 +28,9 @@ const quiz = {
 
 // Servidor de quizzes: registra las peticiones de generar y enviar
 function stubServer() {
-  const requests: { url: string; body?: unknown }[] = []
+  const requests: { url: string; method: string; body?: unknown }[] = []
   vi.stubGlobal("fetch", async (url: string, init?: RequestInit) => {
+    const method = init?.method ?? "GET"
     if (url.endsWith("/users/me")) return json({ id: "u1", username: "ana", email: "a@a.a" })
     if (url.endsWith("/chats/"))
       return json({
@@ -40,12 +41,14 @@ function stubServer() {
         ],
       })
     if (url.includes("/quiz?")) {
-      requests.push({ url })
+      // Como el backend: generar un quiz es un POST; otro método da 405
+      if (method !== "POST") return json({ detail: "Method Not Allowed" }, 405)
+      requests.push({ url, method })
       return json(quiz)
     }
     if (url.includes("/attempts")) {
       const body = JSON.parse(String(init?.body))
-      requests.push({ url, body })
+      requests.push({ url, method, body })
       return json({
         attempt_id: "a1", quiz_id: "q-77", score: 1, total_points: 2, completed_at: "",
         questions: [
@@ -99,7 +102,7 @@ describe("QuizPage", () => {
     // Con el texto de la opción, no solo la letra
     expect(screen.getByText("B. Nitrógeno")).toBeTruthy()
     expect(screen.getByText("A. Oxígeno")).toBeTruthy()
-    expect(requests[0].url).toMatch(/\/chats\/c1\/quiz\?num_questions=5$/)
+    expect(requests[0]).toMatchObject({ method: "POST", url: expect.stringMatching(/\/chats\/c1\/quiz\?num_questions=5$/) })
     expect(requests[1].url).toMatch(/\/quizzes\/q-77\/attempts$/)
     expect(requests[1].body).toEqual({ answers: { "1": "B", "2": "B" } })
   })
@@ -125,6 +128,18 @@ describe("QuizPage", () => {
     fireEvent.change(select, { target: { value: "c2" } })
 
     expect(nav.replace).toHaveBeenCalledWith("/quiz?chat=c2")
+  })
+
+  it("no deja pedir más de 20 preguntas, que es el máximo que acepta el backend", async () => {
+    const requests = stubServer()
+    renderQuiz("chat=c1")
+
+    fireEvent.click(await screen.findByRole("button", { name: "Personalizar" }))
+    fireEvent.change(screen.getByLabelText("Cantidad personalizada"), { target: { value: "21" } })
+    fireEvent.click(screen.getByRole("button", { name: "Generar Quiz" }))
+
+    expect(await screen.findByText("Elige entre 1 y 20 preguntas.")).toBeTruthy()
+    expect(requests).toEqual([])
   })
 
   it("la cantidad personalizada se puede borrar y reescribir con normalidad", async () => {

@@ -58,6 +58,22 @@ describe("MessageContent", () => {
     expect(container.querySelectorAll(".katex")).toHaveLength(1)
   })
 
+  it("una fórmula que empieza por número sí se pinta (respuesta real del tutor)", () => {
+    const { container } = render(
+      <MessageContent content={"Por ejemplo, en la ecuación $2x + 3 = 7$ despejas x. Otra: $3x+1$. Y un número suelto: $2$."} />,
+    )
+
+    expect(container.querySelectorAll(".katex")).toHaveLength(3)
+    expect(container.querySelector(".katex-error")).toBeNull()
+  })
+
+  it("dinero y fórmulas en la misma línea", () => {
+    const { container } = render(<MessageContent content={"Con $20 compras 4, así que cada uno vale $\\frac{20}{4} = 5$"} />)
+
+    expect(container.textContent).toContain("Con $20 compras")
+    expect(container.querySelectorAll(".katex")).toHaveLength(1)
+  })
+
   it("no toca la notación LaTeX escrita dentro de código en línea", () => {
     const { container } = render(<MessageContent content={"Escribe `\\(x\\)` para una fórmula"} />)
 

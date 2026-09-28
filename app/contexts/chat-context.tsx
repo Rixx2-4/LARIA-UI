@@ -17,6 +17,8 @@ interface ChatContextType {
   messages: ChatMessage[]
   // true mientras llegan los mensajes del chat que se está abriendo
   messagesLoading: boolean
+  // El chat cuyos mensajes ya llegaron del servidor (null mientras se abre otro)
+  loadedChatId: string | null
   // Por qué no se pudo abrir el chat activo
   chatError: ChatLoadError | null
   loadChats: () => Promise<void>
@@ -28,6 +30,10 @@ interface ChatContextType {
   setMessages: (msgs: ChatMessage[]) => void
   clearActiveChat: () => void
   generateTitle: (chatId: string, messages: { role: string; content: string }[]) => Promise<void>
+  // Un mensaje que el chat enviará solo en cuanto se abra (empezar la clase tras nivelarse)
+  queueFirstMessage: (chatId: string, text: string) => void
+  // Lo recoge el chat al abrirse; una sola vez
+  takeFirstMessage: (chatId: string) => string | null
 }
 
 const ChatContext = createContext<ChatContextType | undefined>(undefined)
@@ -40,8 +46,10 @@ export function ChatProvider({ children }: { children: ReactNode }) {
   const [activeDocumentId, setActiveDocumentId] = useState<string | null>(null)
   const [messages, setMessages] = useState<ChatMessage[]>([])
   const [messagesLoading, setMessagesLoading] = useState(false)
+  const [loadedChatId, setLoadedChatId] = useState<string | null>(null)
   const [chatError, setChatError] = useState<ChatLoadError | null>(null)
   const requestedChatIdRef = useRef<string | null>(null)
+  const firstMessageRef = useRef<{ chatId: string; text: string } | null>(null)
 
   // Al cerrar sesión se vacía todo durante el render, sin esperar a un efecto
   const [wasAuthenticated, setWasAuthenticated] = useState(isAuthenticated)
@@ -96,12 +104,14 @@ export function ChatProvider({ children }: { children: ReactNode }) {
     setActiveDocumentId(null)
     setMessages([])
     setMessagesLoading(true)
+    setLoadedChatId(null)
     try {
       const chat = await lariaAPI.chats.get(chatId)
       // Si mientras tanto se abrió otro chat, esta respuesta ya no interesa
       if (requestedChatIdRef.current !== chatId) return
       setMessages(chat.messages || [])
       setActiveDocumentId(chat.document_id ?? null)
+      setLoadedChatId(chatId)
     } catch (error) {
       if (requestedChatIdRef.current !== chatId) return
       const notFound = error instanceof ApiError && (error.status === 404 || error.status === 403)
@@ -138,6 +148,18 @@ export function ChatProvider({ children }: { children: ReactNode }) {
     setChatError(null)
     setMessages([])
     setMessagesLoading(false)
+    setLoadedChatId(null)
+  }, [])
+
+  const queueFirstMessage = useCallback((chatId: string, text: string) => {
+    firstMessageRef.current = { chatId, text }
+  }, [])
+
+  const takeFirstMessage = useCallback((chatId: string) => {
+    const pending = firstMessageRef.current
+    if (pending?.chatId !== chatId) return null
+    firstMessageRef.current = null
+    return pending.text
   }, [])
 
   const generateTitle = useCallback(async (chatId: string, msgs: { role: string; content: string }[]) => {
@@ -171,6 +193,7 @@ export function ChatProvider({ children }: { children: ReactNode }) {
         activeDocumentId,
         messages,
         messagesLoading,
+        loadedChatId,
         chatError,
         loadChats,
         createChat,
@@ -181,6 +204,8 @@ export function ChatProvider({ children }: { children: ReactNode }) {
         setMessages,
         clearActiveChat,
         generateTitle,
+        queueFirstMessage,
+        takeFirstMessage,
       }}
     >
       {children}

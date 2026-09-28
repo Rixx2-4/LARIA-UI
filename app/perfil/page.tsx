@@ -230,7 +230,8 @@ function Perfil() {
     const pctScore = a.total_points > 0 ? Math.round((a.score / a.total_points) * 100) : 0
     return {
       fecha: formatDate(a.completed_at),
-      tema: docNameMap[a.document_id] || "Documento",
+      // Sin documento: es una ronda de nivelación (el resumen no trae el tema)
+      tema: a.document_id ? docNameMap[a.document_id] || "Documento" : "Nivelación",
       pctScore,
     }
   })

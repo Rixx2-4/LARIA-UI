@@ -35,7 +35,7 @@ const STEPS = [
   },
   {
     title: "Comprueba si lo sabes",
-    text: "Pide un quiz sobre el documento del chat: 5, 10, 20 preguntas o las que quieras hasta 50. Al terminar ves qué fallaste y cuál era la respuesta correcta.",
+    text: "Pide un quiz sobre el documento del chat: de 5 a 20 preguntas. Al terminar ves qué fallaste y cuál era la respuesta correcta.",
     mock: <QuizMock />,
   },
 ]
