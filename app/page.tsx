@@ -7,7 +7,7 @@ import { LandingHeader } from "./components/landing/landing-header"
 import { LandingMotion, Marker, Reveal } from "./components/landing/motion"
 import { ChatDemo } from "./components/landing/chat-demo"
 import { demoAnswer } from "./components/landing/chat-demo-content"
-import { ProfileMock, QuizMock, UploadMock } from "./components/landing/mocks"
+import { PlacementMock, ProfileMock, QuizMock, UploadMock } from "./components/landing/mocks"
 
 const display = Instrument_Serif({
   subsets: ["latin"],
@@ -17,27 +17,43 @@ const display = Instrument_Serif({
 })
 
 export const metadata: Metadata = {
-  title: { absolute: "Plenum · Sube tus apuntes y pregunta lo que no entiendas" },
+  title: { absolute: "Plenum · Un tutor con IA que se adapta a cómo aprendes" },
   description:
-    "En Plenum estudias con LARIA, un tutor con IA: lee tus PDF, diapositivas o código, te explica lo que no entiendes con fórmulas bien escritas y te hace quizzes para comprobar qué te sabes.",
+    "En Plenum estudias con LARIA, un tutor con IA que convierte tus libros, artículos y apuntes en una clase adaptada a ti. Sin material, te evalúa para saber tu nivel en el tema que quieras.",
 }
 
-const STEPS = [
+// Las dos formas de empezar. Todo lo que se afirma aquí está validado contra el
+// backend desplegado (sesión del backend, 29-sep): no se anuncia nada que no exista
+const PATHS = [
   {
-    title: "Sube el material",
-    text: "PDF, Word, PowerPoint, Excel, texto o código. LARIA lo analiza y a partir de ahí responde basándose en ese contenido.",
+    title: "Con tu material",
+    intro: "Libros, artículos, apuntes, diapositivas o código.",
+    steps: [
+      "Súbelo al chat. LARIA lo analiza y saca los conceptos clave.",
+      "Pregúntale lo que no entiendas: te enseña a partir de tu material, con las fórmulas bien escritas.",
+      "Cuando creas que lo tienes, pídele un cuestionario sobre ese material y te lo corrige al momento.",
+    ],
     mock: <UploadMock />,
   },
   {
-    title: "Pregunta como te salga",
-    text: "Escribe la duda tal cual, o díctala si tienes el libro en las manos. Con tus apuntes, LARIA se ajusta a cómo te va: si un concepto te está costando te guía con pistas, y si ya lo dominas te reta con preguntas antes de darte la solución.",
-    mock: <ChatSnippet />,
+    title: "Sin material",
+    intro: "Solo dile qué quieres aprender.",
+    steps: [
+      "LARIA te evalúa por rondas para saber si estás en básico, intermedio o avanzado.",
+      "Tu nivel en ese tema queda guardado en tu perfil.",
+      "Pide cuestionarios de práctica sobre el tema cuando quieras.",
+    ],
+    mock: <PlacementMock />,
   },
-  {
-    title: "Comprueba si lo sabes",
-    text: "Pide un quiz sobre el documento del chat: de 5 a 20 preguntas. Al terminar ves qué fallaste y cuál era la respuesta correcta.",
-    mock: <QuizMock />,
-  },
+]
+
+// Cómo se adapta (con material, que es donde decide el motor pedagógico)
+const ADAPTS = [
+  { title: "Si un concepto te cuesta", text: "te guía con pistas en vez de soltarte la respuesta." },
+  { title: "Si ya lo dominas", text: "te reta con preguntas antes de darte la solución." },
+  { title: "Cuando toca practicar", text: "te lo propone, sin obligarte." },
+  { title: "Si lo pides de otra forma", text: "paso a paso, con un ejemplo o con un esquema, te lo explica así." },
+  { title: "Y cuando se adapta", text: "te dice por qué te habla de esa manera." },
 ]
 
 const HONEST_NOTES = [
@@ -62,7 +78,7 @@ const FAQ = [
   },
   {
     q: "¿Y si no tengo apuntes?",
-    a: "Dile a LARIA qué quieres aprender. Te pone unas preguntas rápidas por rondas para ver si estás en básico, intermedio o avanzado, y te lo explica.",
+    a: "Dile a LARIA qué quieres aprender. Te evalúa con unas preguntas por rondas para saber si estás en básico, intermedio o avanzado, guarda tu nivel y te lo explica. También puedes pedirle cuestionarios de práctica sobre el tema.",
   },
   {
     q: "¿Sirve para matemáticas y física?",
@@ -82,7 +98,7 @@ const FAQ = [
   },
 ]
 
-// Un momento del chat, para el paso 2 (el hero ya enseña la conversación entera)
+// Un momento del chat en el que LARIA guía con una pista (el hero enseña la conversación entera)
 function ChatSnippet() {
   return (
     <div
@@ -114,14 +130,14 @@ export default function LandingPage() {
             <div>
               <Reveal>
                 <h1 className="font-display text-[2.6rem] leading-[1.05] tracking-tight sm:text-6xl lg:text-[4.25rem]">
-                  Sube los apuntes de clase y <Marker>pregunta</Marker> lo que no entendiste.
+                  Un tutor que se <Marker>adapta</Marker> a cómo aprendes.
                 </h1>
               </Reveal>
               <Reveal delay={0.15}>
                 <p className="mt-6 max-w-xl text-base leading-relaxed text-muted-foreground sm:text-lg">
-                  En Plenum estudias con LARIA, un tutor con IA: lee tu PDF, tus diapositivas o tu código y te
-                  responde a partir de ellos. Las fórmulas se ven como en el libro. Y cuando crees que ya lo tienes,
-                  pídele un quiz para comprobarlo.
+                  En Plenum estudias con LARIA. Súbele tus libros, artículos o apuntes y los convierte en una clase:
+                  te explica, te pregunta y ajusta cada respuesta a lo que ya dominas y a lo que te cuesta. ¿No tienes
+                  material? Dile qué quieres aprender y te evalúa para saber tu nivel.
                 </p>
               </Reveal>
               <Reveal delay={0.3}>
@@ -149,27 +165,66 @@ export default function LandingPage() {
             </Reveal>
           </section>
 
-          {/* Cómo funciona */}
+          {/* Dos formas de empezar */}
           <section id="como-funciona" className="scroll-mt-16 border-t border-foreground/10">
             <div className="mx-auto max-w-6xl px-4 py-20 sm:px-6 lg:py-28">
               <Reveal>
-                <h2 className="font-display text-4xl tracking-tight sm:text-5xl">Así se estudia en Plenum</h2>
+                <h2 className="font-display text-4xl tracking-tight sm:text-5xl">Dos formas de empezar</h2>
               </Reveal>
 
-              <ol className="mt-14 space-y-20 lg:space-y-28">
-                {STEPS.map((step, i) => (
-                  <li key={step.title} className="grid items-center gap-8 md:grid-cols-2 md:gap-14">
+              <div className="mt-14 space-y-20 lg:space-y-28">
+                {PATHS.map((path, i) => (
+                  <div key={path.title} className="grid items-center gap-8 md:grid-cols-2 md:gap-14">
                     <Reveal className={i % 2 === 1 ? "md:order-2" : undefined}>
-                      <p className="font-display text-5xl text-muted-foreground/60" aria-hidden>
-                        {String(i + 1).padStart(2, "0")}
-                      </p>
-                      <h3 className="mt-2 text-2xl font-semibold tracking-tight">{step.title}</h3>
-                      <p className="mt-3 max-w-md leading-relaxed text-muted-foreground">{step.text}</p>
+                      <h3 className="text-2xl font-semibold tracking-tight">{path.title}</h3>
+                      <p className="mt-1 text-muted-foreground">{path.intro}</p>
+                      <ol className="mt-5 space-y-3">
+                        {path.steps.map((step, n) => (
+                          <li key={step} className="flex gap-3 leading-relaxed">
+                            <span className="font-display text-2xl leading-none text-muted-foreground/70" aria-hidden>
+                              {n + 1}
+                            </span>
+                            <span>{step}</span>
+                          </li>
+                        ))}
+                      </ol>
                     </Reveal>
-                    <Reveal delay={0.1}>{step.mock}</Reveal>
-                  </li>
+                    <Reveal delay={0.1}>{path.mock}</Reveal>
+                  </div>
                 ))}
-              </ol>
+              </div>
+            </div>
+          </section>
+
+          {/* Cómo se adapta */}
+          <section id="como-se-adapta" className="scroll-mt-16 border-t border-foreground/10">
+            <div className="mx-auto max-w-6xl px-4 py-20 sm:px-6 lg:py-28">
+              <div className="grid items-start gap-10 md:grid-cols-2 md:gap-14">
+                <Reveal>
+                  <h2 className="font-display text-4xl tracking-tight sm:text-5xl">
+                    No responde igual a <Marker delay={0.2}>todos</Marker>
+                  </h2>
+                  <p className="mt-4 max-w-md leading-relaxed text-muted-foreground">
+                    Con tu material, LARIA decide cómo enseñarte según lo que ya dominas y lo que te cuesta. No es la
+                    IA quien lo improvisa: lo decide a partir de cómo te va en cada concepto.
+                  </p>
+                  <ul className="mt-8 space-y-4">
+                    {ADAPTS.map((item) => (
+                      <li key={item.title} className="border-l-2 border-foreground pl-4">
+                        <span className="font-semibold">{item.title}</span>, {item.text}
+                      </li>
+                    ))}
+                  </ul>
+                </Reveal>
+                <div className="space-y-6">
+                  <Reveal delay={0.1}>
+                    <ChatSnippet />
+                  </Reveal>
+                  <Reveal delay={0.2}>
+                    <QuizMock />
+                  </Reveal>
+                </div>
+              </div>
 
               <div className="mt-24 grid items-center gap-8 rounded-lg border border-foreground/15 bg-background/60 p-6 sm:p-10 md:grid-cols-2 md:gap-14">
                 <Reveal>
@@ -177,9 +232,9 @@ export default function LandingPage() {
                     Y tu perfil va <Marker delay={0.2}>tomando nota</Marker>
                   </h3>
                   <p className="mt-4 max-w-md leading-relaxed text-muted-foreground">
-                    Cada quiz actualiza cuánto dominas cada concepto. Si algo te cuesta varias veces seguidas, porque
-                    lo fallas en un quiz o le dices que no lo entiendes, aparece en tu perfil para que sepas qué
-                    repasar antes del examen.
+                    Registra cuánto dominas cada concepto, lo que se te va olvidando con el tiempo y qué te conviene
+                    repasar. Si algo te cuesta varias veces seguidas, porque lo fallas en un cuestionario o le dices
+                    que no lo entiendes, aparece ahí.
                   </p>
                 </Reveal>
                 <Reveal delay={0.1}>
@@ -238,7 +293,7 @@ export default function LandingPage() {
             <div className="mx-auto max-w-6xl px-4 py-20 sm:px-6 lg:py-28">
               <Reveal>
                 <h2 className="max-w-3xl font-display text-4xl leading-tight tracking-tight sm:text-6xl">
-                  ¿Tienes un tema que no termina de entrar? <Marker delay={0.3}>Súbelo</Marker> y pregunta.
+                  ¿Tienes un tema que no termina de entrar? <Marker delay={0.3}>Súbelo</Marker>, o simplemente dile cuál es.
                 </h2>
                 <Link
                   href={SIGN_UP_HREF}

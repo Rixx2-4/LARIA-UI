@@ -21,10 +21,13 @@ describe("Página de presentación", () => {
   it("cuenta qué es LARIA y lleva a crear cuenta o a entrar", () => {
     render(<LandingPage />)
 
-    expect(screen.getByRole("heading", { level: 1 }).textContent).toContain("pregunta lo que no entendiste")
+    expect(screen.getByRole("heading", { level: 1 }).textContent).toContain("Un tutor que se adapta a cómo aprendes")
     // La plataforma es Plenum; LARIA es su tutor
     expect(screen.getByRole("link", { name: "Plenum, inicio" })).toBeTruthy()
     expect(screen.getAllByText(/LARIA/).length).toBeGreaterThan(0)
+    // Los dos caminos: con material y sin material
+    expect(screen.getByRole("heading", { name: "Con tu material" })).toBeTruthy()
+    expect(screen.getByRole("heading", { name: "Sin material" })).toBeTruthy()
     const signUp = screen.getAllByRole("link", { name: /Crear cuenta/ })
     expect(signUp.length).toBeGreaterThan(0)
     signUp.forEach((link) => expect(link.getAttribute("href")).toBe("/chat?modo=registro"))
