@@ -1,6 +1,6 @@
 "use client"
 
-import { Suspense, useState, type FormEvent } from "react"
+import { Suspense, useEffect, useState, type FormEvent } from "react"
 import Link from "next/link"
 import { useRouter, useSearchParams } from "next/navigation"
 import { Loader2 } from "lucide-react"
@@ -8,7 +8,8 @@ import { Button } from "@/components/ui/button"
 import { AppShell } from "../components/app-shell"
 import { RequireAuth } from "../components/require-auth"
 import { LEVEL_COPY, LEVEL_NAME, QuestionStep, ResultsList, StepRow, toResults, type QuizResult, type StepStatus } from "../quiz/quiz-parts"
-import { lariaAPI, type PlacementResult, type QuizQuestion } from "@/lib/laria-api"
+import { lariaAPI, type ExplanationStyle, type PlacementResult, type QuizQuestion } from "@/lib/laria-api"
+import { StylePicker } from "../components/style-picker"
 import { NEW_CHAT_HREF, chatHref } from "@/lib/routes"
 import { markPlacementOffered } from "@/lib/placement"
 import { useChat } from "../contexts/chat-context"
@@ -25,6 +26,8 @@ interface Preparation {
   review: StepStatus
   // Superó la base: se pregunta si sigue con la avanzada antes de preparar la clase
   offerNext: boolean
+  // Antes de preparar la clase se pregunta cómo prefiere que le expliquen
+  askStyle: boolean
   level: StepStatus
   lesson: StepStatus
 }
@@ -61,9 +64,38 @@ function Placement({ initialTopic, chatId }: { initialTopic: string; chatId: str
   const [results, setResults] = useState<QuizResult[]>([])
   const [placement, setPlacement] = useState<PlacementResult | null>(null)
   const [error, setError] = useState<string | null>(null)
-  const [prep, setPrep] = useState<Preparation>({ review: "pending", offerNext: false, level: "pending", lesson: "pending" })
+  const [prep, setPrep] = useState<Preparation>({ review: "pending", offerNext: false, askStyle: false, level: "pending", lesson: "pending" })
   const router = useRouter()
   const { createChat, queueFirstMessage } = useChat()
+  // La preferencia actual, para marcarla al preguntar (undefined mientras se carga)
+  const [style, setStyle] = useState<ExplanationStyle | null | undefined>(undefined)
+  const [savingStyle, setSavingStyle] = useState(false)
+
+  useEffect(() => {
+    if (!prep.askStyle) return
+    let cancelled = false
+    lariaAPI.learning
+      .preferences()
+      .then((prefs) => !cancelled && setStyle(prefs.explanation_style))
+      .catch(() => !cancelled && setStyle(null))
+    return () => {
+      cancelled = true
+    }
+  }, [prep.askStyle])
+
+  // Si no se puede guardar (p. ej. el backend aún no lo tiene), la clase empieza igual
+  const chooseStyle = async (choice: ExplanationStyle | null) => {
+    setStyle(choice)
+    setSavingStyle(true)
+    try {
+      await lariaAPI.learning.setPreferences(choice)
+    } catch (err) {
+      console.warn("No se pudo guardar cómo prefieres que te expliquen:", err)
+    } finally {
+      setSavingStyle(false)
+    }
+    await prepareLesson(placement, topic)
+  }
 
   const backHref = chatId ? chatHref(chatId) : NEW_CHAT_HREF
 
@@ -93,7 +125,7 @@ function Placement({ initialTopic, chatId }: { initialTopic: string; chatId: str
     setIsSubmitting(true)
     setError(null)
     setPhase("preparing")
-    setPrep({ review: "active", offerNext: false, level: "pending", lesson: "pending" })
+    setPrep({ review: "active", offerNext: false, askStyle: false, level: "pending", lesson: "pending" })
     try {
       const data = await lariaAPI.quizzes.submitAttempt(quizId, answers)
       const verdict = data.placement ?? null
@@ -102,7 +134,7 @@ function Placement({ initialTopic, chatId }: { initialTopic: string; chatId: str
       setPlacement(verdict)
       setTopic(shownTopic)
       setPrep((p) => ({ ...p, review: "done", offerNext: !!verdict?.has_next_round }))
-      if (!verdict?.has_next_round) await prepareLesson(verdict, shownTopic)
+      if (!verdict?.has_next_round) setPrep((p) => ({ ...p, askStyle: true }))
     } catch (err) {
       setError(err instanceof Error ? err.message : "No se pudieron enviar tus respuestas")
       setPhase("questions")
@@ -114,7 +146,7 @@ function Placement({ initialTopic, chatId }: { initialTopic: string; chatId: str
   // Ajusta al nivel y crea el chat de la clase; el primer mensaje lo envía el chat al abrirse
   const prepareLesson = async (verdict: PlacementResult | null, lessonTopic: string) => {
     setError(null)
-    setPrep((p) => ({ ...p, offerNext: false, level: "active", lesson: "pending" }))
+    setPrep((p) => ({ ...p, offerNext: false, askStyle: false, level: "active", lesson: "pending" }))
     await pause(STEP_PAUSE_MS)
     setPrep((p) => ({ ...p, level: "done", lesson: "active" }))
     try {
@@ -182,7 +214,10 @@ function Placement({ initialTopic, chatId }: { initialTopic: string; chatId: str
               error={error}
               results={results}
               onContinue={() => startRound("preparing")}
-              onStop={() => prepareLesson(placement, topic)}
+              onStop={() => setPrep((p) => ({ ...p, offerNext: false, askStyle: true }))}
+              styleValue={style}
+              savingStyle={savingStyle}
+              onChooseStyle={chooseStyle}
               onRetry={() => prepareLesson(placement, topic)}
               backHref={backHref}
             />
@@ -266,6 +301,9 @@ function PreparingLesson({
   onStop,
   onRetry,
   backHref,
+  styleValue,
+  savingStyle,
+  onChooseStyle,
 }: {
   topic: string
   prep: Preparation
@@ -278,6 +316,9 @@ function PreparingLesson({
   onStop: () => void
   onRetry: () => void
   backHref: string
+  styleValue: ExplanationStyle | null | undefined
+  savingStyle: boolean
+  onChooseStyle: (style: ExplanationStyle | null) => void
 }) {
   const working = [prep.review, prep.level, prep.lesson].includes("active")
   const level = placement ? LEVEL_COPY[placement.level] : null
@@ -318,6 +359,19 @@ function PreparingLesson({
                 Lo dejo aquí y empiezo la clase
               </Button>
             </div>
+          </li>
+        )}
+
+        {prep.askStyle && (
+          <li className="ml-9 space-y-3 rounded-lg border border-border p-4 animate-in fade-in slide-in-from-bottom-2 duration-300">
+            {placement && (
+              <p className="text-sm text-muted-foreground">
+                Tu punto de partida: <span className="font-medium text-foreground">{LEVEL_NAME[placement.level]}</span>.
+              </p>
+            )}
+            <p className="font-medium">¿Cómo prefieres que te explique?</p>
+            <StylePicker value={styleValue} onChoose={onChooseStyle} disabled={savingStyle} />
+            <p className="text-xs text-muted-foreground">Vale para todos los temas. Puedes cambiarlo en tu perfil.</p>
           </li>
         )}
 

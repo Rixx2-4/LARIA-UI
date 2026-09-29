@@ -8,8 +8,10 @@ import { AppShell } from "../components/app-shell"
 import { RequireAuth } from "../components/require-auth"
 import { ProfileSkeleton } from "../components/skeletons"
 import { LEVEL_NAME } from "../quiz/quiz-parts"
+import { StylePicker } from "../components/style-picker"
 import { useAuth } from "@/app/contexts/auth-context"
-import { lariaAPI, StudentProfile, LearningHistory, Document } from "@/lib/laria-api"
+import { lariaAPI, StudentProfile, LearningHistory, Document, type ExplanationStyle } from "@/lib/laria-api"
+import { toast } from "sonner"
 
 interface MasteryItem {
   concepto: string
@@ -131,6 +133,22 @@ function Perfil() {
   const [error, setError] = useState<string | null>(null)
 
   const [learningProfile, setLearningProfile] = useState<StudentProfile | null>(null)
+  // Lo que eligió; se guarda al tocar, sin botón de guardar
+  const [styleOverride, setStyleOverride] = useState<ExplanationStyle | null | undefined>(undefined)
+  const [savingStyle, setSavingStyle] = useState(false)
+  const chooseStyle = async (choice: ExplanationStyle | null) => {
+    const previous = styleOverride
+    setStyleOverride(choice)
+    setSavingStyle(true)
+    try {
+      await lariaAPI.learning.setPreferences(choice)
+    } catch {
+      setStyleOverride(previous)
+      toast.error("No se pudo guardar cómo prefieres que te expliquen")
+    } finally {
+      setSavingStyle(false)
+    }
+  }
   const [history, setHistory] = useState<LearningHistory | null>(null)
   const [documents, setDocuments] = useState<Document[]>([])
   const [documentsFailed, setDocumentsFailed] = useState(false)
@@ -309,6 +327,21 @@ function Perfil() {
             </div>
           </div>
         </div>
+
+        {/* Solo si el backend ya lo expone (explanation_style_choice llega como null o un estilo) */}
+        {learningProfile?.explanation_style_choice !== undefined && (
+          <section className="mx-4 md:mx-6 mb-5 rounded-xl border border-border p-4" aria-labelledby="como-te-explica">
+            <h2 id="como-te-explica" className="text-sm font-semibold">Cómo prefieres que te explique</h2>
+            <p className="mb-3 text-xs text-muted-foreground">
+              Vale para todos los temas. Si en un mensaje pides otra cosa («explícamelo paso a paso»), LARIA te hace caso en ese momento.
+            </p>
+            <StylePicker
+              value={styleOverride !== undefined ? styleOverride : learningProfile.explanation_style_choice}
+              onChoose={chooseStyle}
+              disabled={savingStyle}
+            />
+          </section>
+        )}
 
         {levelsByTopic.length > 0 && (
           <section className="mx-4 md:mx-6 mb-5 rounded-xl border border-border p-4" aria-labelledby="niveles-por-tema">

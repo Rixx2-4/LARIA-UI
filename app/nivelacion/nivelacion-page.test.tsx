@@ -38,10 +38,15 @@ function stubServer(verdicts: PlacementResult[]) {
   const diagnostics: string[] = []
   const attempts: Record<string, string>[] = []
   const createdChats: string[] = []
+  const styles: unknown[] = []
   let served = 0
   vi.stubGlobal("fetch", async (url: string, init?: RequestInit) => {
     const method = init?.method ?? "GET"
     if (url.endsWith("/users/me")) return json({ id: "u1", username: "ana", email: "a@a.a" })
+    if (url.endsWith("/learning/me/preferences")) {
+      if (method === "PUT") styles.push(JSON.parse(String(init?.body)))
+      return json(method === "PUT" ? JSON.parse(String(init?.body)) : { explanation_style: "visual" })
+    }
     if (url.endsWith("/chats/") && method === "POST") {
       createdChats.push(JSON.parse(String(init?.body)).title)
       return json({ id: "c9", title: "Clase" }, 201)
@@ -67,7 +72,7 @@ function stubServer(verdicts: PlacementResult[]) {
     }
     throw new Error(`Petición inesperada: ${method} ${url}`)
   })
-  return { diagnostics, attempts, createdChats }
+  return { diagnostics, attempts, createdChats, styles }
 }
 
 // Responde todas las preguntas de la ronda con la misma opción y la envía.
@@ -131,11 +136,17 @@ describe("Nivelación", () => {
     fireEvent.click(screen.getByRole("button", { name: "Seguir" }))
     await answerRound("C")
 
+    // Antes de la clase, cómo prefiere que le expliquen (la elección previa sale marcada)
+    expect(await screen.findByText("¿Cómo prefieres que te explique?")).toBeTruthy()
+    await waitFor(() => expect(screen.getByText("Con esquemas y dibujos").closest("button")?.getAttribute("aria-pressed")).toBe("true"))
+    fireEvent.click(screen.getByText("Paso a paso"))
+
     // Después de la última ronda: pasos reales y la clase en un chat nuevo
     expect(await screen.findByText("Preparando tu clase de ecuaciones lineales")).toBeTruthy()
     expect(await screen.findByText("Ajustando la clase a tu nivel (avanzado)")).toBeTruthy()
     await waitFor(() => expect(nav.push).toHaveBeenCalledWith("/chat/c9"))
     expect(server.createdChats).toEqual(["Clase: ecuaciones lineales"])
+    expect(server.styles).toEqual([{ explanation_style: "step_by_step" }])
     // La segunda ronda se pide con el mismo tema (el canónico) y sin decir cuál toca
     expect(server.diagnostics).toEqual(["ecuaciones", "ecuaciones lineales"])
     // Respuestas por índice, empezando en 0
@@ -149,6 +160,7 @@ describe("Nivelación", () => {
 
     fireEvent.click(await screen.findByRole("button", { name: "Empezar" }))
     await answerRound("A")
+    fireEvent.click(await screen.findByText("Que lo decida LARIA"))
 
     expect(await screen.findByText("Empezamos por lo básico")).toBeTruthy()
     expect(screen.getByText("Ajustando la clase a tu nivel (básico)")).toBeTruthy()
@@ -165,6 +177,7 @@ describe("Nivelación", () => {
     fireEvent.click(await screen.findByRole("button", { name: "Empezar" }))
     await answerRound("C")
     fireEvent.click(await screen.findByRole("button", { name: "Lo dejo aquí y empiezo la clase" }))
+    fireEvent.click(await screen.findByText("Sencillo"))
 
     expect(await screen.findByText("Tienes la base")).toBeTruthy()
     await waitFor(() => expect(nav.push).toHaveBeenCalledWith("/chat/c9"))

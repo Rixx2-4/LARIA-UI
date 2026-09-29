@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, afterEach, beforeEach } from "vitest"
-import { render, screen, cleanup, fireEvent } from "@testing-library/react"
+import { render, screen, cleanup, fireEvent, waitFor } from "@testing-library/react"
 import { AuthProvider } from "@/app/contexts/auth-context"
 import { ChatProvider } from "@/app/contexts/chat-context"
 import PerfilPage from "./page"
@@ -126,5 +126,60 @@ describe("PerfilPage", () => {
     expect(section.textContent).toContain("Electrónica · intermedio")
     expect(section.textContent).toContain("derivadas · básico")
     expect(section.textContent).not.toContain("electronica")
+  })
+
+  it("deja elegir cómo prefiere que le expliquen y lo guarda al tocar", async () => {
+    const saved: unknown[] = []
+    vi.stubGlobal("fetch", async (url: string, init?: RequestInit) => {
+      if (url.endsWith("/users/me")) return json({ id: "u1", username: "ana", email: "a@a.a" })
+      if (url.endsWith("/chats/")) return json({ chats: [] })
+      if (url.endsWith("/documents/")) return json([])
+      if (url.endsWith("/learning/me/preferences") && init?.method === "PUT") {
+        saved.push(JSON.parse(String(init.body)))
+        return json(JSON.parse(String(init.body)))
+      }
+      if (url.endsWith("/profile"))
+        return json({
+          student_id: "u1", pace: "normal", total_attempts: 1, total_struggle_signals: 0, frequent_errors: [], updated_at: "",
+          learning_velocity: 0, pedagogical_memory: null, mastery_by_document: [], mastery_by_concept: [],
+          explanation_style_choice: "analogy",
+        })
+      if (url.endsWith("/learning/me")) return json({ attempts: [], tutor_interactions: [], recommendations: [] })
+      throw new Error(`Petición inesperada: ${url}`)
+    })
+    render(
+      <AuthProvider>
+        <ChatProvider>
+          <PerfilPage />
+        </ChatProvider>
+      </AuthProvider>,
+    )
+
+    const section = await screen.findByRole("region", { name: "Cómo prefieres que te explique" })
+    expect(section.querySelector('[aria-pressed="true"]')?.textContent).toContain("Con ejemplos y analogías")
+    fireEvent.click(screen.getByText("Con fórmulas"))
+    await waitFor(() => expect(saved).toEqual([{ explanation_style: "mathematical" }]))
+  })
+
+  it("sin explanation_style_choice (backend antiguo) no muestra la sección", async () => {
+    vi.stubGlobal("fetch", async (url: string) => {
+      if (url.endsWith("/users/me")) return json({ id: "u1", username: "ana", email: "a@a.a" })
+      if (url.endsWith("/chats/")) return json({ chats: [] })
+      if (url.endsWith("/documents/")) return json([])
+      if (url.endsWith("/profile"))
+        return json({ student_id: "u1", pace: "normal", total_attempts: 1, total_struggle_signals: 0, frequent_errors: [], updated_at: "", learning_velocity: 0, pedagogical_memory: null, mastery_by_document: [], mastery_by_concept: [] })
+      if (url.endsWith("/learning/me")) return json({ attempts: [], tutor_interactions: [], recommendations: [] })
+      throw new Error(`Petición inesperada: ${url}`)
+    })
+    render(
+      <AuthProvider>
+        <ChatProvider>
+          <PerfilPage />
+        </ChatProvider>
+      </AuthProvider>,
+    )
+
+    await screen.findByText(/intentos de quiz completados/)
+    expect(screen.queryByRole("region", { name: "Cómo prefieres que te explique" })).toBeNull()
   })
 })

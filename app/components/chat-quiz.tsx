@@ -3,7 +3,8 @@
 import { useEffect, useRef, useState } from "react"
 import { ArrowRight, Loader2 } from "lucide-react"
 import { Button } from "@/components/ui/button"
-import { lariaAPI, type PlacementResult, type QuizQuestion, type QuizResponse } from "@/lib/laria-api"
+import { lariaAPI, type ExplanationStyle, type PlacementResult, type QuizQuestion, type QuizResponse } from "@/lib/laria-api"
+import { StylePicker } from "./style-picker"
 import {
   LEVEL_COPY,
   LEVEL_NAME,
@@ -26,7 +27,7 @@ export type ChatQuizRequest =
   // Sin topic: sobre el documento del chat
   | { kind: "practice"; topic?: string }
 
-type Phase = "offer" | "loading" | "question" | "grading" | "next-offer" | "lesson" | "done"
+type Phase = "offer" | "loading" | "question" | "grading" | "next-offer" | "style" | "lesson" | "done"
 
 const pause = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms))
 // Lo justo para leer cada paso; el ritmo lo marca el trabajo real
@@ -53,6 +54,36 @@ export function ChatQuiz({ chatId, request, onDismiss, onStartLesson }: ChatQuiz
   const [placement, setPlacement] = useState<PlacementResult | null>(null)
   const [steps, setSteps] = useState<{ level: StepStatus; lesson: StepStatus }>({ level: "pending", lesson: "pending" })
   const [error, setError] = useState<string | null>(null)
+  // La preferencia actual, para marcarla al preguntar (undefined mientras se carga)
+  const [style, setStyle] = useState<ExplanationStyle | null | undefined>(undefined)
+  const [savingStyle, setSavingStyle] = useState(false)
+
+  useEffect(() => {
+    if (phase !== "style") return
+    let cancelled = false
+    lariaAPI.learning
+      .preferences()
+      .then((prefs) => !cancelled && setStyle(prefs.explanation_style))
+      .catch(() => !cancelled && setStyle(null))
+    return () => {
+      cancelled = true
+    }
+  }, [phase])
+
+  // Tras la nivelación: cómo prefiere que le expliquen, y luego la clase. Si no se
+  // puede guardar (p. ej. el backend aún no lo tiene), la clase empieza igual
+  const chooseStyle = async (choice: ExplanationStyle | null) => {
+    setStyle(choice)
+    setSavingStyle(true)
+    try {
+      await lariaAPI.learning.setPreferences(choice)
+    } catch (err) {
+      console.warn("No se pudo guardar cómo prefieres que te expliquen:", err)
+    } finally {
+      setSavingStyle(false)
+    }
+    await startLesson(placement, topic)
+  }
 
   const questions: QuizQuestion[] = quiz?.questions ?? []
 
@@ -101,7 +132,7 @@ export function ChatQuiz({ chatId, request, onDismiss, onStartLesson }: ChatQuiz
       if (isPlacement) setTopic(shownTopic)
       if (!isPlacement) return setPhase("done")
       if (verdict?.has_next_round) return setPhase("next-offer")
-      await startLesson(verdict, shownTopic)
+      setPhase("style")
     } catch (err) {
       setError(err instanceof Error ? err.message : "No se pudieron enviar tus respuestas")
       setPhase("question")
@@ -203,11 +234,24 @@ export function ChatQuiz({ chatId, request, onDismiss, onStartLesson }: ChatQuiz
               <Button size="sm" onClick={load}>
                 Seguir
               </Button>
-              <Button size="sm" variant="outline" onClick={() => startLesson(placement, topic)}>
+              <Button size="sm" variant="outline" onClick={() => setPhase("style")}>
                 Empezar la clase
               </Button>
             </div>
             <Answers results={results} />
+          </div>
+        )}
+
+        {phase === "style" && (
+          <div className="space-y-3">
+            {placement && (
+              <p className="text-sm text-muted-foreground">
+                Tu punto de partida en {topic}: <span className="font-medium text-foreground">{LEVEL_NAME[placement.level]}</span>.
+              </p>
+            )}
+            <p className="font-medium">¿Cómo prefieres que te explique?</p>
+            <StylePicker value={style} onChoose={chooseStyle} disabled={savingStyle} compact />
+            <p className="text-xs text-muted-foreground">Vale para todos los temas. Puedes cambiarlo en tu perfil.</p>
           </div>
         )}
 
