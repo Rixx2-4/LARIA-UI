@@ -18,6 +18,10 @@ interface TutorEnvelope {
     offer_quiz?: boolean
     // Ya se niveló en el tema: la clase parte de este nivel (y no se ofrece nivelarse)
     placement_level?: PlacementLevel
+    // El tutor pregunta cómo prefiere aprender (con las 7 opciones en el texto)
+    ask_learning_style?: boolean
+    // Contestó en el chat ("la 4", "paso a paso") y el backend ya lo guardó; null = que decida LARIA
+    explanation_style_chosen?: ExplanationStyle | null
     [key: string]: unknown
   }
   [key: string]: unknown
