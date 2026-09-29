@@ -16,6 +16,7 @@ import { markPlacementOffered, wasPlacementOffered } from "@/lib/placement"
 import { isTextMime, mimeFromFilename } from "@/lib/file-types"
 import { chatHref } from "@/lib/routes"
 import { envelopeGrounded, envelopeLabel, tutorEnvelope } from "@/lib/tutor-envelope"
+import { LEVEL_NAME } from "@/app/quiz/quiz-parts"
 import { useStreamingChat } from "@/hooks/use-streaming-chat"
 import { useDictation } from "@/hooks/use-dictation"
 
@@ -421,6 +422,12 @@ export function SearchBar({ isOpeningChat = false }: { isOpeningChat?: boolean }
                           Copiar
                         </button>
                         {label && <span className="px-1.5 py-0.5 rounded bg-secondary/50">{label}</span>}
+                        {/* El tutor partió del nivel que sacó en la nivelación de este tema */}
+                        {envelope?.payload?.placement_level && LEVEL_NAME[envelope.payload.placement_level] && (
+                          <span className="px-1.5 py-0.5 rounded bg-secondary/50">
+                            Tu nivel: {LEVEL_NAME[envelope.payload.placement_level]}
+                          </span>
+                        )}
                         {grounded !== null && (
                           <span className={`px-1.5 py-0.5 rounded ${grounded ? "bg-green-500/20 text-green-700 dark:text-green-300" : "bg-yellow-500/20 text-yellow-700 dark:text-yellow-300"}`}>
                             {grounded ? "Tutoría" : "Chat libre"}

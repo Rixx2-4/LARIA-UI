@@ -16,6 +16,8 @@ interface TutorEnvelope {
     topic_hint?: string
     // Pidió un quiz ("ponme un quiz de X"): abrir uno interactivo, con topic_hint si nombró tema
     offer_quiz?: boolean
+    // Ya se niveló en el tema: la clase parte de este nivel (y no se ofrece nivelarse)
+    placement_level?: PlacementLevel
     [key: string]: unknown
   }
   [key: string]: unknown
@@ -135,6 +137,8 @@ interface StudentProfile {
   level_by_topic?: Record<string, PlacementLevel>
   // El nombre para mostrar de cada clave, con tildes; las nivelaciones antiguas no lo tienen
   topic_labels?: Record<string, string>
+  // Cómo eligió que le expliquen (null si no eligió; lo deducido va en pedagogical_memory)
+  explanation_style_choice?: ExplanationStyle | null
 }
 
 interface Document {
@@ -187,6 +191,9 @@ interface QuizAttemptQuestion {
 }
 
 type PlacementLevel = "basico" | "intermedio" | "avanzado"
+
+// Cómo prefiere que le expliquen; vale para todo, con y sin material
+type ExplanationStyle = "simple" | "step_by_step" | "analogy" | "visual" | "mathematical" | "technical"
 
 // Veredicto de una ronda de nivelación
 interface PlacementResult {
@@ -541,6 +548,13 @@ export const lariaAPI = {
   learning: {
     history: () => fetchAPI<LearningHistory>("/learning/me"),
     profile: () => fetchAPI<StudentProfile>("/learning/me/profile"),
+    // null = "que lo decida LARIA"
+    preferences: () => fetchAPI<{ explanation_style: ExplanationStyle | null }>("/learning/me/preferences"),
+    setPreferences: (explanationStyle: ExplanationStyle | null) =>
+      fetchAPI<{ explanation_style: ExplanationStyle | null }>("/learning/me/preferences", {
+        method: "PUT",
+        body: JSON.stringify({ explanation_style: explanationStyle }),
+      }),
   },
 
   documents: {
@@ -585,5 +599,5 @@ export type {
   QuizAttemptSummary, TutorInteraction, LearningRecommendation,
   PedagogicalMemory, DocumentMastery, ConceptMastery,
   QuizResponse, QuizQuestion, QuizAttemptResponse, QuizAttemptQuestion,
-  StreamCallbacks, TutorEnvelope, PlacementResult, PlacementLevel,
+  StreamCallbacks, TutorEnvelope, PlacementResult, PlacementLevel, ExplanationStyle,
 }

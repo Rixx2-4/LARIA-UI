@@ -156,8 +156,8 @@ describe("ChatScreen", () => {
     type Payload = Record<string, unknown>
     // Servidor como Render: el tutor responde a "quiero aprender…" o "ponme un quiz" con
     // el envelope que se le pase; los quizzes se generan y se califican en el servidor
-    function quizServer({ type = "answer", payload, documentId = null }: { type?: string; payload: Payload; documentId?: string | null }) {
-      const calls = { diagnostics: [] as string[], practice: [] as string[], topicPractice: [] as unknown[], attempts: 0, streamed: [] as string[] }
+    function quizServer({ type = "answer", payload, documentId = null, preferences = true }: { type?: string; payload: Payload; documentId?: string | null; preferences?: boolean }) {
+      const calls = { diagnostics: [] as string[], practice: [] as string[], topicPractice: [] as unknown[], attempts: 0, streamed: [] as string[], styles: [] as unknown[] }
       const quiz = (id: string, count: number, extra: Payload = {}) => ({
         id, document_id: documentId, total_points: count * 10, created_at: "", ...extra,
         questions: Array.from({ length: count }, (_, i) => ({
@@ -180,6 +180,15 @@ describe("ChatScreen", () => {
         if (url.endsWith("/quizzes/diagnostic") && method === "POST") {
           calls.diagnostics.push(JSON.parse(String(init?.body)).topic)
           return json(quiz("diag", 6, { topic: "astronomia", topic_label: "Astronomía" }), 201)
+        }
+        if (url.endsWith("/learning/me/preferences")) {
+          // Sin el endpoint (backend aún sin desplegar) responde 404
+          if (!preferences) return json({ detail: "Not Found" }, 404)
+          if (method === "PUT") {
+            calls.styles.push(JSON.parse(String(init?.body)))
+            return json(JSON.parse(String(init?.body)))
+          }
+          return json({ explanation_style: null })
         }
         if (url.endsWith("/quizzes/practice") && method === "POST") {
           calls.topicPractice.push(JSON.parse(String(init?.body)))
@@ -234,12 +243,36 @@ describe("ChatScreen", () => {
       expect(screen.getByText("Nivelación · Astronomía")).toBeTruthy()
       await answerAll("dos")
 
+      // Tras evaluarte, cómo prefieres que te explique
+      expect(await screen.findByText("¿Cómo prefieres que te explique?")).toBeTruthy()
+      fireEvent.click(screen.getByText("Con ejemplos y analogías"))
+      await waitFor(() => expect(calls.styles).toEqual([{ explanation_style: "analogy" }]))
+
       expect(await screen.findByText("Preparando tu clase de Astronomía")).toBeTruthy()
       await waitFor(() => expect(calls.streamed).toEqual(["Empecemos la clase de Astronomía. En la nivelación quedé en nivel básico."]))
       expect(await screen.findByText(/Nivelación de/)).toBeTruthy()
       expect(calls.diagnostics).toEqual(["astronomía"])
       // Sin salir del chat
       expect(nav.push).not.toHaveBeenCalled()
+    })
+
+    it("si el backend aún no guarda el estilo, la clase empieza igual", async () => {
+      const calls = quizServer({ payload: { intent: "learn", suggest_placement: true, topic_hint: "astronomía" }, preferences: false })
+      renderAt("c1")
+
+      fireEvent.click(await screen.findByRole("button", { name: "Empezar" }))
+      await answerAll("dos")
+      fireEvent.click(await screen.findByText("Que lo decida LARIA"))
+
+      await waitFor(() => expect(calls.streamed).toHaveLength(1))
+    })
+
+    it("si el tutor ya parte de tu nivel en el tema (placement_level), lo indica y no ofrece nivelarse", async () => {
+      quizServer({ type: "explanation", payload: { intent: "learn", placement_level: "intermedio", topic_hint: "astronomía" } })
+      renderAt("c1")
+
+      expect(await screen.findByText("Tu nivel: intermedio")).toBeTruthy()
+      expect(screen.queryByLabelText("Tema de la nivelación")).toBeNull()
     })
 
     it("con «learn» a secas (una pregunta conceptual) no ofrece nivelación", async () => {
