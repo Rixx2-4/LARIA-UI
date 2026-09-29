@@ -19,12 +19,17 @@ import { envelopeGrounded, envelopeLabel, tutorEnvelope } from "@/lib/tutor-enve
 import { useStreamingChat } from "@/hooks/use-streaming-chat"
 import { useDictation } from "@/hooks/use-dictation"
 
+// Lo mismo que acepta el backend (file_parser.py): texto, datos, código y cuatro binarios
 const ALLOWED_EXTENSIONS = [
-  ".pdf", ".docx", ".doc", ".txt", ".md", ".rtf", ".odt", ".epub",
-  ".pptx", ".ppt", ".odp", ".xlsx", ".xls", ".csv", ".ods",
-  ".py", ".java", ".c", ".cpp", ".cs", ".js", ".ts", ".html",
-  ".css", ".sql", ".json", ".xml", ".php", ".rb",
+  ".pdf", ".docx", ".pptx", ".xlsx",
+  ".txt", ".md", ".markdown",
+  ".csv", ".json", ".xml", ".yaml", ".yml", ".toml", ".ini", ".cfg", ".tex", ".rst", ".log",
+  ".py", ".js", ".ts", ".tsx", ".jsx", ".html", ".htm", ".css", ".scss", ".sh", ".bash", ".sql",
+  ".java", ".c", ".cpp", ".h", ".cs", ".php", ".rb", ".go", ".rs", ".swift", ".kt", ".r", ".jl", ".lua", ".pl",
 ]
+
+// Los formatos antiguos de Office tienen arreglo fácil: guardarlos en el formato nuevo
+const LEGACY_OFFICE: Record<string, string> = { ".doc": ".docx", ".ppt": ".pptx", ".xls": ".xlsx" }
 
 // Un adjunto del chat: recién subido (con tamaño y vista previa local) o
 // recuperado del servidor tras recargar (solo con sus datos básicos)
@@ -171,8 +176,10 @@ export function SearchBar({ isOpeningChat = false }: { isOpeningChat?: boolean }
 
     const ext = "." + (file.name.split(".").pop() || "").toLowerCase()
     if (!ALLOWED_EXTENSIONS.includes(ext)) {
-      toast.error(`Tipo de archivo no soportado: ${ext}`, {
-        description: `Formatos admitidos: ${ALLOWED_EXTENSIONS.join(", ")}`,
+      toast.error(`No se pueden subir archivos ${ext}`, {
+        description: LEGACY_OFFICE[ext]
+          ? `Guárdalo antes como ${LEGACY_OFFICE[ext]} y súbelo de nuevo.`
+          : "Admite PDF, Word (.docx), PowerPoint (.pptx), Excel (.xlsx), texto y código.",
       })
       return
     }

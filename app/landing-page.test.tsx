@@ -22,6 +22,9 @@ describe("Página de presentación", () => {
     render(<LandingPage />)
 
     expect(screen.getByRole("heading", { level: 1 }).textContent).toContain("pregunta lo que no entendiste")
+    // La plataforma es Plenum; LARIA es su tutor
+    expect(screen.getByRole("link", { name: "Plenum, inicio" })).toBeTruthy()
+    expect(screen.getAllByText(/LARIA/).length).toBeGreaterThan(0)
     const signUp = screen.getAllByRole("link", { name: /Crear cuenta/ })
     expect(signUp.length).toBeGreaterThan(0)
     signUp.forEach((link) => expect(link.getAttribute("href")).toBe("/chat?modo=registro"))

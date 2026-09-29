@@ -497,7 +497,7 @@ export const lariaAPI = {
         if (options.signal?.aborted) return
         // fetch y reader.read() fallan con TypeError cuando la red se cae
         const message = error instanceof TypeError || !(error instanceof Error)
-          ? "Se perdió la conexión con LARIA"
+          ? "Se perdió la conexión con Plenum"
           : error.message
         callbacks.onError?.(new Error(message))
         return

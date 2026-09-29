@@ -17,9 +17,9 @@ const display = Instrument_Serif({
 })
 
 export const metadata: Metadata = {
-  title: { absolute: "LARIA · Sube tus apuntes y pregunta lo que no entiendas" },
+  title: { absolute: "Plenum · Sube tus apuntes y pregunta lo que no entiendas" },
   description:
-    "LARIA lee tus PDF, diapositivas o código, te explica lo que no entiendes con fórmulas bien escritas y te pone quizzes para comprobar qué te sabes.",
+    "En Plenum estudias con LARIA, un tutor con IA: lee tus PDF, diapositivas o código, te explica lo que no entiendes con fórmulas bien escritas y te hace quizzes para comprobar qué te sabes.",
 }
 
 const STEPS = [
@@ -30,7 +30,7 @@ const STEPS = [
   },
   {
     title: "Pregunta como te salga",
-    text: "Escribe la duda tal cual, o díctala si tienes el libro en las manos. Según lo que preguntes, puede contestarte con una pista o con otra pregunta antes de darte la solución.",
+    text: "Escribe la duda tal cual, o díctala si tienes el libro en las manos. Con tus apuntes, LARIA se ajusta a cómo te va: si un concepto te está costando te guía con pistas, y si ya lo dominas te reta con preguntas antes de darte la solución.",
     mock: <ChatSnippet />,
   },
   {
@@ -47,7 +47,7 @@ const HONEST_NOTES = [
   },
   {
     title: "Tus documentos son tuyos",
-    text: "Solo los ves tú, desde tu cuenta. No aparecen en los chats de nadie más.",
+    text: "Solo los ves tú, desde tu cuenta. No aparecen en los chats de nadie más. Para responderte, su texto se procesa con OpenAI.",
   },
   {
     title: "El examen lo haces tú",
@@ -58,7 +58,11 @@ const HONEST_NOTES = [
 const FAQ = [
   {
     q: "¿Qué archivos puedo subir?",
-    a: "PDF, Word (.docx, .doc), PowerPoint (.pptx, .ppt), Excel (.xlsx, .xls), documentos de OpenDocument, ePub, RTF, Markdown, texto plano, CSV y código: Python, Java, C, C++, C#, JavaScript, TypeScript, PHP, Ruby, SQL, HTML, CSS, JSON y XML.",
+    a: "PDF, Word (.docx), PowerPoint (.pptx), Excel (.xlsx), texto (.txt, .md, .csv, .json…) y código (Python, JavaScript, TypeScript, Java, C/C++, C#, Go, Rust, SQL, HTML, CSS…), hasta 200 MB. Los formatos antiguos (.doc, .ppt, .xls) no: guárdalos antes como .docx, .pptx o .xlsx. Los PDF escaneados, que son solo imagen, tampoco se pueden leer.",
+  },
+  {
+    q: "¿Y si no tengo apuntes?",
+    a: "Dile a LARIA qué quieres aprender. Te pone unas preguntas rápidas por rondas para ver si estás en básico, intermedio o avanzado, y te lo explica.",
   },
   {
     q: "¿Sirve para matemáticas y física?",
@@ -115,8 +119,9 @@ export default function LandingPage() {
               </Reveal>
               <Reveal delay={0.15}>
                 <p className="mt-6 max-w-xl text-base leading-relaxed text-muted-foreground sm:text-lg">
-                  LARIA lee tu PDF, tus diapositivas o tu código y te responde a partir de ellos. Las fórmulas se
-                  ven como en el libro. Y cuando crees que ya lo tienes, te pone un quiz para comprobarlo.
+                  En Plenum estudias con LARIA, un tutor con IA: lee tu PDF, tus diapositivas o tu código y te
+                  responde a partir de ellos. Las fórmulas se ven como en el libro. Y cuando crees que ya lo tienes,
+                  pídele un quiz para comprobarlo.
                 </p>
               </Reveal>
               <Reveal delay={0.3}>
@@ -148,7 +153,7 @@ export default function LandingPage() {
           <section id="como-funciona" className="scroll-mt-16 border-t border-foreground/10">
             <div className="mx-auto max-w-6xl px-4 py-20 sm:px-6 lg:py-28">
               <Reveal>
-                <h2 className="font-display text-4xl tracking-tight sm:text-5xl">Así se estudia con LARIA</h2>
+                <h2 className="font-display text-4xl tracking-tight sm:text-5xl">Así se estudia en Plenum</h2>
               </Reveal>
 
               <ol className="mt-14 space-y-20 lg:space-y-28">
@@ -172,8 +177,9 @@ export default function LandingPage() {
                     Y tu perfil va <Marker delay={0.2}>tomando nota</Marker>
                   </h3>
                   <p className="mt-4 max-w-md leading-relaxed text-muted-foreground">
-                    Cada quiz actualiza cuánto dominas cada concepto. Si fallas varias veces seguidas en lo mismo,
-                    aparece en tu perfil para que sepas qué repasar antes del examen.
+                    Cada quiz actualiza cuánto dominas cada concepto. Si algo te cuesta varias veces seguidas, porque
+                    lo fallas en un quiz o le dices que no lo entiendes, aparece en tu perfil para que sepas qué
+                    repasar antes del examen.
                   </p>
                 </Reveal>
                 <Reveal delay={0.1}>
@@ -248,7 +254,7 @@ export default function LandingPage() {
 
         <footer className="border-t border-foreground/10">
           <div className="mx-auto flex max-w-6xl flex-wrap items-center justify-between gap-4 px-4 py-8 text-sm text-muted-foreground sm:px-6">
-            <span>© {new Date().getFullYear()} LARIA</span>
+            <span>© {new Date().getFullYear()} Plenum</span>
             <div className="flex gap-5">
               <Link href={NEW_CHAT_HREF} className="hover:text-foreground">
                 Entrar

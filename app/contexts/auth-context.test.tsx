@@ -39,7 +39,7 @@ describe("AuthProvider", () => {
 
     await waitFor(() => expect(result.current.isLoading).toBe(false))
     expect(result.current.isAuthenticated).toBe(false)
-    expect(result.current.connectionError).toBe("No se pudo conectar con LARIA")
+    expect(result.current.connectionError).toBe("No se pudo conectar con Plenum")
 
     online = true
     await act(() => result.current.retry())

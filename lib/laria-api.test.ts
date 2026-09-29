@@ -104,7 +104,7 @@ describe("lariaAPI.chats.stream", () => {
     sse.fail(new TypeError("network error"))
     await done
 
-    expect(events).toEqual(["token:Hola", "error:Se perdió la conexión con LARIA"])
+    expect(events).toEqual(["token:Hola", "error:Se perdió la conexión con Plenum"])
   })
 
   it("si el servidor rechaza la petición, avisa con su mensaje", async () => {

@@ -145,7 +145,7 @@ describe("Sidebar", () => {
     expect(screen.getByRole("textbox", { name: "Nuevo título" })).toBeTruthy()
   })
 
-  it("el nombre LARIA solo aparece con la barra lateral desplegada", async () => {
+  it("el nombre de la plataforma (Plenum) solo aparece con la barra lateral desplegada; el robot siempre", async () => {
     stubServer()
     render(
       <AuthProvider>
@@ -155,12 +155,13 @@ describe("Sidebar", () => {
       </AuthProvider>,
     )
     const historial = await screen.findByRole("button", { name: "Historial" })
-    expect(screen.queryByText("LARIA")).toBeNull()
+    expect(screen.queryByText("Plenum")).toBeNull()
+    expect(screen.getByRole("img", { name: "Plenum" })).toBeTruthy()
 
     fireEvent.click(historial)
-    expect(screen.getByText("LARIA")).toBeTruthy()
+    expect(screen.getByText("Plenum")).toBeTruthy()
 
     fireEvent.click(historial)
-    expect(screen.queryByText("LARIA")).toBeNull()
+    expect(screen.queryByText("Plenum")).toBeNull()
   })
 })

@@ -6,6 +6,7 @@ import { Loader2, ArrowRight, Check, Circle, X } from "lucide-react"
 import { useAuth } from "@/app/contexts/auth-context"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
+import { PlenumLogo } from "./plenum-logo"
 
 // Las mismas reglas que exige el backend al registrarse
 const PASSWORD_RULES = [
@@ -61,9 +62,8 @@ export function LoginScreen() {
       </Link>
       <section className="flex w-full max-w-md flex-col items-center gap-8 text-center">
         <div className="flex flex-col items-center gap-5">
-          <Link href="/" aria-label="LARIA, página de inicio" className="flex items-center gap-1.5">
-            <span className="text-3xl font-bold tracking-tight text-foreground">LARIA</span>
-            <span className="rounded-full bg-primary px-2.5 py-1 text-xs font-semibold text-primary-foreground">IA</span>
+          <Link href="/" aria-label="Plenum, página de inicio" className="flex items-center text-foreground">
+            <PlenumLogo className="h-16" />
           </Link>
           <div className="flex flex-col gap-2">
             <h1 className="text-2xl font-semibold tracking-tight text-foreground">

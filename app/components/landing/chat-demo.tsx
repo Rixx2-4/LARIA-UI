@@ -50,7 +50,7 @@ export function ChatDemo({ answer }: { answer: DemoPiece[][] }) {
   return (
     <div
       role="img"
-      aria-label="Ejemplo de conversación en LARIA: una estudiante sube el tema de derivadas y pregunta por la regla de la cadena; LARIA la explica con la fórmula y un ejemplo."
+      aria-label="Ejemplo de conversación en Plenum con LARIA: una estudiante sube el tema de derivadas y pregunta por la regla de la cadena; LARIA la explica con la fórmula y un ejemplo."
       className="overflow-hidden rounded-lg border border-foreground/15 bg-background shadow-[6px_6px_0_0] shadow-foreground/10"
     >
       <div className="flex items-center justify-between border-b border-foreground/10 px-4 py-2.5 text-xs text-muted-foreground">
