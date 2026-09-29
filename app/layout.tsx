@@ -8,11 +8,11 @@ import { ThemeProvider } from "next-themes"
 import { ThemedToaster } from "./components/themed-toaster"
 
 export const metadata: Metadata = {
-  title: { default: "LARIA", template: "%s · LARIA" },
-  description: "LARIA, tu tutor con IA: pregunta, sube tus apuntes y practica con quizzes.",
+  title: { default: "Plenum", template: "%s · Plenum" },
+  description: "Plenum: estudia con LARIA, un tutor con IA. Pregunta, sube tus apuntes y practica con quizzes.",
   openGraph: {
-    title: "LARIA",
-    description: "Tu tutor con IA: pregunta, sube tus apuntes y practica con quizzes.",
+    title: "Plenum",
+    description: "Estudia con LARIA, un tutor con IA: pregunta, sube tus apuntes y practica con quizzes.",
     locale: "es_ES",
     type: "website",
   },

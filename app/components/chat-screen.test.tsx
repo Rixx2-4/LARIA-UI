@@ -152,45 +152,106 @@ describe("ChatScreen", () => {
     await waitFor(() => expect(live()).toBe("Respuesta de LARIA lista."))
   })
 
-  describe("nivelación", () => {
-    const learnChat = (intent: string) =>
-      vi.stubGlobal("fetch", async (url: string) => {
+  describe("quiz en la conversación", () => {
+    type Payload = Record<string, unknown>
+    // Servidor como Render: el tutor responde a "quiero aprender…" o "ponme un quiz" con
+    // el envelope que se le pase; los quizzes se generan y se califican en el servidor
+    function quizServer({ type = "answer", payload, documentId = null }: { type?: string; payload: Payload; documentId?: string | null }) {
+      const calls = { diagnostics: [] as string[], practice: [] as string[], topicPractice: [] as unknown[], attempts: 0, streamed: [] as string[] }
+      const quiz = (id: string, count: number, extra: Payload = {}) => ({
+        id, document_id: documentId, total_points: count * 10, created_at: "", ...extra,
+        questions: Array.from({ length: count }, (_, i) => ({
+          index: i, text: `Pregunta ${i + 1}`, options: { A: "uno", B: "dos", C: "tres", D: "cuatro" }, difficulty: "easy",
+        })),
+      })
+      vi.stubGlobal("fetch", async (url: string, init?: RequestInit) => {
+        const method = init?.method ?? "GET"
         if (url.endsWith("/users/me")) return json({ id: "u1", username: "ana", email: "a@a.a" })
-        if (url.endsWith("/chats/")) return json({ chats: [{ id: "c1", title: "Ecuaciones" }] })
+        if (url.endsWith("/chats/")) return json({ chats: [{ id: "c1", title: "Chat" }] })
+        if (url.endsWith("/documents/")) return json([])
         if (url.endsWith("/chats/c1"))
           return json({
-            id: "c1",
-            title: "Ecuaciones",
+            id: "c1", title: "Chat", document_id: documentId,
             messages: [
-              { role: "user", content: "Quiero aprender ecuaciones" },
-              {
-                role: "assistant",
-                content: "Una ecuación es una igualdad con una incógnita.",
-                // Así guarda el backend el envelope: directamente en metadata
-                metadata: { type: "explanation", emotion: "encouraging", payload: { content: "…", intent, grounded: false } },
-              },
+              { role: "user", content: "Quiero aprender astronomía" },
+              { role: "assistant", content: "La astronomía estudia los cuerpos celestes.", metadata: { type, emotion: "encouraging", payload: { content: "…", grounded: !!documentId, ...payload } } },
             ],
           })
-        throw new Error(`Petición inesperada: ${url}`)
+        if (url.endsWith("/quizzes/diagnostic") && method === "POST") {
+          calls.diagnostics.push(JSON.parse(String(init?.body)).topic)
+          return json(quiz("diag", 6, { topic: "astronomia", topic_label: "Astronomía" }), 201)
+        }
+        if (url.endsWith("/quizzes/practice") && method === "POST") {
+          calls.topicPractice.push(JSON.parse(String(init?.body)))
+          return json(quiz("prac", 5, { topic: "fracciones", topic_label: "Fracciones" }), 201)
+        }
+        if (url.includes("/chats/c1/quiz?") && method === "POST") {
+          calls.practice.push(url)
+          return json(quiz("prac", 5))
+        }
+        const attempt = url.match(/\/quizzes\/(\w+)\/attempts$/)
+        if (attempt && method === "POST") {
+          calls.attempts++
+          const { answers } = JSON.parse(String(init?.body))
+          return json({
+            attempt_id: "a1", quiz_id: attempt[1], score: 0, total_points: 0, completed_at: "",
+            questions: Object.entries(answers).map(([index, selected]) => ({ index: Number(index), text: `Pregunta ${Number(index) + 1}`, selected, correct_answer: "C", is_correct: selected === "C" })),
+            placement: attempt[1] === "diag" ? { topic: "astronomia", topic_label: "Astronomía", round: "base", level: "basico", passed: false, has_next_round: false } : null,
+          })
+        }
+        if (url.endsWith("/chats/c1/stream") && method === "POST") {
+          calls.streamed.push(JSON.parse(String(init?.body)).content)
+          return new Response(tokenEvent("Empecemos por el sistema solar.") + doneEvent(), { status: 200 })
+        }
+        throw new Error(`Petición inesperada: ${method} ${url}`)
       })
+      return calls
+    }
+
+    // Responde la tarjeta entera con la misma opción, por texto (más rápido que por rol)
+    async function answerAll(optionText: string) {
+      for (;;) {
+        fireEvent.click(await screen.findByText(optionText))
+        const finish = screen.queryByText("Finalizar")
+        if (finish) return fireEvent.click(finish)
+        fireEvent.click(screen.getByText("Siguiente"))
+      }
+    }
 
     beforeEach(() => localStorage.clear())
 
-    it("si el tutor detecta «quiero aprender», ofrece nivelarse con el tema ya puesto", async () => {
-      learnChat("learn")
+    it("«quiero aprender X» (suggest_placement): nivelación aquí mismo y la clase empieza en este chat", async () => {
+      const calls = quizServer({ payload: { intent: "learn", suggest_placement: true, topic_hint: "astronomía" } })
       renderAt("c1")
 
+      // El tema viene del backend (topic_hint), con sus tildes
       const topic = (await screen.findByLabelText("Tema de la nivelación")) as HTMLInputElement
-      expect(topic.value).toBe("ecuaciones")
-      expect(screen.getByRole("link", { name: "Empezar" }).getAttribute("href")).toBe("/nivelacion?tema=ecuaciones&chat=c1")
-      // Las etiquetas del tutor se leen de metadata (antes no salían nunca)
-      expect(screen.getByText("Explicación")).toBeTruthy()
-      expect(screen.getByText("Chat libre")).toBeTruthy()
-      expect(screen.queryByText("encouraging")).toBeNull()
+      expect(topic.value).toBe("astronomía")
+      fireEvent.click(screen.getByRole("button", { name: "Empezar" }))
+
+      expect(await screen.findByText("1 de 6")).toBeTruthy()
+      // Se muestra el nombre para mostrar (topic_label), no la clave interna
+      expect(screen.getByText("Nivelación · Astronomía")).toBeTruthy()
+      await answerAll("dos")
+
+      expect(await screen.findByText("Preparando tu clase de Astronomía")).toBeTruthy()
+      await waitFor(() => expect(calls.streamed).toEqual(["Empecemos la clase de Astronomía. En la nivelación quedé en nivel básico."]))
+      expect(await screen.findByText(/Nivelación de/)).toBeTruthy()
+      expect(calls.diagnostics).toEqual(["astronomía"])
+      // Sin salir del chat
+      expect(nav.push).not.toHaveBeenCalled()
+    })
+
+    it("con «learn» a secas (una pregunta conceptual) no ofrece nivelación", async () => {
+      quizServer({ payload: { intent: "learn" } })
+      renderAt("c1")
+
+      await screen.findByText("La astronomía estudia los cuerpos celestes.")
+      expect(screen.queryByLabelText("Tema de la nivelación")).toBeNull()
     })
 
     it("«Ahora no» la cierra y ese chat no la vuelve a ofrecer", async () => {
-      learnChat("learn")
+      quizServer({ payload: { intent: "learn", suggest_placement: true, topic_hint: "astronomía" } })
       const { unmount } = renderAt("c1")
 
       fireEvent.click(await screen.findByRole("button", { name: "Ahora no" }))
@@ -198,16 +259,52 @@ describe("ChatScreen", () => {
 
       unmount()
       renderAt("c1")
-      await screen.findByText("Una ecuación es una igualdad con una incógnita.")
+      await screen.findByText("La astronomía estudia los cuerpos celestes.")
       expect(screen.queryByLabelText("Tema de la nivelación")).toBeNull()
     })
 
-    it("con otra intención no ofrece nada", async () => {
-      learnChat("general")
+    it("«ponme un quiz» (offer_quiz) en un chat con documento: práctica sobre el documento", async () => {
+      const calls = quizServer({ payload: { intent: "quiz", offer_quiz: true }, documentId: "d1" })
       renderAt("c1")
 
-      await screen.findByText("Una ecuación es una igualdad con una incógnita.")
-      expect(screen.queryByLabelText("Tema de la nivelación")).toBeNull()
+      expect(await screen.findByText(/Cuestionario sobre tu documento/)).toBeTruthy()
+      fireEvent.click(screen.getByRole("button", { name: "Empezar" }))
+      await answerAll("tres")
+
+      expect(await screen.findByText("5 de 5")).toBeTruthy()
+      expect(calls.practice[0]).toMatch(/\/chats\/c1\/quiz\?num_questions=5$/)
+      expect(calls.attempts).toBe(1)
+      expect(calls.streamed).toEqual([])
+    })
+
+    it("«ponme un quiz de fracciones» sin documento: práctica sobre el tema, sin tocar el nivel", async () => {
+      const calls = quizServer({ payload: { intent: "quiz", offer_quiz: true, topic_hint: "fracciones" } })
+      renderAt("c1")
+
+      expect(await screen.findByText(/Cuestionario sobre/)).toBeTruthy()
+      fireEvent.click(screen.getByRole("button", { name: "Empezar" }))
+      expect(await screen.findByText("Práctica · Fracciones")).toBeTruthy()
+      await answerAll("tres")
+
+      expect(await screen.findByText("5 de 5")).toBeTruthy()
+      expect(calls.topicPractice).toEqual([{ topic: "fracciones", num_questions: 5 }])
+      expect(calls.diagnostics).toEqual([])
+    })
+
+    it("sin offer_quiz no se abre nada, aunque la intención sea quiz", async () => {
+      quizServer({ payload: { intent: "quiz" }, documentId: "d1" })
+      renderAt("c1")
+
+      await screen.findByText("La astronomía estudia los cuerpos celestes.")
+      expect(screen.queryByText(/Cuestionario sobre/)).toBeNull()
+    })
+
+    it("«ponme un quiz» sin tema ni documento: no se abre nada (el tutor pregunta el tema)", async () => {
+      quizServer({ payload: { intent: "quiz", offer_quiz: true } })
+      renderAt("c1")
+
+      await screen.findByText("La astronomía estudia los cuerpos celestes.")
+      expect(screen.queryByText(/Cuestionario sobre/)).toBeNull()
     })
   })
 

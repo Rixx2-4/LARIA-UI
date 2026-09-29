@@ -36,7 +36,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     } catch (error) {
       // Un 401 ya borró el token y avisó por onUnauthorized
       const expired = error instanceof ApiError && error.status === 401
-      if (!expired) setConnectionError("No se pudo conectar con LARIA")
+      if (!expired) setConnectionError("No se pudo conectar con Plenum")
     } finally {
       setIsLoading(false)
     }

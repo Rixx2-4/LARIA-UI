@@ -15,8 +15,8 @@ import {
   Pencil,
 } from "lucide-react"
 import { ScrollArea } from "@/components/ui/scroll-area"
-import Image from "next/image"
 import { AccountMenu } from "./account-menu"
+import { PlenumMark } from "./plenum-logo"
 import { ChatListSkeleton, DocumentListSkeleton } from "./skeletons"
 import { useChat } from "@/app/contexts/chat-context"
 import { useAuth } from "@/app/contexts/auth-context"
@@ -95,7 +95,7 @@ export function Sidebar({ onNavigate }: { onNavigate?: () => void } = {}) {
       <div className="flex flex-col h-full w-[72px] shrink-0 items-center">
         {/* Logo */}
         <div className="mb-6 flex h-10 w-10 shrink-0 items-center justify-center">
-          <Image src="/images/robot.png" alt="LARIA" width={32} height={32} className="rounded-lg object-contain" />
+          <PlenumMark className="h-9 text-foreground" />
         </div>
 
         <Button
@@ -190,7 +190,7 @@ export function Sidebar({ onNavigate }: { onNavigate?: () => void } = {}) {
         <div key={openPanel} className="flex w-[208px] flex-col bg-background border-r border-border">
           {/* El nombre de la app solo se ve con la barra lateral desplegada, a la altura del logo */}
           <div className="mb-6 flex h-10 shrink-0 items-center px-3">
-            <span className="text-xl font-bold tracking-tight text-foreground">LARIA</span>
+            <span className="text-xl font-bold tracking-tight text-foreground">Plenum</span>
           </div>
           <div className="min-h-0 flex-1">
             {openPanel === "history" && (

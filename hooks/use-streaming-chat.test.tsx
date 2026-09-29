@@ -105,7 +105,7 @@ describe("useStreamingChat", () => {
     await waitFor(() => expect(last(result.current.messages).content).toBe("Hola"))
     sse.fail(new TypeError("network error"))
 
-    await waitFor(() => expect(result.current.error).toBe("Se perdió la conexión con LARIA"))
+    await waitFor(() => expect(result.current.error).toBe("Se perdió la conexión con Plenum"))
     expect(result.current.isStreaming).toBe(false)
     expect(result.current.isThinking).toBe(false)
     expect(last(result.current.messages)).toMatchObject({ role: "assistant", content: "Hola" })

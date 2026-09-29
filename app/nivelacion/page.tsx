@@ -3,12 +3,12 @@
 import { Suspense, useState, type FormEvent } from "react"
 import Link from "next/link"
 import { useRouter, useSearchParams } from "next/navigation"
-import { Check, Loader2 } from "lucide-react"
+import { Loader2 } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { AppShell } from "../components/app-shell"
 import { RequireAuth } from "../components/require-auth"
-import { QuestionStep, ResultsList, toResults, type QuizResult } from "../quiz/quiz-parts"
-import { lariaAPI, type PlacementLevel, type PlacementResult, type QuizQuestion } from "@/lib/laria-api"
+import { LEVEL_COPY, LEVEL_NAME, QuestionStep, ResultsList, StepRow, toResults, type QuizResult, type StepStatus } from "../quiz/quiz-parts"
+import { lariaAPI, type PlacementResult, type QuizQuestion } from "@/lib/laria-api"
 import { NEW_CHAT_HREF, chatHref } from "@/lib/routes"
 import { markPlacementOffered } from "@/lib/placement"
 import { useChat } from "../contexts/chat-context"
@@ -19,21 +19,7 @@ import { useChat } from "../contexts/chat-context"
 // Al terminar se prepara la primera clase: un chat nuevo en el que el tutor empieza
 // a explicar el tema. Cada paso de la animación corresponde a algo que ocurre de verdad.
 
-const LEVEL_NAME: Record<PlacementLevel, string> = {
-  basico: "básico",
-  intermedio: "intermedio",
-  avanzado: "avanzado",
-}
-
-// Cómo se nombra cada punto de partida: sin tono de aprobado o suspenso
-const LEVEL_COPY: Record<PlacementLevel, { title: string }> = {
-  basico: { title: "Empezamos por lo básico" },
-  intermedio: { title: "Tienes la base" },
-  avanzado: { title: "Vas por delante" },
-}
-
 type Phase = "intro" | "loading" | "questions" | "preparing"
-type StepStatus = "pending" | "active" | "done"
 
 interface Preparation {
   review: StepStatus
@@ -90,8 +76,8 @@ function Placement({ initialTopic, chatId }: { initialTopic: string; chatId: str
       if (!quiz.questions?.length) throw new Error("No se pudieron preparar las preguntas. Prueba de nuevo.")
       setQuizId(quiz.id)
       setQuestions(quiz.questions)
-      // El nombre con el que el backend guarda el nivel ("ecuaciones" → "ecuaciones lineales")
-      if (quiz.topic) setTopic(quiz.topic)
+      // El nombre para mostrar (topic_label, con tildes); topic es la clave interna
+      if (quiz.topic_label || quiz.topic) setTopic(quiz.topic_label || quiz.topic || topic)
       setCurrent(0)
       setAnswers({})
       setPhase("questions")
@@ -264,31 +250,6 @@ function Intro({
         </Button>
       </div>
     </form>
-  )
-}
-
-function StepRow({ status, label, detail }: { status: StepStatus; label: string; detail?: string | null }) {
-  return (
-    <li className={`flex gap-3 transition-opacity duration-300 ${status === "pending" ? "opacity-40" : "opacity-100"}`}>
-      <span className="mt-0.5 flex h-6 w-6 shrink-0 items-center justify-center" aria-hidden>
-        {status === "done" ? (
-          <span className="flex h-6 w-6 items-center justify-center rounded-full bg-primary text-primary-foreground animate-in zoom-in-50 duration-300">
-            <Check className="h-3.5 w-3.5" />
-          </span>
-        ) : status === "active" ? (
-          <Loader2 className="h-5 w-5 animate-spin text-foreground motion-reduce:animate-none" />
-        ) : (
-          <span className="h-4 w-4 rounded-full border-2 border-muted-foreground/40" />
-        )}
-      </span>
-      <div>
-        <p className={status === "active" ? "font-medium" : undefined}>
-          {label}
-          <span className="sr-only">{status === "done" ? " (hecho)" : status === "active" ? " (en curso)" : " (pendiente)"}</span>
-        </p>
-        {detail && <p className="text-sm text-muted-foreground animate-in fade-in duration-300">{detail}</p>}
-      </div>
-    </li>
   )
 }
 

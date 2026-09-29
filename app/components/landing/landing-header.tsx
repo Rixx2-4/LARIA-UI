@@ -5,6 +5,7 @@ import Link from "next/link"
 import { useRouter } from "next/navigation"
 import { useMotionValueEvent, useScroll } from "motion/react"
 import { getAuthToken } from "@/lib/laria-api"
+import { PlenumLogo } from "../plenum-logo"
 import { NEW_CHAT_HREF, SIGN_UP_HREF } from "@/lib/routes"
 
 const SECTIONS = [
@@ -31,9 +32,8 @@ export function LandingHeader() {
       }`}
     >
       <div className="mx-auto flex max-w-6xl items-center justify-between gap-4 px-4 py-3 sm:px-6">
-        <Link href="/" className="flex items-center gap-1.5" aria-label="LARIA, inicio">
-          <span className="text-xl font-bold tracking-tight">LARIA</span>
-          <span className="rounded-full bg-primary px-2 py-0.5 text-[10px] font-semibold text-primary-foreground">IA</span>
+        <Link href="/" className="flex items-center" aria-label="Plenum, inicio">
+          <PlenumLogo className="h-10 sm:h-12" />
         </Link>
 
         <nav aria-label="Secciones" className="hidden items-center gap-6 text-sm text-muted-foreground md:flex">

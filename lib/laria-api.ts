@@ -7,9 +7,15 @@ interface TutorEnvelope {
   emotion?: string
   payload?: {
     content?: string
-    // "learn" cuando el estudiante dice que quiere aprender algo
+    // "learn" con cualquier pregunta conceptual; no sirve para decidir si ofrecer nivelación
     intent?: string
     grounded?: boolean
+    // Solo cuando pidió aprender un TEMA ("quiero aprender X"): ofrecer la nivelación
+    suggest_placement?: boolean
+    // El tema tal como lo escribió el estudiante, con tildes
+    topic_hint?: string
+    // Pidió un quiz ("ponme un quiz de X"): abrir uno interactivo, con topic_hint si nombró tema
+    offer_quiz?: boolean
     [key: string]: unknown
   }
   [key: string]: unknown
@@ -125,8 +131,10 @@ interface StudentProfile {
   pedagogical_memory: PedagogicalMemory | null
   mastery_by_document: DocumentMastery[]
   mastery_by_concept: ConceptMastery[]
-  // Nivel alcanzado en cada tema nivelado; aún no lo envía el backend
+  // Nivel alcanzado en cada tema nivelado, por clave interna del tema ({} si ninguno)
   level_by_topic?: Record<string, PlacementLevel>
+  // El nombre para mostrar de cada clave, con tildes; las nivelaciones antiguas no lo tienen
+  topic_labels?: Record<string, string>
 }
 
 interface Document {
@@ -489,7 +497,7 @@ export const lariaAPI = {
         if (options.signal?.aborted) return
         // fetch y reader.read() fallan con TypeError cuando la red se cae
         const message = error instanceof TypeError || !(error instanceof Error)
-          ? "Se perdió la conexión con LARIA"
+          ? "Se perdió la conexión con Plenum"
           : error.message
         callbacks.onError?.(new Error(message))
         return
@@ -509,6 +517,13 @@ export const lariaAPI = {
   },
 
   quizzes: {
+    // Quiz de práctica sobre un tema, sin documento: deja evidencia pero no cambia el nivel
+    practice: (topic: string, numQuestions: number = 5) =>
+      fetchAPI<QuizResponse>("/quizzes/practice", {
+        method: "POST",
+        body: JSON.stringify({ topic, num_questions: numQuestions }),
+      }),
+
     // Una ronda de nivelación sobre un tema; el backend decide si toca la base o la avanzada
     diagnostic: (topic: string) =>
       fetchAPI<QuizResponse>("/quizzes/diagnostic", {

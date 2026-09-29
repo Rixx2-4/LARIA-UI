@@ -48,7 +48,7 @@ describe("RequireAuth", () => {
     })
     renderProtectedPage()
 
-    expect(await screen.findByText("No se pudo conectar con LARIA")).toBeTruthy()
+    expect(await screen.findByText("No se pudo conectar con Plenum")).toBeTruthy()
     online = true
     fireEvent.click(screen.getByRole("button", { name: "Reintentar" }))
 

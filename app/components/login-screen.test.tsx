@@ -67,6 +67,6 @@ describe("LoginScreen", () => {
     )
 
     expect(screen.getByRole("link", { name: "Cerrar y volver a la página de inicio" }).getAttribute("href")).toBe("/")
-    expect(screen.getByRole("link", { name: "LARIA, página de inicio" }).getAttribute("href")).toBe("/")
+    expect(screen.getByRole("link", { name: "Plenum, página de inicio" }).getAttribute("href")).toBe("/")
   })
 })

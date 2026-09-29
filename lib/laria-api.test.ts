@@ -104,7 +104,7 @@ describe("lariaAPI.chats.stream", () => {
     sse.fail(new TypeError("network error"))
     await done
 
-    expect(events).toEqual(["token:Hola", "error:Se perdió la conexión con LARIA"])
+    expect(events).toEqual(["token:Hola", "error:Se perdió la conexión con Plenum"])
   })
 
   it("si el servidor rechaza la petición, avisa con su mensaje", async () => {
@@ -288,5 +288,19 @@ describe("lariaAPI.quizzes.diagnostic", () => {
 
     expect(seen[0]).toEqual({ url: expect.stringMatching(/\/quizzes\/diagnostic$/), method: "POST", body: '{"topic":"ecuaciones"}' })
     expect(quiz.topic).toBe("ecuaciones lineales")
+  })
+})
+
+describe("lariaAPI.quizzes.practice", () => {
+  it("pide la práctica sobre un tema con un POST y el número de preguntas", async () => {
+    const seen: { url: string; method?: string; body?: string }[] = []
+    vi.stubGlobal("fetch", async (url: string, init?: RequestInit) => {
+      seen.push({ url, method: init?.method, body: String(init?.body) })
+      return new Response(JSON.stringify({ id: "q1", document_id: null, questions: [], total_points: 0, created_at: "" }), { status: 201 })
+    })
+
+    await lariaAPI.quizzes.practice("fracciones")
+
+    expect(seen[0]).toEqual({ url: expect.stringMatching(/\/quizzes\/practice$/), method: "POST", body: '{"topic":"fracciones","num_questions":5}' })
   })
 })
