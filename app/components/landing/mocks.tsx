@@ -174,3 +174,62 @@ export function ProfileMock() {
     </div>
   )
 }
+
+// Sin material: la nivelación por rondas y el nivel que queda guardado
+const LEVEL_STEPS = ["básico", "intermedio", "avanzado"]
+
+export function PlacementMock() {
+  const { ref, play, instant } = usePlay<HTMLDivElement>()
+  const [answered, setAnswered] = useState(false)
+
+  useEffect(() => {
+    if (!play) return
+    const timer = setTimeout(() => setAnswered(true), instant ? 0 : 1300)
+    return () => clearTimeout(timer)
+  }, [play, instant])
+
+  return (
+    <div ref={ref} aria-hidden className={`${frame} p-4`}>
+      <div className="mb-3 flex items-center justify-between text-xs text-muted-foreground">
+        <span>Nivelación · Astronomía</span>
+        <span>Ronda base · 6 de 6</span>
+      </div>
+      <p className="mb-3 text-[14px] font-medium">¿Qué planeta está más cerca del Sol?</p>
+      <div className="space-y-2">
+        {["Venus", "Mercurio", "Marte"].map((option) => {
+          const chosen = answered && option === "Mercurio"
+          return (
+            <div
+              key={option}
+              className={`rounded-md border px-3 py-2 text-[13px] transition-colors duration-300 ${
+                chosen ? "border-foreground bg-foreground/5" : "border-foreground/15"
+              }`}
+            >
+              {option}
+            </div>
+          )
+        })}
+      </div>
+      <m.div
+        className="mt-4 border-t border-foreground/10 pt-3"
+        initial={{ opacity: 0 }}
+        animate={answered ? { opacity: 1 } : undefined}
+        transition={{ delay: instant ? 0 : 0.5 }}
+      >
+        <p className="mb-2 text-[12.5px]">Tu punto de partida en astronomía:</p>
+        <div className="flex gap-1.5">
+          {LEVEL_STEPS.map((level, i) => (
+            <span
+              key={level}
+              className={`flex-1 rounded-full px-2 py-1 text-center text-[11.5px] ${
+                i === 1 ? "bg-foreground text-background" : "bg-muted text-muted-foreground"
+              }`}
+            >
+              {level}
+            </span>
+          ))}
+        </div>
+      </m.div>
+    </div>
+  )
+}

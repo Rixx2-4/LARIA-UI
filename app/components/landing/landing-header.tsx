@@ -9,7 +9,8 @@ import { PlenumLogo } from "../plenum-logo"
 import { NEW_CHAT_HREF, SIGN_UP_HREF } from "@/lib/routes"
 
 const SECTIONS = [
-  { href: "#como-funciona", label: "Cómo funciona" },
+  { href: "#como-funciona", label: "Cómo empezar" },
+  { href: "#como-se-adapta", label: "Cómo se adapta" },
   { href: "#antes-de-empezar", label: "Antes de empezar" },
   { href: "#preguntas", label: "Preguntas" },
 ]
