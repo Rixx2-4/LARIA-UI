@@ -30,6 +30,10 @@ const ALLOWED_EXTENSIONS = [
 ]
 
 // Los formatos antiguos de Office tienen arreglo fácil: guardarlos en el formato nuevo
+// Límite de subida del backend (DOCUMENT_MAX_UPLOAD_BYTES en Render): mejor avisar
+// antes que esperar a subir el archivo entero para recibir un 413
+const MAX_UPLOAD_BYTES = 25 * 1024 * 1024
+
 const LEGACY_OFFICE: Record<string, string> = { ".doc": ".docx", ".ppt": ".pptx", ".xls": ".xlsx" }
 
 // Un adjunto del chat: recién subido (con tamaño y vista previa local) o
@@ -182,6 +186,10 @@ export function SearchBar({ isOpeningChat = false }: { isOpeningChat?: boolean }
           ? `Guárdalo antes como ${LEGACY_OFFICE[ext]} y súbelo de nuevo.`
           : "Admite PDF, Word (.docx), PowerPoint (.pptx), Excel (.xlsx), texto y código.",
       })
+      return
+    }
+    if (file.size > MAX_UPLOAD_BYTES) {
+      toast.error("El archivo es demasiado grande", { description: "El máximo es 25 MB." })
       return
     }
 

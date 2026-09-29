@@ -8,6 +8,7 @@ import { setAuthToken } from "@/lib/laria-api"
 import { controllableSSE, doneEvent, tokenEvent } from "@/test/sse"
 import { FakeSpeechRecognition } from "@/test/speech"
 import { preferReducedMotion } from "@/test/media"
+import { toast } from "sonner"
 
 // El router de Next: la URL actual y las navegaciones que pide la pantalla
 const nav = vi.hoisted(() => ({
@@ -503,6 +504,28 @@ describe("ChatScreen", () => {
     expect(sent).toEqual([{ role: "system", content: "📎 Subí el archivo: tema1.txt" }])
     // Una línea de aviso, no una burbuja del tutor
     expect(note.tagName).toBe("P")
+  })
+
+  it("un archivo de más de 25 MB se rechaza antes de subirlo", async () => {
+    const requests: string[] = []
+    vi.stubGlobal("fetch", async (url: string) => {
+      requests.push(url)
+      if (url.endsWith("/users/me")) return json({ id: "u1", username: "ana", email: "a@a.a" })
+      if (url.endsWith("/chats/")) return json({ chats: [] })
+      if (url.endsWith("/chats/c1")) return json({ id: "c1", title: "t", messages: [{ role: "user", content: "Hola" }] })
+      throw new Error(`Petición inesperada: ${url}`)
+    })
+    const toastError = vi.spyOn(toast, "error")
+    const { container } = renderAt("c1")
+    await screen.findByText("Hola")
+
+    const big = new File(["x"], "libro.pdf", { type: "application/pdf" })
+    Object.defineProperty(big, "size", { value: 25 * 1024 * 1024 + 1 })
+    fireEvent.change(container.querySelector<HTMLInputElement>('input[type="file"]')!, { target: { files: [big] } })
+
+    await waitFor(() => expect(toastError).toHaveBeenCalledWith("El archivo es demasiado grande", { description: "El máximo es 25 MB." }))
+    expect(requests.some((u) => u.includes("/documents"))).toBe(false)
+    toastError.mockRestore()
   })
 
   it("al abrir un chat con documento vinculado (p. ej. tras recargar), muestra su archivo", async () => {
