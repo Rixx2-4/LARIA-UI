@@ -370,7 +370,7 @@ export const lariaAPI = {
 
       if (!response.ok) {
         // El detalle del backend puede venir en inglés; los casos habituales se dicen en español
-        if (response.status === 401) throw new Error("Email o contraseña incorrectos")
+        if (response.status === 401) throw new ApiError("Email o contraseña incorrectos", 401)
         const error = await response.json().catch(() => ({ detail: "Error de autenticación" }))
         throw new Error(
           describeErrorDetail(error.detail, response.status === 429 ? "Demasiados intentos. Espera un momento y vuelve a probar" : "Error de autenticación"),

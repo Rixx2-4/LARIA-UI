@@ -6,6 +6,7 @@ import { Loader2, ArrowRight, Check, Circle, X } from "lucide-react"
 import { useAuth } from "@/app/contexts/auth-context"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
+import { ApiError } from "@/lib/laria-api"
 import { PlenumLogo } from "./plenum-logo"
 import { GoogleButton, useGoogleSignIn } from "./google-button"
 
@@ -44,7 +45,18 @@ export function LoginScreen() {
       if (isLogin) await login(email, password)
       else await register(username, email, password)
     } catch (err) {
-      setError(err instanceof Error ? err.message : "No se pudo completar la operación")
+      const message = err instanceof Error ? err.message : "No se pudo completar la operación"
+      const sentence = message.replace(/\.$/, "")
+      const status = err instanceof ApiError ? err.status : null
+      // Qué hacer después, según el caso: la cuenta ya existe, o quizá se creó con Google
+      // (una cuenta vinculada a Google puede no tener contraseña)
+      if (!isLogin && status === 409) {
+        setError(`${sentence}. ¿Ya tienes cuenta? Inicia sesión${googleClientId ? " o entra con Google" : ""}.`)
+      } else if (isLogin && status === 401 && googleClientId) {
+        setError(`${sentence}. ¿Te registraste con Google? Usa «Continuar con Google».`)
+      } else {
+        setError(message)
+      }
     } finally {
       setIsLoading(false)
     }

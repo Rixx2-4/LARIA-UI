@@ -177,4 +177,69 @@ describe("LoginScreen", () => {
 
     expect((await screen.findByRole("alert")).textContent).toBe("Demasiados intentos para esta cuenta. Espera 15 minutos y vuelve a intentarlo.")
   })
+
+  describe("qué hacer tras un error", () => {
+    const withGoogle = (routes: (url: string) => Response | undefined) =>
+      vi.stubGlobal("fetch", async (url: string) => {
+        if (url.endsWith("/auth/providers")) return json({ google_client_id: "abc.apps.googleusercontent.com" })
+        const response = routes(url)
+        if (response) return response
+        throw new Error(`Petición inesperada: ${url}`)
+      })
+
+    it("en el registro también está «Continuar con Google», y si la cuenta ya existe sugiere entrar", async () => {
+      fakeGoogle()
+      withGoogle((url) => (url.endsWith("/auth/register") ? json({ detail: "Ya existe un usuario con esos datos" }, 409) : undefined))
+      renderRegister()
+      expect(await screen.findByText("Continuar con Google")).toBeTruthy()
+
+      fireEvent.change(screen.getByPlaceholderText("Mínimo 8 caracteres"), { target: { value: "Clave123" } })
+      fireEvent.click(screen.getByRole("button", { name: "Crear cuenta" }))
+
+      expect((await screen.findByRole("alert")).textContent).toBe(
+        "Ya existe un usuario con esos datos. ¿Ya tienes cuenta? Inicia sesión o entra con Google.",
+      )
+    })
+
+    it("con la contraseña rechazada y Google disponible, recuerda que la cuenta puede ser de Google", async () => {
+      fakeGoogle()
+      withGoogle((url) => (url.endsWith("/auth/token") ? json({ detail: "Credenciales invalidas" }, 401) : undefined))
+      render(
+        <AuthProvider>
+          <LoginScreen />
+        </AuthProvider>,
+      )
+      await screen.findByText("Continuar con Google")
+      fireEvent.change(screen.getByPlaceholderText("tu@email.com"), { target: { value: "ana@example.com" } })
+      fireEvent.change(screen.getByPlaceholderText("Tu contraseña"), { target: { value: "Clave123" } })
+      fireEvent.click(screen.getByRole("button", { name: "Iniciar sesión" }))
+
+      expect((await screen.findByRole("alert")).textContent).toBe(
+        "Email o contraseña incorrectos. ¿Te registraste con Google? Usa «Continuar con Google».",
+      )
+    })
+
+    it("sin Google, la contraseña rechazada no menciona Google; un 429 del registro muestra su motivo", async () => {
+      vi.stubGlobal("fetch", async (url: string) => {
+        if (url.endsWith("/auth/token")) return json({ detail: "Credenciales invalidas" }, 401)
+        if (url.endsWith("/auth/register")) return json({ detail: "Demasiadas solicitudes. Intenta de nuevo más tarde." }, 429)
+        return json({ google_client_id: null })
+      })
+      render(
+        <AuthProvider>
+          <LoginScreen />
+        </AuthProvider>,
+      )
+      fireEvent.change(screen.getByPlaceholderText("tu@email.com"), { target: { value: "ana@example.com" } })
+      fireEvent.change(screen.getByPlaceholderText("Tu contraseña"), { target: { value: "Clave123" } })
+      fireEvent.click(screen.getByRole("button", { name: "Iniciar sesión" }))
+      expect((await screen.findByRole("alert")).textContent).toBe("Email o contraseña incorrectos")
+
+      fireEvent.click(screen.getByRole("button", { name: "Regístrate" }))
+      fireEvent.change(screen.getByPlaceholderText("Tu nombre de usuario"), { target: { value: "ana" } })
+      fireEvent.change(screen.getByPlaceholderText("Mínimo 8 caracteres"), { target: { value: "Clave123" } })
+      fireEvent.click(screen.getByRole("button", { name: "Crear cuenta" }))
+      expect((await screen.findByRole("alert")).textContent).toBe("Demasiadas solicitudes. Intenta de nuevo más tarde.")
+    })
+  })
 })
