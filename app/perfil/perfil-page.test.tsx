@@ -52,6 +52,34 @@ describe("PerfilPage", () => {
     expect(await screen.findByText("3 intentos de quiz completados")).toBeTruthy()
   })
 
+  it("si solo falla el historial (/learning/me), muestra el perfil que sí llegó y avisa del resto", async () => {
+    vi.stubGlobal("fetch", async (url: string) => {
+      if (url.endsWith("/users/me")) return json({ id: "u1", username: "ana", email: "a@a.a" })
+      if (url.endsWith("/chats/")) return json({ chats: [] })
+      if (url.endsWith("/documents/")) return json([])
+      if (url.endsWith("/profile"))
+        return json({
+          student_id: "u1", pace: "normal", total_attempts: 2, total_struggle_signals: 0, frequent_errors: [], updated_at: "",
+          learning_velocity: 0, pedagogical_memory: null, mastery_by_document: [], mastery_by_concept: [],
+          level_by_topic: { astronomia: "basico" }, topic_labels: { astronomia: "Astronomía" },
+        })
+      if (url.endsWith("/learning/me")) return json({ detail: "Internal Server Error" }, 500)
+      throw new Error(`Petición inesperada: ${url}`)
+    })
+    render(
+      <AuthProvider>
+        <ChatProvider>
+          <PerfilPage />
+        </ChatProvider>
+      </AuthProvider>,
+    )
+
+    expect(await screen.findByText("2 intentos de quiz completados")).toBeTruthy()
+    expect(screen.getByRole("region", { name: "Tu nivel por tema" }).textContent).toContain("Astronomía · básico")
+    expect(screen.getByText("Parte de tu progreso no se pudo cargar; lo que ves puede estar incompleto.")).toBeTruthy()
+    expect(screen.queryByText("No se pudo cargar tu perfil de aprendizaje")).toBeNull()
+  })
+
   it("sin actividad todavía, invita a hacer el primer quiz en lugar de mostrar un 0%", async () => {
     vi.stubGlobal("fetch", async (url: string) => {
       if (url.endsWith("/users/me")) return json({ id: "u1", username: "ana", email: "a@a.a" })
@@ -72,6 +100,7 @@ describe("PerfilPage", () => {
 
     expect(await screen.findByText("Aún no hay actividad de aprendizaje")).toBeTruthy()
     expect(screen.getByRole("link", { name: "Hacer un quiz" }).getAttribute("href")).toBe("/quiz")
+    expect(screen.getByRole("link", { name: "Nivelarme en un tema" }).getAttribute("href")).toBe("/nivelacion")
     // El ritmo "normal" por defecto no es un nivel medido
     expect(screen.getByText("Sin actividad todavía")).toBeTruthy()
     expect(screen.queryByText(/Nivel:/)).toBeNull()
