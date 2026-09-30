@@ -74,7 +74,7 @@ const HONEST_NOTES = [
 const FAQ = [
   {
     q: "¿Qué archivos puedo subir?",
-    a: "PDF, Word (.docx), PowerPoint (.pptx), Excel (.xlsx), texto (.txt, .md, .csv, .json…) y código (Python, JavaScript, TypeScript, Java, C/C++, C#, Go, Rust, SQL, HTML, CSS…), hasta 200 MB. Los formatos antiguos (.doc, .ppt, .xls) no: guárdalos antes como .docx, .pptx o .xlsx. Los PDF escaneados, que son solo imagen, tampoco se pueden leer.",
+    a: "PDF, Word (.docx), PowerPoint (.pptx), Excel (.xlsx), texto (.txt, .md, .csv, .json…) y código (Python, JavaScript, TypeScript, Java, C/C++, C#, Go, Rust, SQL, HTML, CSS…), hasta 25 MB. Los formatos antiguos (.doc, .ppt, .xls) no: guárdalos antes como .docx, .pptx o .xlsx. Los PDF escaneados, que son solo imagen, tampoco se pueden leer.",
   },
   {
     q: "¿Y si no tengo apuntes?",
