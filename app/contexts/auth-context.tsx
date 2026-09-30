@@ -11,6 +11,7 @@ interface AuthContextType {
   connectionError: string | null
   retry: () => Promise<void>
   login: (email: string, password: string) => Promise<void>
+  loginWithGoogle: (idToken: string) => Promise<void>
   register: (username: string, email: string, password: string) => Promise<void>
   logout: () => void
 }
@@ -64,6 +65,12 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     setConnectionError(null)
   }, [])
 
+  const loginWithGoogle = useCallback(async (idToken: string) => {
+    await lariaAPI.auth.google(idToken)
+    setUser(await lariaAPI.auth.me())
+    setConnectionError(null)
+  }, [])
+
   const register = useCallback(async (username: string, email: string, password: string) => {
     await lariaAPI.auth.register(username, email, password)
     await login(email, password)
@@ -78,6 +85,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         connectionError,
         retry: loadUser,
         login,
+        loginWithGoogle,
         register,
         logout,
       }}

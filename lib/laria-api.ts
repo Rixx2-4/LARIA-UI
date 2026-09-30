@@ -50,6 +50,10 @@ interface ChatListResponse {
   chats: Chat[]
 }
 
+export interface AuthProviders {
+  google_client_id: string | null
+}
+
 interface User {
   id: string
   username: string
@@ -57,6 +61,9 @@ interface User {
   role: string
   is_active: boolean
   created_at: string
+  // Solo en backends con «Continuar con Google» (ADR-025)
+  email_verified?: boolean
+  has_password?: boolean
 }
 
 interface AuthResponse {
@@ -364,11 +371,37 @@ export const lariaAPI = {
       if (!response.ok) {
         // El detalle del backend puede venir en inglés; los casos habituales se dicen en español
         if (response.status === 401) throw new Error("Email o contraseña incorrectos")
-        if (response.status === 429) throw new Error("Demasiados intentos. Espera un momento y vuelve a probar")
         const error = await response.json().catch(() => ({ detail: "Error de autenticación" }))
-        throw new Error(describeErrorDetail(error.detail, "Error de autenticación"))
+        throw new Error(
+          describeErrorDetail(error.detail, response.status === 429 ? "Demasiados intentos. Espera un momento y vuelve a probar" : "Error de autenticación"),
+        )
       }
 
+      const data = await response.json()
+      setAuthToken(data.access_token)
+      return data
+    },
+
+    // Qué formas de entrar ofrece el backend. Un backend sin el endpoint (o caído)
+    // equivale a «solo email y contraseña»: el botón de Google no se muestra
+    providers: async (): Promise<AuthProviders> => {
+      try {
+        const response = await fetch(`${API_BASE_URL}/auth/providers`)
+        if (!response.ok) return { google_client_id: null }
+        const data = await response.json()
+        return { google_client_id: typeof data?.google_client_id === "string" && data.google_client_id ? data.google_client_id : null }
+      } catch {
+        return { google_client_id: null }
+      }
+    },
+
+    // Cambia el ID token que da Google por una sesión de Plenum (crea la cuenta si no existe)
+    google: async (idToken: string) => {
+      const response = await request("/auth/google", { method: "POST", body: JSON.stringify({ id_token: idToken }) }, "No se pudo entrar con Google")
+        .catch((error) => {
+          if (error instanceof ApiError && error.status === 401) throw new Error("Google no pudo confirmar tu cuenta. Prueba de nuevo.")
+          throw error
+        })
       const data = await response.json()
       setAuthToken(data.access_token)
       return data

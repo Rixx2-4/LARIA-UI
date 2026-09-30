@@ -7,6 +7,7 @@ import { useAuth } from "@/app/contexts/auth-context"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { PlenumLogo } from "./plenum-logo"
+import { GoogleButton, useGoogleSignIn } from "./google-button"
 
 // Las mismas reglas que exige el backend al registrarse
 const PASSWORD_RULES = [
@@ -17,7 +18,8 @@ const PASSWORD_RULES = [
 ]
 
 export function LoginScreen() {
-  const { login, register } = useAuth()
+  const { login, loginWithGoogle, register } = useAuth()
+  const googleClientId = useGoogleSignIn()
   // "Crear cuenta" en la página de presentación llega con ?modo=registro.
   // Esta pantalla solo se pinta en el navegador (antes va el skeleton de sesión)
   const [isLogin, setIsLogin] = useState(
@@ -43,6 +45,18 @@ export function LoginScreen() {
       else await register(username, email, password)
     } catch (err) {
       setError(err instanceof Error ? err.message : "No se pudo completar la operación")
+    } finally {
+      setIsLoading(false)
+    }
+  }
+
+  const handleGoogle = async (idToken: string) => {
+    setError("")
+    setIsLoading(true)
+    try {
+      await loginWithGoogle(idToken)
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "No se pudo entrar con Google")
     } finally {
       setIsLoading(false)
     }
@@ -118,6 +132,15 @@ export function LoginScreen() {
               {isLogin ? "Iniciar sesión" : "Crear cuenta"}
             </Button>
           </form>
+          {/* Solo si el backend tiene Google configurado */}
+          {googleClientId && (
+            <>
+              <div className="my-5 flex items-center gap-3 text-xs text-muted-foreground" aria-hidden>
+                <span className="h-px flex-1 bg-border" />o<span className="h-px flex-1 bg-border" />
+              </div>
+              <GoogleButton clientId={googleClientId} onCredential={handleGoogle} onError={setError} />
+            </>
+          )}
           <p className="mt-6 text-sm text-muted-foreground">
             {isLogin ? "¿No tienes cuenta?" : "¿Ya tienes cuenta?"}{" "}
             <button type="button" onClick={() => { setIsLogin(!isLogin); setError("") }} className="font-medium text-foreground underline-offset-4 transition-all duration-200 hover:underline">
