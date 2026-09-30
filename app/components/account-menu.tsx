@@ -3,7 +3,7 @@
 import { useEffect, useRef, useSyncExternalStore } from "react"
 import Link from "next/link"
 import { useTheme } from "next-themes"
-import { BrainCircuit, LogOut, Monitor, Moon, Sun } from "lucide-react"
+import { BrainCircuit, LogOut, Monitor, Moon, Sun, UserCog } from "lucide-react"
 import { useAuth } from "@/app/contexts/auth-context"
 
 const THEMES = [
@@ -100,6 +100,17 @@ export function AccountMenu({ isOpen, onClose, onNavigate }: AccountMenuProps) {
           >
             <BrainCircuit className="h-4 w-4 shrink-0" />
             Perfil de aprendizaje
+          </Link>
+          <Link
+            href="/cuenta"
+            onClick={() => {
+              onClose()
+              onNavigate?.()
+            }}
+            className="flex w-full items-center gap-3 rounded px-3 py-2.5 text-sm transition-colors hover:bg-accent"
+          >
+            <UserCog className="h-4 w-4 shrink-0" />
+            Gestionar cuenta
           </Link>
           <button
             onClick={() => {

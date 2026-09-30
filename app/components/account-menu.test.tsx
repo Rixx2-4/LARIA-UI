@@ -4,7 +4,7 @@ import { render, screen, cleanup, fireEvent } from "@testing-library/react"
 import { AuthProvider, useAuth } from "@/app/contexts/auth-context"
 import { ThemeProvider } from "next-themes"
 import { AccountMenu } from "./account-menu"
-import { getAuthToken, setAuthToken } from "@/lib/laria-api"
+import { getSessionState, setAuthToken } from "@/lib/laria-api"
 
 function SessionState() {
   const { isAuthenticated } = useAuth()
@@ -36,12 +36,14 @@ describe("AccountMenu", () => {
     expect(await screen.findByText("ana")).toBeTruthy()
     expect(screen.getByText("ana@example.com")).toBeTruthy()
     expect(screen.getByRole("link", { name: "Perfil de aprendizaje" }).getAttribute("href")).toBe("/perfil")
+    // Correo, contraseña, Google y sesiones: el perfil de Clerk
+    expect(screen.getByRole("link", { name: "Gestionar cuenta" }).getAttribute("href")).toBe("/cuenta")
     expect(screen.queryByText("pro")).toBeNull()
 
     fireEvent.click(screen.getByRole("button", { name: "Cerrar sesión" }))
 
     expect(screen.getByText("sin sesión")).toBeTruthy()
-    expect(getAuthToken()).toBeNull()
+    expect(getSessionState()).toBe("signed-out")
     expect(onClose).toHaveBeenCalled()
   })
 

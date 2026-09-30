@@ -67,7 +67,7 @@ describe("Sidebar", () => {
   })
 
   it("mientras cargan los chats no dice que no hay ninguno", async () => {
-    let answer: (response: Response) => void = () => {}
+    let answer: ((response: Response) => void) | null = null
     vi.stubGlobal("fetch", async (url: string) => {
       if (url.endsWith("/users/me")) return json({ id: "u1", username: "ana", email: "a@a.a" })
       if (url.endsWith("/chats/")) return new Promise<Response>((resolve) => (answer = resolve))
@@ -85,7 +85,9 @@ describe("Sidebar", () => {
     expect(screen.getByRole("status", { name: "Cargando tus chats" })).toBeTruthy()
     expect(screen.queryByText("No hay chats aún")).toBeNull()
 
-    answer(json({ chats: [] }))
+    // El token se pide antes de cada petición: se espera a que salga la de los chats
+    await waitFor(() => expect(answer).not.toBeNull())
+    answer!(json({ chats: [] }))
     expect(await screen.findByText("No hay chats aún")).toBeTruthy()
   })
 

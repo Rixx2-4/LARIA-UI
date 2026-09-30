@@ -13,6 +13,9 @@
     "verify": "eslint . && tsc --noEmit && vitest run && next build"
   },
   "dependencies": {
+    "@clerk/localizations": "^4.21.1",
+    "@clerk/nextjs": "^7.9.9",
+    "@clerk/ui": "^1.38.0",
     "@radix-ui/react-scroll-area": "1.2.2",
     "@radix-ui/react-slot": "1.1.1",
     "class-variance-authority": "^0.7.1",

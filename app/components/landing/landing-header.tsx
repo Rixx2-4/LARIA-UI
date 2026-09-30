@@ -4,9 +4,9 @@ import { useEffect, useState } from "react"
 import Link from "next/link"
 import { useRouter } from "next/navigation"
 import { useMotionValueEvent, useScroll } from "motion/react"
-import { getAuthToken } from "@/lib/laria-api"
+import { getSessionState, onSessionChange } from "@/lib/laria-api"
 import { PlenumLogo } from "../plenum-logo"
-import { NEW_CHAT_HREF, SIGN_UP_HREF } from "@/lib/routes"
+import { NEW_CHAT_HREF, SIGN_IN_HREF, SIGN_UP_HREF } from "@/lib/routes"
 
 const SECTIONS = [
   { href: "#como-funciona", label: "Cómo empezar" },
@@ -23,7 +23,12 @@ export function LandingHeader() {
 
   // Quien ya tiene sesión viene a estudiar, no a leer la presentación
   useEffect(() => {
-    if (getAuthToken()) router.replace(NEW_CHAT_HREF)
+    const goIfSignedIn = () => {
+      if (getSessionState() === "signed-in") router.replace(NEW_CHAT_HREF)
+    }
+    goIfSignedIn()
+    // Clerk tarda un momento en saber si hay sesión
+    return onSessionChange(goIfSignedIn)
   }, [router])
 
   return (
@@ -46,7 +51,7 @@ export function LandingHeader() {
         </nav>
 
         <div className="flex items-center gap-2 text-sm">
-          <Link href={NEW_CHAT_HREF} className="rounded-md px-3 py-2 font-medium transition-colors hover:bg-foreground/5">
+          <Link href={SIGN_IN_HREF} className="rounded-md px-3 py-2 font-medium transition-colors hover:bg-foreground/5">
             Entrar
           </Link>
           <Link

@@ -3,8 +3,9 @@
 // "/" es la página de presentación; la app empieza en un chat nuevo
 export const NEW_CHAT_HREF = "/chat"
 
-// Para llegar al formulario directamente en modo "crear cuenta"
-export const SIGN_UP_HREF = "/chat?modo=registro"
+// Entrar y crear cuenta: las pantallas de Clerk
+export const SIGN_IN_HREF = "/sign-in"
+export const SIGN_UP_HREF = "/sign-up"
 
 export function chatHref(chatId: string): string {
   return `/chat/${encodeURIComponent(chatId)}`

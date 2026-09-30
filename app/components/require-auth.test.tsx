@@ -1,8 +1,14 @@
 import { describe, it, expect, vi, afterEach } from "vitest"
-import { render, screen, fireEvent, cleanup } from "@testing-library/react"
+import { render, screen, fireEvent, cleanup, waitFor } from "@testing-library/react"
 import { AuthProvider } from "@/app/contexts/auth-context"
 import { RequireAuth } from "./require-auth"
-import { setAuthToken } from "@/lib/laria-api"
+import { setAuthToken, setSession } from "@/lib/laria-api"
+
+const nav = vi.hoisted(() => ({ replace: vi.fn() }))
+vi.mock("next/navigation", () => ({
+  useRouter: () => ({ replace: nav.replace, push: vi.fn() }),
+  usePathname: () => "/perfil",
+}))
 
 const json = (body: unknown, status = 200) => new Response(JSON.stringify(body), { status })
 
@@ -23,11 +29,31 @@ afterEach(() => {
 })
 
 describe("RequireAuth", () => {
-  it("sin sesión muestra el login y no la página", async () => {
+  it("sin sesión lleva a entrar (y de vuelta a esta página después), sin enseñarla", async () => {
+    setAuthToken(null)
     renderProtectedPage()
 
-    expect(await screen.findByText("Bienvenido de nuevo")).toBeTruthy()
+    await waitFor(() => expect(nav.replace).toHaveBeenCalledWith("/sign-in?redirect_url=%2Fperfil"))
     expect(screen.queryByText("Contenido privado")).toBeNull()
+  })
+
+  it("mientras Clerk no sabe si hay sesión, espera sin redirigir", () => {
+    setSession("loading")
+    nav.replace.mockClear()
+    renderProtectedPage()
+
+    expect(screen.getByRole("status")).toBeTruthy()
+    expect(nav.replace).not.toHaveBeenCalled()
+  })
+
+  it("si el backend rechaza la cuenta, dice por qué y deja cerrar sesión", async () => {
+    setAuthToken("valido")
+    vi.stubGlobal("fetch", async () => json({ detail: "Verifica tu correo en Clerk para entrar." }, 403))
+    renderProtectedPage()
+
+    expect(await screen.findByText("Verifica tu correo en Clerk para entrar.")).toBeTruthy()
+    fireEvent.click(screen.getByRole("button", { name: "Cerrar sesión" }))
+    await waitFor(() => expect(nav.replace).toHaveBeenCalledWith("/sign-in?redirect_url=%2Fperfil"))
   })
 
   it("con sesión muestra la página", async () => {
