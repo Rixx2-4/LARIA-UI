@@ -25,9 +25,9 @@ describe("LoginScreen", () => {
     vi.stubGlobal("fetch", fetchMock)
     renderRegister()
 
-    fireEvent.change(screen.getByPlaceholderText("Mínimo 12 caracteres"), { target: { value: "abcdefgh1234" } })
+    fireEvent.change(screen.getByPlaceholderText("Mínimo 8 caracteres"), { target: { value: "abcdefg1" } })
     expect(screen.getByText("Una mayúscula").textContent).toContain("(pendiente)")
-    expect(screen.getByText("Al menos 12 caracteres").textContent).toContain("(cumplido)")
+    expect(screen.getByText("Al menos 8 caracteres").textContent).toContain("(cumplido)")
 
     fireEvent.click(screen.getByRole("button", { name: "Crear cuenta" }))
 
@@ -44,7 +44,7 @@ describe("LoginScreen", () => {
 
     const password = screen.getByPlaceholderText("Tu contraseña")
     expect(password.getAttribute("minlength")).toBeNull()
-    expect(screen.queryByText("Al menos 12 caracteres")).toBeNull()
+    expect(screen.queryByText("Al menos 8 caracteres")).toBeNull()
   })
 
   it("desde «Crear cuenta» de la presentación (?modo=registro) abre directamente el registro", () => {

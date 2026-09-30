@@ -10,7 +10,7 @@ import { PlenumLogo } from "./plenum-logo"
 
 // Las mismas reglas que exige el backend al registrarse
 const PASSWORD_RULES = [
-  { label: "Al menos 12 caracteres", test: (p: string) => p.length >= 12 },
+  { label: "Al menos 8 caracteres", test: (p: string) => p.length >= 8 },
   { label: "Una mayúscula", test: (p: string) => /\p{Lu}/u.test(p) },
   { label: "Una minúscula", test: (p: string) => /\p{Ll}/u.test(p) },
   { label: "Un número", test: (p: string) => /\d/.test(p) },
@@ -91,7 +91,7 @@ export function LoginScreen() {
                 type="password"
                 value={password}
                 onChange={(event) => setPassword(event.target.value)}
-                placeholder={isLogin ? "Tu contraseña" : "Mínimo 12 caracteres"}
+                placeholder={isLogin ? "Tu contraseña" : "Mínimo 8 caracteres"}
                 autoComplete={isLogin ? "current-password" : "new-password"}
                 aria-describedby={isLogin ? undefined : "password-rules"}
                 required
