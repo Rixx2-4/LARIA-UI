@@ -2,6 +2,7 @@ import type { ReactNode } from "react"
 import Link from "next/link"
 import { X } from "lucide-react"
 import { PlenumLogo } from "./plenum-logo"
+import { clerkConfigured } from "@/lib/clerk-config"
 
 // Marco de las pantallas de Clerk (entrar, crear cuenta): la marca de Plenum y
 // una salida bien visible a la página de inicio
@@ -20,7 +21,14 @@ export function AuthPage({ children }: { children: ReactNode }) {
       <Link href="/" aria-label="Plenum, página de inicio" className="flex items-center text-foreground">
         <PlenumLogo className="h-14" />
       </Link>
-      {children}
+      {clerkConfigured ? (
+        children
+      ) : (
+        <div role="alert" className="max-w-sm rounded-xl border border-border bg-card p-6 text-center">
+          <p className="font-medium">Inicio de sesión no configurado</p>
+          <p className="mt-1 text-sm text-muted-foreground">Ahora mismo no se puede entrar ni crear cuenta. Vuelve a intentarlo en un rato.</p>
+        </div>
+      )}
     </main>
   )
 }
