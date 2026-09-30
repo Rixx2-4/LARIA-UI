@@ -30,8 +30,10 @@ describe("Página de presentación", () => {
     expect(screen.getByRole("heading", { name: "Sin material" })).toBeTruthy()
     const signUp = screen.getAllByRole("link", { name: /Crear cuenta/ })
     expect(signUp.length).toBeGreaterThan(0)
-    signUp.forEach((link) => expect(link.getAttribute("href")).toBe("/chat?modo=registro"))
-    expect(screen.getByRole("link", { name: "Ya tengo cuenta" }).getAttribute("href")).toBe("/chat")
+    // Crear cuenta y entrar: las pantallas de Clerk
+    signUp.forEach((link) => expect(link.getAttribute("href")).toBe("/sign-up"))
+    expect(screen.getByRole("link", { name: "Ya tengo cuenta" }).getAttribute("href")).toBe("/sign-in")
+    screen.getAllByRole("link", { name: "Entrar" }).forEach((link) => expect(link.getAttribute("href")).toBe("/sign-in"))
   })
 
   it("quien ya tiene sesión va directo a la app", async () => {

@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, afterEach } from "vitest"
-import { lariaAPI, getAuthToken, onUnauthorized, setAuthToken, describeErrorDetail } from "./laria-api"
+import { lariaAPI, getSessionState, onUnauthorized, setAuthToken, setSession, describeErrorDetail } from "./laria-api"
 import { controllableSSE, doneEvent, errorEvent, tokenEvent } from "@/test/sse"
 
 afterEach(() => {
@@ -135,50 +135,86 @@ describe("lariaAPI.chats.stream", () => {
 describe("sesión caducada", () => {
   afterEach(() => setAuthToken(null))
 
-  it("un 401 en cualquier petición borra el token y avisa", async () => {
-    setAuthToken("caducado")
-    vi.stubGlobal("fetch", async () =>
-      new Response(JSON.stringify({ detail: "Token inválido o expirado" }), { status: 401 }),
-    )
+  // Como Clerk: getToken da el token en caché; con skipCache, uno recién emitido
+  function clerkSession() {
+    const requests: { skipCache: boolean }[] = []
+    setSession("signed-in", async (options) => {
+      requests.push({ skipCache: !!options?.skipCache })
+      return options?.skipCache ? "nuevo" : "caducado"
+    })
+    return requests
+  }
+
+  it("un 401 se reintenta una vez con un token nuevo y, si pasa, la sesión sigue", async () => {
+    const tokenRequests = clerkSession()
+    const sent: (string | null)[] = []
+    vi.stubGlobal("fetch", async (_url: string, init?: RequestInit) => {
+      const auth = new Headers(init?.headers).get("Authorization")
+      sent.push(auth)
+      return auth === "Bearer nuevo" ? new Response(JSON.stringify({ chats: [] })) : new Response("{}", { status: 401 })
+    })
+    const listener = vi.fn()
+    const unsubscribe = onUnauthorized(listener)
+
+    await expect(lariaAPI.chats.list()).resolves.toEqual({ chats: [] })
+
+    expect(sent).toEqual(["Bearer caducado", "Bearer nuevo"])
+    expect(tokenRequests).toEqual([{ skipCache: false }, { skipCache: true }])
+    expect(listener).not.toHaveBeenCalled()
+    unsubscribe()
+  })
+
+  it("si con el token nuevo sigue el 401, avisa para cerrar la sesión (una vez)", async () => {
+    clerkSession()
+    let calls = 0
+    vi.stubGlobal("fetch", async () => {
+      calls++
+      return new Response(JSON.stringify({ detail: "Token inválido o expirado" }), { status: 401 })
+    })
     const listener = vi.fn()
     const unsubscribe = onUnauthorized(listener)
 
     await expect(lariaAPI.chats.list()).rejects.toThrow("Token inválido o expirado")
 
-    expect(getAuthToken()).toBeNull()
+    expect(calls).toBe(2)
     expect(listener).toHaveBeenCalledOnce()
     unsubscribe()
   })
 
-  it("un 401 tardío de la sesión anterior no cierra una sesión nueva", async () => {
-    setAuthToken("viejo")
-    let answer!: (r: Response) => void
-    vi.stubGlobal("fetch", () => new Promise<Response>((r) => (answer = r)))
+  it("sin sesión, un 401 no reintenta ni avisa", async () => {
+    setAuthToken(null)
+    let calls = 0
+    vi.stubGlobal("fetch", async () => {
+      calls++
+      return new Response("{}", { status: 401 })
+    })
     const listener = vi.fn()
     const unsubscribe = onUnauthorized(listener)
 
-    const oldRequest = lariaAPI.chats.list().catch(() => {})
-    setAuthToken("nuevo") // el usuario vuelve a iniciar sesión mientras tanto
-    answer(new Response("{}", { status: 401 }))
-    await oldRequest
+    await lariaAPI.chats.list().catch(() => {})
 
-    expect(getAuthToken()).toBe("nuevo")
+    expect(calls).toBe(1)
     expect(listener).not.toHaveBeenCalled()
+    expect(getSessionState()).toBe("signed-out")
     unsubscribe()
   })
 
   it.each([
     ["el stream del chat", () => lariaAPI.chats.stream("c1", "user", "hola", { onError: () => {} })],
     ["la subida de un archivo", () => lariaAPI.documents.upload(new File(["x"], "apuntes.txt")).catch(() => {})],
-  ])("%s también cierra la sesión con un 401", async (_name, call) => {
-    setAuthToken("caducado")
-    vi.stubGlobal("fetch", async () => new Response("{}", { status: 401 }))
+  ])("%s también reintenta y, si no, cierra la sesión", async (_name, call) => {
+    clerkSession()
+    let calls = 0
+    vi.stubGlobal("fetch", async () => {
+      calls++
+      return new Response("{}", { status: 401 })
+    })
     const listener = vi.fn()
     const unsubscribe = onUnauthorized(listener)
 
     await call()
 
-    expect(getAuthToken()).toBeNull()
+    expect(calls).toBe(2)
     expect(listener).toHaveBeenCalledOnce()
     unsubscribe()
   })
@@ -206,18 +242,6 @@ describe("lariaAPI.documents.content", () => {
   })
 })
 
-describe("lariaAPI.auth.login", () => {
-  it("con credenciales incorrectas avisa en español y no cierra ninguna sesión", async () => {
-    vi.stubGlobal("fetch", async () => new Response(JSON.stringify({ detail: "Incorrect username or password" }), { status: 401 }))
-    const listener = vi.fn()
-    const unsubscribe = onUnauthorized(listener)
-
-    await expect(lariaAPI.auth.login("ana@example.com", "mal")).rejects.toThrow("Email o contraseña incorrectos")
-    expect(listener).not.toHaveBeenCalled()
-    unsubscribe()
-  })
-})
-
 describe("errores de validación del backend", () => {
   it("un 422 con la lista de FastAPI se cuenta en español, no como [object Object]", async () => {
     vi.stubGlobal("fetch", async () =>
@@ -229,7 +253,7 @@ describe("errores de validación del backend", () => {
       ),
     )
 
-    await expect(lariaAPI.auth.register("ana", "ana@example.com", "Abc1")).rejects.toThrow(
+    await expect(lariaAPI.chats.create("x")).rejects.toThrow(
       "La contraseña debe tener al menos 8 caracteres.",
     )
   })

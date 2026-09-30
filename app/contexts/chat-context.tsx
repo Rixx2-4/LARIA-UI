@@ -1,7 +1,7 @@
 "use client"
 
 import { createContext, useContext, useState, useEffect, useCallback, useRef, ReactNode } from "react"
-import { lariaAPI, ApiError, Chat, ChatMessage, getAuthToken } from "@/lib/laria-api"
+import { lariaAPI, ApiError, Chat, ChatMessage, getSessionState } from "@/lib/laria-api"
 import { toast } from "sonner"
 import { useAuth } from "./auth-context"
 
@@ -66,7 +66,7 @@ export function ChatProvider({ children }: { children: ReactNode }) {
   }
 
   const loadChats = useCallback(async () => {
-    if (!getAuthToken()) return
+    if (getSessionState() !== "signed-in") return
     try {
       const response = await lariaAPI.chats.list()
       setChats(response.chats)

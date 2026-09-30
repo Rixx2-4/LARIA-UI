@@ -6,6 +6,11 @@ import { ChatProvider } from "./contexts/chat-context"
 import { AuthProvider } from "./contexts/auth-context"
 import { ThemeProvider } from "next-themes"
 import { ThemedToaster } from "./components/themed-toaster"
+import { ClerkProvider } from "@clerk/nextjs"
+import { clerkLocalization } from "@/lib/clerk-localization"
+import { shadcn } from "@clerk/ui/themes"
+import { ClerkBridge } from "./components/clerk-bridge"
+import { SIGN_IN_HREF, SIGN_UP_HREF, NEW_CHAT_HREF } from "@/lib/routes"
 
 export const metadata: Metadata = {
   title: { default: "Plenum", template: "%s · Plenum" },
@@ -45,14 +50,26 @@ export default function RootLayout({
     // next-themes pone la clase del tema en <html> antes de hidratar
     <html lang="es" suppressHydrationWarning>
       <body className={`font-sans antialiased`}>
-        <ThemeProvider attribute="class" defaultTheme="system" enableSystem disableTransitionOnChange>
-          <AuthProvider>
-            <ChatProvider>
-              {children}
-              <ThemedToaster />
-            </ChatProvider>
-          </AuthProvider>
-        </ThemeProvider>
+        {/* Clerk lleva la cuenta (entrar, registrarse, perfil); tras entrar, al chat */}
+        <ClerkProvider
+          localization={clerkLocalization}
+          appearance={{ theme: shadcn }}
+          signInUrl={SIGN_IN_HREF}
+          signUpUrl={SIGN_UP_HREF}
+          signInFallbackRedirectUrl={NEW_CHAT_HREF}
+          signUpFallbackRedirectUrl={NEW_CHAT_HREF}
+          afterSignOutUrl="/"
+        >
+          <ClerkBridge />
+          <ThemeProvider attribute="class" defaultTheme="system" enableSystem disableTransitionOnChange>
+            <AuthProvider>
+              <ChatProvider>
+                {children}
+                <ThemedToaster />
+              </ChatProvider>
+            </AuthProvider>
+          </ThemeProvider>
+        </ClerkProvider>
       </body>
     </html>
   )

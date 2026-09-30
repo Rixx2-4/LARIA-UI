@@ -1,87 +1,66 @@
 "use client"
 
-import { createContext, useContext, useState, useEffect, useCallback, ReactNode } from "react"
-import { lariaAPI, ApiError, User, getAuthToken, onUnauthorized } from "@/lib/laria-api"
+import { createContext, useContext, useState, useEffect, useCallback, useSyncExternalStore, ReactNode } from "react"
+import { lariaAPI, ApiError, User, getSessionState, onSessionChange, onUnauthorized, signOut } from "@/lib/laria-api"
 
 interface AuthContextType {
   user: User | null
   isAuthenticated: boolean
   isLoading: boolean
-  // Hay sesión guardada pero no se pudo comprobar por falta de conexión
+  // Hay sesión pero no se pudo cargar el usuario (sin conexión, o el backend lo rechaza)
   connectionError: string | null
   retry: () => Promise<void>
-  login: (email: string, password: string) => Promise<void>
-  register: (username: string, email: string, password: string) => Promise<void>
   logout: () => void
 }
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined)
 
+// Entrar y salir lo lleva Clerk (ClerkBridge publica la sesión en lib/laria-api);
+// aquí se carga quién eres en Plenum: el usuario del backend, con sus chats y su perfil
 export function AuthProvider({ children }: { children: ReactNode }) {
+  // En el servidor aún no se sabe: Clerk lo dice ya en el navegador
+  const session = useSyncExternalStore(onSessionChange, getSessionState, () => "loading" as const)
   const [user, setUser] = useState<User | null>(null)
-  const [isLoading, setIsLoading] = useState(true)
+  const [loadingUser, setLoadingUser] = useState(false)
   const [connectionError, setConnectionError] = useState<string | null>(null)
 
   const loadUser = useCallback(async () => {
-    if (!getAuthToken()) {
-      setConnectionError(null)
-      setIsLoading(false)
-      return
-    }
-
-    setIsLoading(true)
+    setLoadingUser(true)
+    setConnectionError(null)
     try {
       setUser(await lariaAPI.auth.me())
-      setConnectionError(null)
     } catch (error) {
-      // Un 401 ya borró el token y avisó por onUnauthorized
-      const expired = error instanceof ApiError && error.status === 401
-      if (!expired) setConnectionError("No se pudo conectar con Plenum")
+      // Un 401 ya cerró la sesión (onUnauthorized). El backend explica sus rechazos
+      // (correo sin verificar, Clerk no responde…); sin respuesta, no hay conexión
+      if (error instanceof ApiError && error.status === 401) return
+      setConnectionError(error instanceof ApiError ? error.message : "No se pudo conectar con Plenum")
     } finally {
-      setIsLoading(false)
+      setLoadingUser(false)
     }
   }, [])
 
   useEffect(() => {
-    // El token vive en localStorage, que solo existe en el cliente: leerlo en el
-    // estado inicial rompería la hidratación, así que se lee al montar
+    // La sesión acaba de empezar: se carga el usuario desde aquí
     // eslint-disable-next-line react-hooks/set-state-in-effect
-    loadUser()
-  }, [loadUser])
+    if (session === "signed-in") loadUser()
+  }, [session, loadUser])
 
   const logout = useCallback(() => {
-    lariaAPI.auth.logout()
-    setUser(null)
-    setConnectionError(null)
+    signOut()
   }, [])
 
-  // Cualquier petición que reciba un 401 cierra la sesión
+  // Cualquier petición que reciba un 401 (ya con un token nuevo) cierra la sesión
   useEffect(() => onUnauthorized(logout), [logout])
 
-  const login = useCallback(async (email: string, password: string) => {
-    await lariaAPI.auth.login(email, password)
-    setUser(await lariaAPI.auth.me())
-    setConnectionError(null)
-  }, [])
-
-  const register = useCallback(async (username: string, email: string, password: string) => {
-    await lariaAPI.auth.register(username, email, password)
-    await login(email, password)
-  }, [login])
+  // Sin sesión no cuenta lo que quedara de la anterior
+  const signedIn = session === "signed-in"
+  const currentUser = signedIn ? user : null
+  const currentError = signedIn ? connectionError : null
+  const isAuthenticated = !!currentUser
+  const isLoading = session === "loading" || (signedIn && !user && !connectionError) || (signedIn && loadingUser)
 
   return (
-    <AuthContext.Provider
-      value={{
-        user,
-        isAuthenticated: !!user,
-        isLoading,
-        connectionError,
-        retry: loadUser,
-        login,
-        register,
-        logout,
-      }}
-    >
+    <AuthContext.Provider value={{ user: currentUser, isAuthenticated, isLoading, connectionError: currentError, retry: loadUser, logout }}>
       {children}
     </AuthContext.Provider>
   )

@@ -64,11 +64,7 @@ interface User {
   role: string
   is_active: boolean
   created_at: string
-}
-
-interface AuthResponse {
-  access_token: string
-  token_type: string
+  auth_provider?: string
 }
 
 interface QuizAttemptSummary {
@@ -237,23 +233,56 @@ interface StreamCallbacks {
   onError?: (error: Error) => void
 }
 
-let authToken: string | null = null
+// La sesión la lleva Clerk: quien la conoce (ClerkBridge) registra aquí cómo pedir
+// el token, y cada petición pide uno al salir (dura ~60 s; Clerk lo renueva solo)
+type TokenGetter = (options?: { skipCache?: boolean }) => Promise<string | null>
+export type SessionState = "loading" | "signed-in" | "signed-out"
 
-export function setAuthToken(token: string | null) {
-  authToken = token
-  if (token) {
-    localStorage.setItem("laria_token", token)
-  } else {
-    localStorage.removeItem("laria_token")
+let tokenGetter: TokenGetter | null = null
+let sessionState: SessionState = "loading"
+const sessionListeners = new Set<() => void>()
+
+export function setSession(state: SessionState, getter: TokenGetter | null = null) {
+  sessionState = state
+  tokenGetter = state === "signed-in" ? getter : null
+  sessionListeners.forEach((listener) => listener())
+}
+
+export function getSessionState(): SessionState {
+  return sessionState
+}
+
+export function onSessionChange(listener: () => void): () => void {
+  sessionListeners.add(listener)
+  return () => {
+    sessionListeners.delete(listener)
   }
 }
 
-export function getAuthToken(): string | null {
-  if (authToken) return authToken
-  if (typeof window !== "undefined") {
-    authToken = localStorage.getItem("laria_token")
+// Salir lo hace Clerk (ClerkBridge registra cómo); sin él, basta olvidar la sesión
+let signOutHandler: (() => Promise<unknown> | void) | null = null
+
+export function setSignOutHandler(handler: (() => Promise<unknown> | void) | null) {
+  signOutHandler = handler
+}
+
+export async function signOut() {
+  if (signOutHandler) await signOutHandler()
+  else setSession("signed-out")
+}
+
+// Una sesión con un token fijo (los tests); null, sin sesión
+export function setAuthToken(token: string | null) {
+  setSession(token ? "signed-in" : "signed-out", token ? async () => token : null)
+}
+
+// Las sesiones de antes de Clerk guardaban su token aquí: ya no vale
+if (typeof window !== "undefined") {
+  try {
+    localStorage.removeItem("laria_token")
+  } catch {
+    // Sin almacenamiento no hay nada que limpiar
   }
-  return authToken
 }
 
 function authHeaders(token: string | null): Record<string, string> {
@@ -315,12 +344,11 @@ export function describeErrorDetail(detail: unknown, fallback: string): string {
   return fallback
 }
 
-// Convierte una respuesta fallida en ApiError; un 401 además cierra la sesión,
-// salvo que la petición se hiciera con un token que ya no es el actual
+// Convierte una respuesta fallida en ApiError; un 401 con sesión (ya reintentado
+// con un token nuevo) la cierra
 async function responseError(response: Response, fallback: string, sentToken: string | null): Promise<ApiError> {
   const body = await response.json().catch(() => ({ detail: fallback }))
-  if (response.status === 401 && sentToken && sentToken === getAuthToken()) {
-    setAuthToken(null)
+  if (response.status === 401 && sentToken) {
     unauthorizedListeners.forEach((listener) => listener())
   }
   return new ApiError(describeErrorDetail(body.detail, `Error ${response.status}`), response.status)
@@ -332,15 +360,20 @@ const segment = (id: string) => encodeURIComponent(id)
 
 // Petición autenticada a la API; si falla, lanza un ApiError con el motivo en español
 async function request(endpoint: string, init: RequestInit = {}, fallback = "Error desconocido"): Promise<Response> {
-  const token = getAuthToken()
-  const headers: Record<string, string> = {
-    ...((init.headers as Record<string, string>) || {}),
-    ...authHeaders(token),
+  const send = async (skipCache: boolean) => {
+    const token = tokenGetter ? await tokenGetter(skipCache ? { skipCache: true } : undefined) : null
+    const headers: Record<string, string> = {
+      ...((init.headers as Record<string, string>) || {}),
+      ...authHeaders(token),
+    }
+    // Solo con cuerpo JSON: así los GET no necesitan la petición previa de CORS
+    if (typeof init.body === "string") headers["Content-Type"] ??= "application/json"
+    return { token, response: await fetch(`${API_BASE_URL}${endpoint}`, { ...init, headers }) }
   }
-  // Solo con cuerpo JSON: así los GET no necesitan la petición previa de CORS
-  if (typeof init.body === "string") headers["Content-Type"] ??= "application/json"
 
-  const response = await fetch(`${API_BASE_URL}${endpoint}`, { ...init, headers })
+  let { token, response } = await send(false)
+  // Un token recién caducado: se pide uno nuevo y se reintenta una sola vez
+  if (response.status === 401 && token && tokenGetter) ({ token, response } = await send(true))
   if (!response.ok) throw await responseError(response, fallback, token)
   return response
 }
@@ -357,40 +390,7 @@ async function fetchAPI<T>(endpoint: string, options?: RequestInit): Promise<T> 
 
 export const lariaAPI = {
   auth: {
-    login: async (email: string, password: string): Promise<AuthResponse> => {
-      const formData = new URLSearchParams()
-      formData.append("username", email)
-      formData.append("password", password)
-      
-      const response = await fetch(`${API_BASE_URL}/auth/token`, {
-        method: "POST",
-        headers: { "Content-Type": "application/x-www-form-urlencoded" },
-        body: formData.toString(),
-      })
-
-      if (!response.ok) {
-        // El detalle del backend puede venir en inglés; los casos habituales se dicen en español
-        if (response.status === 401) throw new Error("Email o contraseña incorrectos")
-        if (response.status === 429) throw new Error("Demasiados intentos. Espera un momento y vuelve a probar")
-        const error = await response.json().catch(() => ({ detail: "Error de autenticación" }))
-        throw new Error(describeErrorDetail(error.detail, "Error de autenticación"))
-      }
-
-      const data = await response.json()
-      setAuthToken(data.access_token)
-      return data
-    },
-
-    register: (username: string, email: string, password: string) =>
-      fetchAPI<User>("/auth/register", {
-        method: "POST",
-        body: JSON.stringify({ username, email, password }),
-      }),
-
-    logout: () => {
-      setAuthToken(null)
-    },
-
+    // Entrar, registrarse y salir lo hace Clerk; el backend solo dice quién eres
     me: () => fetchAPI<User>("/users/me"),
   },
 
@@ -627,7 +627,7 @@ export const lariaAPI = {
 }
 
 export type {
-  Chat, ChatMessage, ChatListResponse, User, AuthResponse,
+  Chat, ChatMessage, ChatListResponse, User,
   LearningHistory, StudentProfile, Document, AnalysisResponse, QuestionResponse,
   QuizAttemptSummary, TutorInteraction, LearningRecommendation,
   PedagogicalMemory, DocumentMastery, ConceptMastery,

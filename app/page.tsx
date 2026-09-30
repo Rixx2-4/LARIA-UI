@@ -2,7 +2,7 @@ import type { Metadata } from "next"
 import Link from "next/link"
 import { Instrument_Serif } from "next/font/google"
 import { ArrowRight } from "lucide-react"
-import { NEW_CHAT_HREF, SIGN_UP_HREF } from "@/lib/routes"
+import { SIGN_IN_HREF, SIGN_UP_HREF } from "@/lib/routes"
 import { LandingHeader } from "./components/landing/landing-header"
 import { LandingMotion, Marker, Reveal } from "./components/landing/motion"
 import { ChatDemo } from "./components/landing/chat-demo"
@@ -150,7 +150,7 @@ export default function LandingPage() {
                     <ArrowRight className="h-4 w-4" aria-hidden />
                   </Link>
                   <Link
-                    href={NEW_CHAT_HREF}
+                    href={SIGN_IN_HREF}
                     className="rounded-md px-5 py-3 text-sm font-medium underline-offset-4 hover:underline"
                   >
                     Ya tengo cuenta
@@ -311,7 +311,7 @@ export default function LandingPage() {
           <div className="mx-auto flex max-w-6xl flex-wrap items-center justify-between gap-4 px-4 py-8 text-sm text-muted-foreground sm:px-6">
             <span>© {new Date().getFullYear()} Plenum</span>
             <div className="flex gap-5">
-              <Link href={NEW_CHAT_HREF} className="hover:text-foreground">
+              <Link href={SIGN_IN_HREF} className="hover:text-foreground">
                 Entrar
               </Link>
               <Link href={SIGN_UP_HREF} className="hover:text-foreground">
