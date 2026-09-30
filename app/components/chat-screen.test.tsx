@@ -276,6 +276,30 @@ describe("ChatScreen", () => {
       expect(screen.queryByLabelText("Tema de la nivelación")).toBeNull()
     })
 
+    it("si el tutor pregunta cómo prefieres aprender, se puede elegir pulsando", async () => {
+      const calls = quizServer({ payload: { intent: "learning_style", ask_learning_style: true } })
+      renderAt("c1")
+
+      expect(await screen.findByText("¿Cómo prefieres que te explique?")).toBeTruthy()
+      fireEvent.click(screen.getByText("Paso a paso"))
+
+      await waitFor(() => expect(calls.styles).toEqual([{ explanation_style: "step_by_step" }]))
+      expect(await screen.findByText(/Te explicaré:/)).toBeTruthy()
+      // Solo la elección: ni quiz ni clase
+      expect(calls.diagnostics).toEqual([])
+      expect(calls.streamed).toEqual([])
+    })
+
+    it("si contestó en el chat, muestra el estilo que guardó el backend sin volver a guardarlo", async () => {
+      const calls = quizServer({ payload: { intent: "learning_style", explanation_style_chosen: "visual" } })
+      renderAt("c1")
+
+      expect(await screen.findByText(/Estilo guardado:/)).toBeTruthy()
+      expect(screen.getByText(/Con esquemas y dibujos/)).toBeTruthy()
+      expect(screen.queryByText("¿Cómo prefieres que te explique?")).toBeNull()
+      expect(calls.styles).toEqual([])
+    })
+
     it("con «learn» a secas (una pregunta conceptual) no ofrece nivelación", async () => {
       quizServer({ payload: { intent: "learn" } })
       renderAt("c1")

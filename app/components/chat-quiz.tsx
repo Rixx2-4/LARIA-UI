@@ -4,7 +4,7 @@ import { useEffect, useRef, useState } from "react"
 import { ArrowRight, Loader2 } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { lariaAPI, type ExplanationStyle, type PlacementResult, type QuizQuestion, type QuizResponse } from "@/lib/laria-api"
-import { StylePicker } from "./style-picker"
+import { STYLE_OPTIONS, StylePicker } from "./style-picker"
 import {
   LEVEL_COPY,
   LEVEL_NAME,
@@ -24,6 +24,8 @@ import {
 
 export type ChatQuizRequest =
   | { kind: "placement"; topic: string }
+  // El tutor pregunta cómo prefiere aprender: solo la elección, sin quiz
+  | { kind: "style" }
   // Sin topic: sobre el documento del chat
   | { kind: "practice"; topic?: string }
 
@@ -44,8 +46,9 @@ interface ChatQuizProps {
 
 export function ChatQuiz({ chatId, request, onDismiss, onStartLesson }: ChatQuizProps) {
   const isPlacement = request.kind === "placement"
-  const [phase, setPhase] = useState<Phase>("offer")
-  const [topic, setTopic] = useState(request.topic ?? "")
+  const isStyleOnly = request.kind === "style"
+  const [phase, setPhase] = useState<Phase>(isStyleOnly ? "style" : "offer")
+  const [topic, setTopic] = useState("topic" in request ? (request.topic ?? "") : "")
   const practiceOnDocument = request.kind === "practice" && !request.topic
   const [quiz, setQuiz] = useState<QuizResponse | null>(null)
   const [current, setCurrent] = useState(0)
@@ -82,6 +85,7 @@ export function ChatQuiz({ chatId, request, onDismiss, onStartLesson }: ChatQuiz
     } finally {
       setSavingStyle(false)
     }
+    if (isStyleOnly) return setPhase("done")
     await startLesson(placement, topic)
   }
 
@@ -270,7 +274,15 @@ export function ChatQuiz({ chatId, request, onDismiss, onStartLesson }: ChatQuiz
           </div>
         )}
 
-        {phase === "done" && (
+        {phase === "done" && isStyleOnly && (
+          <p>
+            Te explicaré:{" "}
+            <span className="font-medium">{STYLE_OPTIONS.find((o) => o.value === (style ?? null))?.label}</span>. Puedes
+            cambiarlo en tu perfil.
+          </p>
+        )}
+
+        {phase === "done" && !isStyleOnly && (
           <div className="space-y-2">
             {isPlacement ? (
               <p>

@@ -12,6 +12,7 @@ import { FileViewer } from "./file-viewer"
 import { MessageContent } from "./message-content"
 import { MessagesSkeleton } from "./skeletons"
 import { ChatQuiz, type ChatQuizRequest } from "./chat-quiz"
+import { STYLE_OPTIONS } from "./style-picker"
 import { markPlacementOffered, wasPlacementOffered } from "@/lib/placement"
 import { isTextMime, mimeFromFilename } from "@/lib/file-types"
 import { chatHref } from "@/lib/routes"
@@ -317,20 +318,20 @@ export function SearchBar({ isOpeningChat = false }: { isOpeningChat?: boolean }
 
   // Quiz dentro de la conversación, bajo la respuesta del tutor que lo propone:
   // - suggest_placement: pidió aprender un tema → nivelación con el tema del backend
+  // - ask_learning_style: el tutor pregunta cómo prefiere aprender → las opciones para elegir
   // - offer_quiz: pidió un quiz → práctica sobre el documento del chat o, sin él, sobre
   //   el tema que nombró (sin tema, el tutor se lo pregunta y no se abre nada)
   const lastIndex = messages.length - 1
   const lastEnvelope = lastIndex >= 0 && messages[lastIndex].role === "assistant" ? tutorEnvelope(messages[lastIndex]) : null
-  const offeredQuiz: ChatQuizRequest | null =
-    isStreaming || !chatId || !lastEnvelope
-      ? null
-      : lastEnvelope.payload?.suggest_placement && !wasPlacementOffered(chatId)
-        ? { kind: "placement", topic: lastEnvelope.payload.topic_hint ?? "" }
-        : lastEnvelope.payload?.offer_quiz && activeDocumentId
-          ? { kind: "practice" }
-          : lastEnvelope.payload?.offer_quiz && lastEnvelope.payload.topic_hint
-            ? { kind: "practice", topic: lastEnvelope.payload.topic_hint }
-            : null
+  const offerFor = (payload: NonNullable<typeof lastEnvelope>["payload"]): ChatQuizRequest | null => {
+    if (!payload || !chatId) return null
+    if (payload.ask_learning_style) return { kind: "style" }
+    if (payload.suggest_placement && !wasPlacementOffered(chatId)) return { kind: "placement", topic: payload.topic_hint ?? "" }
+    if (payload.offer_quiz && activeDocumentId) return { kind: "practice" }
+    if (payload.offer_quiz && payload.topic_hint) return { kind: "practice", topic: payload.topic_hint }
+    return null
+  }
+  const offeredQuiz = isStreaming || !lastEnvelope ? null : offerFor(lastEnvelope.payload)
 
   // La tarjeta se queda anclada a su mensaje: cuando empieza la clase o llegan más
   // mensajes, sigue en su sitio con el resumen
@@ -430,6 +431,13 @@ export function SearchBar({ isOpeningChat = false }: { isOpeningChat?: boolean }
                           Copiar
                         </button>
                         {label && <span className="px-1.5 py-0.5 rounded bg-secondary/50">{label}</span>}
+                        {/* Contestó en el chat cómo prefiere aprender y el backend ya lo guardó */}
+                        {envelope?.payload?.explanation_style_chosen !== undefined && (
+                          <span className="px-1.5 py-0.5 rounded bg-secondary/50">
+                            Estilo guardado:{" "}
+                            {STYLE_OPTIONS.find((o) => o.value === envelope.payload?.explanation_style_chosen)?.label ?? "a tu medida"}
+                          </span>
+                        )}
                         {/* El tutor partió del nivel que sacó en la nivelación de este tema */}
                         {envelope?.payload?.placement_level && LEVEL_NAME[envelope.payload.placement_level] && (
                           <span className="px-1.5 py-0.5 rounded bg-secondary/50">
