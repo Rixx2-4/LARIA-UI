@@ -4,7 +4,7 @@ import { Fragment, useState, useRef, useEffect, useCallback } from "react"
 import { useRouter } from "next/navigation"
 import { toast } from "sonner"
 import { Button } from "@/components/ui/button"
-import { Paperclip, Mic, Send, Loader2, Square, Copy } from "lucide-react"
+import { Paperclip, Mic, Send, Loader2, Square, Copy, Volume2, VolumeX } from "lucide-react"
 import { useChat } from "@/app/contexts/chat-context"
 import { lariaAPI, Document } from "@/lib/laria-api"
 import { FileCard } from "./file-card"
@@ -20,6 +20,8 @@ import { envelopeGrounded, envelopeLabel, tutorEnvelope } from "@/lib/tutor-enve
 import { LEVEL_NAME } from "@/app/quiz/quiz-parts"
 import { useStreamingChat } from "@/hooks/use-streaming-chat"
 import { useDictation } from "@/hooks/use-dictation"
+import { toEmotion, useSpeech } from "@/hooks/use-speech"
+import { takeSpeakable } from "@/lib/speech-chunks"
 
 // Lo mismo que acepta el backend (file_parser.py): texto, datos, código y cuatro binarios
 const ALLOWED_EXTENSIONS = [
@@ -87,11 +89,32 @@ export function SearchBar({ isOpeningChat = false }: { isOpeningChat?: boolean }
     startStreaming,
     cancelStreaming,
     resetStreaming,
+    fullContent,
+    envelope: liveEnvelope,
   } = useStreamingChat({
     messages,
     setMessages,
     chatId,
   })
+
+  // Voz del tutor: con «Leer en voz», cada frase que se cierra en el stream se lee
+  // mientras sigue escribiendo. spokenRef: hasta dónde de la respuesta ya se leyó
+  const speech = useSpeech()
+  const speakAlong = speech.enabled && speech.mode === "voice"
+  const spokenRef = useRef(0)
+  const liveKeyRef = useRef("")
+  const { enqueue: enqueueSpeech, maxChars: speechMaxChars, stop: stopSpeech } = speech
+  useEffect(() => {
+    if (!speakAlong || (!isStreaming && !isDone)) return
+    const unread = fullContent.slice(spokenRef.current)
+    if (!unread) return
+    const { chunks, rest } = takeSpeakable(unread, isDone, speechMaxChars)
+    spokenRef.current = fullContent.length - rest.length
+    // La emoción llega con el envelope, al final; hasta entonces, la de ánimo
+    enqueueSpeech(chunks, isDone ? toEmotion(liveEnvelope?.emotion) : "encouraging", liveKeyRef.current)
+  }, [speakAlong, fullContent, isStreaming, isDone, liveEnvelope, speechMaxChars, enqueueSpeech])
+  // Otro chat: lo que se estaba leyendo ya no toca
+  useEffect(() => stopSpeech, [chatId, stopSpeech])
 
   // Para lectores de pantalla: se anuncia el principio y el final de la respuesta,
   // no cada fragmento que llega
@@ -271,11 +294,17 @@ export function SearchBar({ isOpeningChat = false }: { isOpeningChat?: boolean }
 
     setQuery("")
     dictation.cancel()
+    // Un mensaje nuevo corta la lectura del anterior
+    speech.stop()
+    if (speakAlong) speech.prime()
+    spokenRef.current = 0
     resetStreaming()
     isUserScrolledRef.current = false
 
     try {
       const { id: currentChatId, isNew: isNewChat } = await ensureChat()
+      // La respuesta será el mensaje tras el del usuario: la misma clave que su «Escuchar»
+      liveKeyRef.current = `${currentChatId}:${messages.length + 1}`
 
       await startStreaming(userMessage, currentChatId)
 
@@ -314,6 +343,7 @@ export function SearchBar({ isOpeningChat = false }: { isOpeningChat?: boolean }
 
   const handleStopGeneration = () => {
     cancelStreaming()
+    speech.stop()
   }
 
   // Quiz dentro de la conversación, bajo la respuesta del tutor que lo propone:
@@ -430,6 +460,20 @@ export function SearchBar({ isOpeningChat = false }: { isOpeningChat?: boolean }
                           <Copy className="h-3 w-3" />
                           Copiar
                         </button>
+                        {speech.enabled && (() => {
+                          const key = `${chatId}:${index}`
+                          const playing = speech.speakingKey === key
+                          return (
+                            <button
+                              onClick={() => (playing ? speech.stop() : speech.playMessage(key, msg.content, toEmotion(envelope?.emotion)))}
+                              aria-label={playing ? "Detener la lectura" : "Escuchar respuesta"}
+                              className="flex items-center gap-1 transition-colors hover:text-foreground"
+                            >
+                              {playing ? <Square className="h-3 w-3" /> : <Volume2 className="h-3 w-3" />}
+                              {playing ? "Detener" : "Escuchar"}
+                            </button>
+                          )
+                        })()}
                         {label && <span className="px-1.5 py-0.5 rounded bg-secondary/50">{label}</span>}
                         {/* Contestó en el chat cómo prefiere aprender y el backend ya lo guardó */}
                         {envelope?.payload?.explanation_style_chosen !== undefined && (
@@ -571,6 +615,22 @@ export function SearchBar({ isOpeningChat = false }: { isOpeningChat?: boolean }
                   <Paperclip className="h-4 w-4 md:h-[17px] md:w-[17px]" />
                 )}
               </Button>
+              {speech.enabled && (
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  onClick={() => speech.setMode(speech.mode === "voice" ? "text" : "voice")}
+                  aria-pressed={speech.mode === "voice"}
+                  aria-label={speech.mode === "voice" ? "Leer en voz: activado" : "Leer en voz: desactivado (solo texto)"}
+                  title={speech.mode === "voice" ? "LARIA lee sus respuestas en voz. Pulsa para solo texto" : "Solo texto. Pulsa para que LARIA lea en voz"}
+                  className={`h-8 gap-1.5 rounded-lg px-2 text-xs md:h-9 transition-all hover:bg-accent/60 ${
+                    speech.mode === "voice" ? "text-foreground" : "text-muted-foreground hover:text-foreground"
+                  }`}
+                >
+                  {speech.mode === "voice" ? <Volume2 className="h-4 w-4" /> : <VolumeX className="h-4 w-4" />}
+                  <span aria-hidden className="hidden sm:inline">{speech.mode === "voice" ? "Leer en voz" : "Solo texto"}</span>
+                </Button>
+              )}
             </div>
 
             <div className="flex items-center gap-0.5">
