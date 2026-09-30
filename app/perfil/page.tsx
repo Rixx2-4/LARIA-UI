@@ -10,6 +10,7 @@ import { ProfileSkeleton } from "../components/skeletons"
 import { LEVEL_NAME } from "../quiz/quiz-parts"
 import { StylePicker } from "../components/style-picker"
 import { useAuth } from "@/app/contexts/auth-context"
+import { placementHref } from "@/lib/routes"
 import { lariaAPI, StudentProfile, LearningHistory, Document, type ExplanationStyle } from "@/lib/laria-api"
 import { toast } from "sonner"
 
@@ -152,6 +153,8 @@ function Perfil() {
   const [history, setHistory] = useState<LearningHistory | null>(null)
   const [documents, setDocuments] = useState<Document[]>([])
   const [documentsFailed, setDocumentsFailed] = useState(false)
+  // Llegó el perfil o el historial, pero no los dos
+  const [learningPartial, setLearningPartial] = useState(false)
 
 
   const loadProfileData = useCallback(async () => {
@@ -165,8 +168,9 @@ function Perfil() {
         lariaAPI.documents.list(),
       ])
 
-      // Sin perfil ni historial, el panel mostraría ceros como si fueran datos reales
-      if (lp.status === "rejected" || lh.status === "rejected") {
+      // Sin perfil ni historial, el panel mostraría ceros como si fueran datos reales;
+      // con uno de los dos se enseña lo que llegó y se avisa del resto
+      if (lp.status === "rejected" && lh.status === "rejected") {
         setError("No se pudo cargar tu perfil de aprendizaje")
         return
       }
@@ -176,6 +180,7 @@ function Perfil() {
       const docList = docs.status === "fulfilled" ? docs.value : []
 
       setDocumentsFailed(docs.status === "rejected")
+      setLearningPartial(lp.status === "rejected" || lh.status === "rejected")
       setLearningProfile(profile)
       setHistory(hist)
       setDocuments(docList)
@@ -296,7 +301,9 @@ function Perfil() {
     label: learningProfile?.topic_labels?.[key] ?? key,
   }))
 
+  // Con una de las dos respuestas perdida no se puede afirmar que no haya actividad
   const hasNoActivity =
+    !learningPartial &&
     !learningProfile?.total_attempts &&
     !learningProfile?.mastery_by_concept.length &&
     !history?.attempts.length &&
@@ -377,11 +384,26 @@ function Perfil() {
             <div>
               <p className="font-medium">Aún no hay actividad de aprendizaje</p>
               <p className="text-sm text-muted-foreground">
-                Haz un quiz sobre uno de tus documentos y aquí verás tu progreso.
+                Haz una nivelación o una práctica sobre un tema, o un quiz sobre tus documentos, y aquí verás tu progreso.
               </p>
             </div>
-            <Button asChild>
-              <Link href="/quiz">Hacer un quiz</Link>
+            <div className="flex shrink-0 flex-wrap gap-2">
+              <Button asChild variant="outline">
+                <Link href={placementHref()}>Nivelarme en un tema</Link>
+              </Button>
+              <Button asChild>
+                <Link href="/quiz">Hacer un quiz</Link>
+              </Button>
+            </div>
+          </div>
+        )}
+
+        {learningPartial && (
+          <div role="status" className="mx-4 md:mx-6 mb-4 flex flex-col gap-3 rounded-xl border border-border bg-card p-4 text-sm sm:flex-row sm:items-center sm:justify-between">
+            <p className="text-muted-foreground">Parte de tu progreso no se pudo cargar; lo que ves puede estar incompleto.</p>
+            <Button variant="outline" size="sm" onClick={loadProfileData} className="gap-2 self-start sm:self-auto">
+              <RefreshCw className="h-4 w-4" />
+              Reintentar
             </Button>
           </div>
         )}
