@@ -31,15 +31,13 @@ describe("takeSpeakable", () => {
     expect(first.rest).toBe("```python\nprint('hola')\n")
 
     const closed = takeSpeakable(first.rest + "```\nY así se imprime.", true, MAX)
-    expect(closed.chunks).toEqual(["```python\nprint('hola')\n```\n", "Y así se imprime."])
+    // El servidor no lee el código: basta la valla vacía
+    expect(closed.chunks).toEqual(["```python\n```\n", "Y así se imprime."])
   })
 
-  it("un bloque de código que no cabe se recorta, pero cerrado", () => {
+  it("un bloque de código largo no se manda: solo su valla", () => {
     const code = "```js\n" + "x = 1;\n".repeat(300) + "```\n"
-    const [chunk] = takeSpeakable(code, true, MAX).chunks
-    expect(chunk.length).toBeLessThanOrEqual(MAX)
-    expect(chunk.startsWith("```js\n")).toBe(true)
-    expect(chunk.endsWith("```\n")).toBe(true)
+    expect(takeSpeakable(code, true, MAX).chunks).toEqual(["```js\n```\n"])
   })
 
   it("corta antes de cada elemento de una lista y en los párrafos", () => {

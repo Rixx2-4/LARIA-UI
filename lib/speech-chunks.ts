@@ -46,12 +46,10 @@ function boundaries(text: string): { cuts: number[]; codeBlocks: [number, number
   return { cuts: [...new Set(cuts)].sort((a, b) => a - b), codeBlocks }
 }
 
-// Un bloque de código se lee como «te dejo el código en pantalla»: si no cabe, se
-// manda recortado pero cerrado, para que el servidor lo siga reconociendo
-function fitCodeBlock(block: string, maxChars: number): string {
-  if (block.length <= maxChars) return block
-  const firstLine = block.slice(0, block.indexOf("\n") + 1)
-  return `${firstLine}${block.slice(firstLine.length, maxChars - firstLine.length - 5).trimEnd()}\n\`\`\`\n`
+// Un bloque de código se lee como «te dejo el código en pantalla»: el servidor no
+// dice el código, así que basta mandar la valla vacía (con su lenguaje)
+function codePlaceholder(block: string): string {
+  return `${block.slice(0, block.indexOf("\n") + 1)}\`\`\`\n`
 }
 
 // Parte un trozo demasiado largo por el último espacio antes del límite
@@ -97,7 +95,7 @@ export function takeSpeakable(text: string, final: boolean, maxChars: number): {
   for (const segment of segments) {
     if (segment.code) {
       flush()
-      chunks.push(fitCodeBlock(segment.text, maxChars))
+      chunks.push(codePlaceholder(segment.text))
       consumed += segment.text.length
       continue
     }
