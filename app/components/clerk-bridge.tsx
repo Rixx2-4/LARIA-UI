@@ -24,3 +24,10 @@ export function ClerkBridge() {
 
   return null
 }
+
+// Sin Clerk configurado no hay forma de entrar: se publica «sin sesión» para que
+// las páginas no se queden esperando
+export function NoAuthBridge() {
+  useEffect(() => setSession("signed-out"), [])
+  return null
+}
