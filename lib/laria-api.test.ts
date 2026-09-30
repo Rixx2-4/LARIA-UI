@@ -223,14 +223,14 @@ describe("errores de validación del backend", () => {
     vi.stubGlobal("fetch", async () =>
       new Response(
         JSON.stringify({
-          detail: [{ type: "string_too_short", loc: ["body", "password"], msg: "String should have at least 12 characters", ctx: { min_length: 12 } }],
+          detail: [{ type: "string_too_short", loc: ["body", "password"], msg: "String should have at least 8 characters", ctx: { min_length: 8 } }],
         }),
         { status: 422 },
       ),
     )
 
-    await expect(lariaAPI.auth.register("ana", "ana@example.com", "Abcdef12")).rejects.toThrow(
-      "La contraseña debe tener al menos 12 caracteres.",
+    await expect(lariaAPI.auth.register("ana", "ana@example.com", "Abc1")).rejects.toThrow(
+      "La contraseña debe tener al menos 8 caracteres.",
     )
   })
 
