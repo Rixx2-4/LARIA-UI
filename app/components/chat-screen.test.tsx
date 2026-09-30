@@ -157,7 +157,7 @@ describe("ChatScreen", () => {
     type Payload = Record<string, unknown>
     // Servidor como Render: el tutor responde a "quiero aprender…" o "ponme un quiz" con
     // el envelope que se le pase; los quizzes se generan y se califican en el servidor
-    function quizServer({ type = "answer", payload, documentId = null, preferences = true }: { type?: string; payload: Payload; documentId?: string | null; preferences?: boolean }) {
+    function quizServer({ type = "answer", payload, documentId = null, preferences = true, practiceFailures = 0 }: { type?: string; payload: Payload; documentId?: string | null; preferences?: boolean; practiceFailures?: number }) {
       const calls = { diagnostics: [] as string[], practice: [] as string[], topicPractice: [] as unknown[], attempts: 0, streamed: [] as string[], styles: [] as unknown[] }
       const quiz = (id: string, count: number, extra: Payload = {}) => ({
         id, document_id: documentId, total_points: count * 10, created_at: "", ...extra,
@@ -192,6 +192,7 @@ describe("ChatScreen", () => {
           return json({ explanation_style: null })
         }
         if (url.endsWith("/quizzes/practice") && method === "POST") {
+          if (practiceFailures-- > 0) return json({ detail: "El servicio de IA está recibiendo muchas peticiones ahora mismo." }, 503)
           calls.topicPractice.push(JSON.parse(String(init?.body)))
           return json(quiz("prac", 5, { topic: "fracciones", topic_label: "Fracciones" }), 201)
         }
@@ -347,6 +348,18 @@ describe("ChatScreen", () => {
       expect(await screen.findByText("5 de 5")).toBeTruthy()
       expect(calls.topicPractice).toEqual([{ topic: "fracciones", num_questions: 5 }])
       expect(calls.diagnostics).toEqual([])
+    })
+
+    it("si la IA falla al preparar el quiz, muestra el motivo y deja reintentar", async () => {
+      const calls = quizServer({ payload: { intent: "quiz", offer_quiz: true, topic_hint: "fracciones" }, practiceFailures: 1 })
+      renderAt("c1")
+
+      fireEvent.click(await screen.findByRole("button", { name: "Empezar" }))
+      expect(await screen.findByText("El servicio de IA está recibiendo muchas peticiones ahora mismo.")).toBeTruthy()
+
+      fireEvent.click(screen.getByRole("button", { name: "Reintentar" }))
+      expect(await screen.findByText("Práctica · Fracciones")).toBeTruthy()
+      expect(calls.topicPractice).toEqual([{ topic: "fracciones", num_questions: 5 }])
     })
 
     it("sin offer_quiz no se abre nada, aunque la intención sea quiz", async () => {

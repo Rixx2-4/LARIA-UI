@@ -199,7 +199,7 @@ export function ChatQuiz({ chatId, request, onDismiss, onStartLesson }: ChatQuiz
             {error && <ErrorLine message={error} />}
             <div className="flex gap-2">
               <Button size="sm" onClick={load} disabled={isPlacement && topic.trim().length < 2}>
-                Empezar
+                {error ? "Reintentar" : "Empezar"}
               </Button>
               <Button size="sm" variant="ghost" onClick={onDismiss}>
                 Ahora no
@@ -236,7 +236,7 @@ export function ChatQuiz({ chatId, request, onDismiss, onStartLesson }: ChatQuiz
             {error && <ErrorLine message={error} />}
             <div className="flex flex-wrap gap-2">
               <Button size="sm" onClick={load}>
-                Seguir
+                {error ? "Reintentar" : "Seguir"}
               </Button>
               <Button size="sm" variant="outline" onClick={() => setPhase("style")}>
                 Empezar la clase
