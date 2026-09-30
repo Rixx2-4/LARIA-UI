@@ -358,21 +358,20 @@ export const lariaAPI = {
         const decoder = new TextDecoder()
         let buffer = ""
 
-        // Nombre del evento SSE en curso (event: …), si el servidor lo usa
+        // Evento SSE en curso: su nombre (event: …) y sus líneas data:, que se unen
+        // con saltos de línea y se procesan al llegar la línea en blanco
         let eventName = ""
+        let dataLines: string[] = []
 
-        // Devuelve true cuando el stream ha terminado ([DONE] o evento done)
-        const handleLine = (line: string): boolean => {
-          if (line === "") {
-            eventName = ""
-            return false
-          }
-          if (line.startsWith("event:")) {
-            eventName = line.slice(6).trim()
-            return false
-          }
-          if (!line.startsWith("data:")) return false
-          const data = line.slice(5).replace(/^ /, "")
+        // Procesa el evento acumulado; devuelve true cuando el stream ha terminado
+        const dispatchEvent = (): boolean => {
+          const name = eventName
+          const lines = dataLines
+          eventName = ""
+          dataLines = []
+          if (lines.length === 0) return false
+
+          const data = lines.join("\n")
           if (data === "[DONE]") return true
 
           let parsed: unknown = data
@@ -382,20 +381,32 @@ export const lariaAPI = {
             // Texto sin JSON: se interpreta según el nombre del evento
           }
           const payload = parsed !== null && typeof parsed === "object" ? (parsed as Record<string, unknown>) : null
-          const type = (typeof payload?.type === "string" ? payload.type : "") || eventName || "token"
-          const text = typeof parsed === "string" ? parsed : ""
+          // Lo que no es un objeto (texto, o JSON como 42 o null) se toma tal cual llegó
+          const text = typeof parsed === "string" ? parsed : payload ? "" : data
+          const type = (typeof payload?.type === "string" ? payload.type : "") || name || "token"
 
           if (type === "token") {
             const content = payload ? payload.content : text
             callbacks.onToken?.(typeof content === "string" ? content : "")
           } else if (type === "thinking") {
-            const label = payload ? (payload.content ?? payload.message ?? payload.label ?? "") : text
+            const label = payload ? payload.content : text
             callbacks.onThinking?.(typeof label === "string" ? label : "")
           } else if (type === "envelope") {
             callbacks.onEnvelope?.({ ...(payload ?? {}), type: "envelope" })
+          } else if (type === "error") {
+            const detail = payload ? (payload.detail ?? payload.message ?? payload.content) : text
+            throw new Error(typeof detail === "string" && detail ? detail : "El tutor no pudo responder")
           } else if (type === "done") {
             return true
           }
+          return false
+        }
+
+        const handleLine = (line: string): boolean => {
+          if (line === "") return dispatchEvent()
+          if (line.startsWith("event:")) eventName = line.slice(6).trim()
+          else if (line.startsWith("data:")) dataLines.push(line.slice(5).replace(/^ /, ""))
+          // id:, retry: y comentarios (:) no se usan
           return false
         }
 
@@ -403,7 +414,8 @@ export const lariaAPI = {
           const { done, value } = await reader.read()
           if (done) {
             buffer += decoder.decode()
-            handleLine(buffer)
+            if (buffer) handleLine(buffer)
+            dispatchEvent()
             break
           }
 

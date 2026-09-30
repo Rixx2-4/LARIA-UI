@@ -185,4 +185,71 @@ describe("useStreamingChat", () => {
     await waitFor(() => expect(result.current.isDone).toBe(true), { timeout: 5000 })
     expect(last(result.current.messages).content).toBe(answer)
   })
+
+  describe("la animación de escritura no deja la respuesta a medias", () => {
+    const answer = "La célula es la unidad básica de la vida. ".repeat(20).trim()
+    const saved: ChatMessage[] = [
+      { role: "user", content: "hola" },
+      { role: "assistant", content: answer },
+    ]
+
+    async function receiveWholeAnswer() {
+      const sse = network(saved)
+      const hook = renderChat()
+      act(() => {
+        hook.result.current.startStreaming("hola")
+      })
+      sse.push(tokenEvent(answer))
+      sse.push("data: [DONE]\n\n")
+      sse.close()
+      return hook
+    }
+
+    afterEach(() => {
+      vi.restoreAllMocks()
+      delete (window as { matchMedia?: unknown }).matchMedia
+    })
+
+    it("parar durante la animación muestra ya toda la respuesta recibida", async () => {
+      const { result } = await receiveWholeAnswer()
+      await sleep(120)
+      expect(last(result.current.messages).content.length).toBeLessThan(answer.length)
+
+      act(() => result.current.stopStreaming())
+
+      expect(last(result.current.messages).content).toBe(answer)
+      expect(result.current.isStreaming).toBe(false)
+    })
+
+    it("cambiar de chat mientras aún se anima no vuelca la respuesta en el chat nuevo", async () => {
+      const { result } = await receiveWholeAnswer()
+      await sleep(120)
+      const otherChat: ChatMessage[] = [{ role: "user", content: "Otro tema" }]
+
+      act(() => result.current.openChat("c2", otherChat))
+      await sleep(300)
+
+      expect(result.current.messages).toEqual(otherChat)
+    })
+
+    it("con la pestaña en segundo plano, la respuesta se completa igualmente", async () => {
+      vi.spyOn(document, "hidden", "get").mockReturnValue(true)
+      const { result } = await receiveWholeAnswer()
+
+      await waitFor(() => expect(result.current.isDone).toBe(true), { timeout: 1000 })
+      expect(last(result.current.messages).content).toBe(answer)
+    })
+
+    it("con \"reducir movimiento\" activado, la respuesta aparece sin efecto de escritura", async () => {
+      ;(window as { matchMedia?: unknown }).matchMedia = (query: string) => ({
+        matches: query.includes("prefers-reduced-motion"),
+        addEventListener() {},
+        removeEventListener() {},
+      })
+      const { result } = await receiveWholeAnswer()
+
+      await waitFor(() => expect(result.current.isDone).toBe(true), { timeout: 300 })
+      expect(last(result.current.messages).content).toBe(answer)
+    })
+  })
 })

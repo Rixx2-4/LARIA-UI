@@ -89,7 +89,7 @@ export function SearchBar() {
     error: streamError,
     isDone,
     startStreaming,
-    cancelStreaming,
+    stopStreaming,
     resetStreaming,
   } = useStreamingChat({
     messages,
@@ -312,7 +312,7 @@ export function SearchBar() {
   }
 
   const handleStopGeneration = () => {
-    cancelStreaming()
+    stopStreaming()
   }
 
   const renderMessageContent = (msg: typeof messages[0], isLive: boolean) =>

@@ -65,6 +65,34 @@ describe("lariaAPI.chats.stream", () => {
     expect(events).toEqual(["thinking:Pensando en un ejemplo", "token:Hola", "envelope:envelope", "done"])
   })
 
+  it("une las líneas data: de un mismo evento con saltos de línea", async () => {
+    const sse = controllableSSE()
+    vi.stubGlobal("fetch", sse.fetchMock)
+    const { events, callbacks } = recorder()
+
+    const done = lariaAPI.chats.stream("c1", "user", "hola", callbacks)
+    sse.push("event: token\ndata: Primera línea\ndata: Segunda línea\n\n")
+    sse.push("data: 42\n\n")
+    sse.push("data: [DONE]\n\n")
+    await done
+
+    expect(events).toEqual(["token:Primera línea\nSegunda línea", "token:42", "done"])
+  })
+
+  it("un evento error del servidor se avisa como error, no como respuesta terminada", async () => {
+    const sse = controllableSSE()
+    vi.stubGlobal("fetch", sse.fetchMock)
+    const { events, callbacks } = recorder()
+
+    const done = lariaAPI.chats.stream("c1", "user", "hola", callbacks)
+    sse.push(tokenEvent("Hola"))
+    sse.push('event: error\ndata: {"detail":"El modelo no respondió"}\n\n')
+    sse.close()
+    await done
+
+    expect(events).toEqual(["token:Hola", "error:El modelo no respondió"])
+  })
+
   it("reconstruye un evento partido entre dos fragmentos de red", async () => {
     const sse = controllableSSE()
     vi.stubGlobal("fetch", sse.fetchMock)
