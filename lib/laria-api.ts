@@ -50,6 +50,13 @@ interface ChatListResponse {
   chats: Chat[]
 }
 
+export interface SpeechConfig {
+  enabled: boolean
+  max_chars: number
+}
+
+export type SpeechEmotion = "calm" | "encouraging" | "patient" | "celebratory"
+
 interface User {
   id: string
   username: string
@@ -547,6 +554,28 @@ export const lariaAPI = {
         method: "POST",
         body: JSON.stringify({ answers }),
       }),
+  },
+
+  // Voz del tutor (ADR-026): el backend limpia el texto (markdown, fórmulas, código)
+  // y devuelve MP3. Se manda el trozo tal cual se ve en pantalla
+  speech: {
+    // Sin el endpoint (backend antiguo) o sin conexión, no hay voz: se lee solo texto
+    config: async (): Promise<SpeechConfig> => {
+      try {
+        const response = await request("/speech/config")
+        const data = await response.json()
+        return { enabled: data?.enabled === true, max_chars: Number(data?.max_chars) > 0 ? Number(data.max_chars) : 1200 }
+      } catch {
+        return { enabled: false, max_chars: 1200 }
+      }
+    },
+
+    // null (204) si, limpio, no queda nada que decir
+    synthesize: async (text: string, emotion: SpeechEmotion, signal?: AbortSignal): Promise<Blob | null> => {
+      const response = await request("/speech", { method: "POST", body: JSON.stringify({ text, emotion }), signal }, "No se pudo leer en voz")
+      if (response.status === 204) return null
+      return response.blob()
+    },
   },
 
   learning: {

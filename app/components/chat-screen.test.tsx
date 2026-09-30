@@ -695,4 +695,116 @@ describe("ChatScreen", () => {
       expect(input.value).toBe("")
     })
   })
+
+  describe("voz del tutor", () => {
+    const envelopeEvent = (data: unknown) => `event: envelope\ndata: ${JSON.stringify(data)}\n\n`
+    const answer = "La derivada mide cómo cambia una función en cada punto. Se escribe f prima de x. ¿Seguimos?"
+
+    beforeEach(() => {
+      localStorage.clear()
+      // Audio de mentira: «suena» y termina enseguida
+      vi.spyOn(HTMLMediaElement.prototype, "play").mockImplementation(function (this: HTMLMediaElement) {
+        setTimeout(() => this.onended?.(new Event("ended")), 0)
+        return Promise.resolve()
+      })
+      vi.spyOn(HTMLMediaElement.prototype, "pause").mockImplementation(() => {})
+      URL.createObjectURL = vi.fn(() => "blob:audio")
+      URL.revokeObjectURL = vi.fn()
+    })
+    afterEach(() => vi.restoreAllMocks())
+
+    function voiceServer({ enabled = true, sse }: { enabled?: boolean; sse?: ReturnType<typeof controllableSSE> } = {}) {
+      const spoken: { text: string; emotion: string }[] = []
+      let answered = false
+      vi.stubGlobal("fetch", async (url: string, init?: RequestInit) => {
+        const method = init?.method ?? "GET"
+        if (url.endsWith("/users/me")) return json({ id: "u1", username: "ana", email: "a@a.a" })
+        if (url.endsWith("/chats/")) return json({ chats: [{ id: "c1", title: "Derivadas" }] })
+        if (url.endsWith("/documents/")) return json([])
+        if (url.endsWith("/speech/config")) return enabled ? json({ enabled: true, max_chars: 1200 }) : json({ detail: "Not Found" }, 404)
+        if (url.endsWith("/speech") && method === "POST") {
+          spoken.push(JSON.parse(String(init?.body)))
+          return new Response(new Blob(["mp3"], { type: "audio/mpeg" }), { status: 200 })
+        }
+        if (url.endsWith("/chats/c1/stream") && sse) {
+          answered = true
+          return sse.fetchMock(url, init)
+        }
+        if (url.endsWith("/chats/c1"))
+          return json({
+            id: "c1", title: "Derivadas",
+            messages: sse && !answered
+              ? [{ role: "user", content: "Hola" }, { role: "assistant", content: "Hola, ¿qué quieres aprender hoy?" }]
+              : [{ role: "user", content: "Explícame la derivada" }, { role: "assistant", content: answer, metadata: { type: "answer", emotion: "patient", payload: { content: answer } } }],
+          })
+        throw new Error(`Petición inesperada: ${method} ${url}`)
+      })
+      return spoken
+    }
+
+    it("con «Leer en voz», lee cada frase según llega, en orden, y la última con la emoción del tutor", async () => {
+      localStorage.setItem("laria_voz", "voice")
+      const sse = controllableSSE()
+      const spoken = voiceServer({ sse })
+      renderAt("c1")
+      await screen.findByText("Hola, ¿qué quieres aprender hoy?")
+      expect(await screen.findByRole("button", { name: "Leer en voz: activado" })).toBeTruthy()
+
+      const input = screen.getByRole("textbox")
+      fireEvent.change(input, { target: { value: "Explícame la derivada" } })
+      fireEvent.keyDown(input, { key: "Enter" })
+
+      sse.push(tokenEvent("La derivada mide cómo cambia una función en cada punto. Se escr"))
+      // La primera frase suena mientras el tutor sigue escribiendo
+      await waitFor(() => expect(spoken).toEqual([{ text: "La derivada mide cómo cambia una función en cada punto.", emotion: "encouraging" }]))
+
+      sse.push(tokenEvent("ibe f prima de x. ¿Seguimos?"))
+      sse.push(envelopeEvent({ type: "answer", emotion: "calm", payload: { content: answer } }))
+      sse.push(doneEvent())
+      sse.close()
+
+      // La frase corta espera a la siguiente y sale con la emoción del envelope
+      await waitFor(() => expect(spoken[1]).toEqual({ text: "Se escribe f prima de x. ¿Seguimos?", emotion: "calm" }))
+      expect(spoken).toHaveLength(2)
+    })
+
+    it("por defecto solo texto: no pide audio; «Escuchar» lo lee y la segunda vez sale de memoria", async () => {
+      const spoken = voiceServer()
+      renderAt("c1")
+      await screen.findByText(answer)
+      const toggle = await screen.findByRole("button", { name: "Leer en voz: desactivado (solo texto)" })
+      expect(toggle.textContent).toContain("Solo texto")
+      expect(spoken).toEqual([])
+
+      fireEvent.click(screen.getByRole("button", { name: "Escuchar respuesta" }))
+      await waitFor(() =>
+        expect(spoken).toEqual([
+          { text: "La derivada mide cómo cambia una función en cada punto.", emotion: "patient" },
+          { text: "Se escribe f prima de x. ¿Seguimos?", emotion: "patient" },
+        ]),
+      )
+      // Al terminar, el botón vuelve a «Escuchar»
+      const listen = await screen.findByRole("button", { name: "Escuchar respuesta" })
+
+      fireEvent.click(listen)
+      await screen.findByRole("button", { name: "Escuchar respuesta" })
+      expect(spoken).toHaveLength(2)
+    })
+
+    it("elegir «Leer en voz» se recuerda", async () => {
+      voiceServer()
+      renderAt("c1")
+      fireEvent.click(await screen.findByRole("button", { name: "Leer en voz: desactivado (solo texto)" }))
+      expect(await screen.findByRole("button", { name: "Leer en voz: activado" })).toBeTruthy()
+      expect(localStorage.getItem("laria_voz")).toBe("voice")
+    })
+
+    it("sin voz en el backend no hay conmutador ni «Escuchar»", async () => {
+      voiceServer({ enabled: false })
+      renderAt("c1")
+      await screen.findByText(answer)
+      expect(screen.queryByRole("button", { name: /Leer en voz/ })).toBeNull()
+      expect(screen.queryByRole("button", { name: "Escuchar respuesta" })).toBeNull()
+    })
+  })
 })
