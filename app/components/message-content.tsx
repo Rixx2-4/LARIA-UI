@@ -77,3 +77,18 @@ export function MessageContent({ content }: { content: string }) {
     </ReactMarkdown>
   )
 }
+
+// Texto corto que puede llevar fórmulas (enunciados y opciones de los quizzes): sin
+// párrafos, para que quepa en una línea, un botón o un título. Sin fórmulas se deja
+// como texto plano: así un «1.» o un «*» del enunciado no se convierten en markdown
+const HAS_MATH = /\\\(|\\\[|\$/
+const inlineComponents: Components = { ...components, p: ({ children }) => <>{children}</> }
+
+export function MathText({ text }: { text: string }) {
+  if (!HAS_MATH.test(text)) return <>{text}</>
+  return (
+    <ReactMarkdown remarkPlugins={[remarkMath]} rehypePlugins={[rehypeKatex]} components={inlineComponents}>
+      {normalizeMath(text)}
+    </ReactMarkdown>
+  )
+}

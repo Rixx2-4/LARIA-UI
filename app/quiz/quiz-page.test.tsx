@@ -27,7 +27,7 @@ const quiz = {
 }
 
 // Servidor de quizzes: registra las peticiones de generar y enviar
-function stubServer() {
+function stubServer(served = quiz) {
   const requests: { url: string; method: string; body?: unknown }[] = []
   vi.stubGlobal("fetch", async (url: string, init?: RequestInit) => {
     const method = init?.method ?? "GET"
@@ -44,7 +44,7 @@ function stubServer() {
       // Como el backend: generar un quiz es un POST; otro método da 405
       if (method !== "POST") return json({ detail: "Method Not Allowed" }, 405)
       requests.push({ url, method })
-      return json(quiz)
+      return json(served)
     }
     if (url.includes("/attempts")) {
       const body = JSON.parse(String(init?.body))
@@ -116,6 +116,20 @@ describe("QuizPage", () => {
     expect(generate.disabled).toBe(true)
     fireEvent.click(generate)
     expect(requests).toEqual([])
+  })
+
+  it("las fórmulas del enunciado y de las opciones se dibujan con KaTeX", async () => {
+    stubServer({
+      ...quiz,
+      questions: [{ index: 0, text: "¿Cuánto es \\( \\frac{3}{4} + \\frac{1}{4} \\)?", options: { A: "\\( 1 \\)", B: "\\( \\frac{4}{8} \\)" }, difficulty: "easy" }],
+    })
+    const { container } = renderQuiz("chat=c1")
+
+    fireEvent.click(await screen.findByText("Generar Quiz"))
+    await screen.findByText(/¿Cuánto es/)
+    // Una fórmula en el enunciado y una en cada opción
+    expect(container.querySelectorAll(".katex-html")).toHaveLength(3)
+    expect(container.textContent).not.toContain("\\(")
   })
 
   it("Personalizar permite pedir otro número de preguntas", async () => {
