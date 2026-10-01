@@ -1,6 +1,6 @@
 "use client"
 
-import { useEffect, useRef, useState } from "react"
+import { useEffect, useRef, useState, useSyncExternalStore } from "react"
 import { m, useInView, useReducedMotion } from "motion/react"
 import { Check } from "lucide-react"
 import { FileTypeIcon } from "../file-type-icon"
@@ -8,12 +8,18 @@ import { mimeFromFilename } from "@/lib/file-types"
 
 const frame = "rounded-lg border border-foreground/15 bg-card shadow-[6px_6px_0_0] shadow-foreground/10"
 
-// Cuándo empezar: al entrar en pantalla (o ya, si se pidió reducir movimiento)
+const noop = () => () => {}
+
+// Cuándo empezar: al entrar en pantalla (o ya, si se pidió reducir movimiento).
+// `hide`: lo que aparece con la animación solo se esconde tras hidratar; del
+// servidor (sin JS, con JS lento, al imprimir) sale visible, como en Reveal
 function usePlay<T extends Element>() {
   const ref = useRef<T>(null)
   const inView = useInView(ref, { once: true, margin: "0px 0px -120px 0px" })
   const reduceMotion = useReducedMotion()
-  return { ref, play: inView || !!reduceMotion, instant: !!reduceMotion }
+  const hydrated = useSyncExternalStore(noop, () => true, () => false)
+  const play = inView || !!reduceMotion
+  return { ref, play, instant: !!reduceMotion, hydrated, hide: hydrated && !play }
 }
 
 const FILES = [
@@ -23,7 +29,7 @@ const FILES = [
 ]
 
 export function UploadMock() {
-  const { ref, play, instant } = usePlay<HTMLDivElement>()
+  const { ref, play, instant, hide } = usePlay<HTMLDivElement>()
   const [analyzed, setAnalyzed] = useState(0)
 
   useEffect(() => {
@@ -42,9 +48,9 @@ export function UploadMock() {
             <m.li
               key={file.name}
               className="flex items-center gap-3 rounded-md border border-foreground/10 px-3 py-2.5"
-              initial={{ opacity: 0, x: -12 }}
-              animate={play ? { opacity: 1, x: 0 } : undefined}
-              transition={{ delay: i * 0.15, duration: 0.4 }}
+              initial={false}
+              animate={hide ? { opacity: 0, x: -12 } : { opacity: 1, x: 0 }}
+              transition={hide ? { duration: 0 } : { delay: i * 0.15, duration: 0.4 }}
             >
               <FileTypeIcon mimeType={mimeFromFilename(file.name)} className="h-4 w-4 shrink-0 text-muted-foreground" />
               <div className="min-w-0 flex-1">
@@ -136,7 +142,7 @@ const CONCEPTS = [
 ]
 
 export function ProfileMock() {
-  const { ref, play, instant } = usePlay<HTMLDivElement>()
+  const { ref, play, instant, hide } = usePlay<HTMLDivElement>()
 
   return (
     <div ref={ref} aria-hidden className={`${frame} p-4`}>
@@ -165,9 +171,9 @@ export function ProfileMock() {
       </ul>
       <m.p
         className="mt-4 border-t border-foreground/10 pt-3 text-[12.5px]"
-        initial={{ opacity: 0 }}
-        animate={play ? { opacity: 1 } : undefined}
-        transition={{ delay: instant ? 0 : 1.2 }}
+        initial={false}
+        animate={hide ? { opacity: 0 } : { opacity: 1 }}
+        transition={hide ? { duration: 0 } : { delay: instant ? 0 : 1.2 }}
       >
         <span className="font-medium">Para repasar:</span> límites laterales, con 3 fallos seguidos.
       </m.p>
@@ -179,7 +185,7 @@ export function ProfileMock() {
 const LEVEL_STEPS = ["básico", "intermedio", "avanzado"]
 
 export function PlacementMock() {
-  const { ref, play, instant } = usePlay<HTMLDivElement>()
+  const { ref, play, instant, hydrated, hide } = usePlay<HTMLDivElement>()
   const [answered, setAnswered] = useState(false)
 
   useEffect(() => {
@@ -212,9 +218,10 @@ export function PlacementMock() {
       </div>
       <m.div
         className="mt-4 border-t border-foreground/10 pt-3"
-        initial={{ opacity: 0 }}
-        animate={answered ? { opacity: 1 } : undefined}
-        transition={{ delay: instant ? 0 : 0.5 }}
+        initial={false}
+        // Sin hidratar se ve el resultado; con JS aparece al responder
+        animate={hide || (hydrated && !answered) ? { opacity: 0 } : { opacity: 1 }}
+        transition={hide || !answered ? { duration: 0 } : { delay: instant ? 0 : 0.5 }}
       >
         <p className="mb-2 text-[12.5px]">Tu punto de partida en astronomía:</p>
         <div className="flex gap-1.5">

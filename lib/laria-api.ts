@@ -197,6 +197,68 @@ interface QuizAttemptQuestion {
   is_correct: boolean
 }
 
+// Ruta de aprendizaje guiada (ADR-028): evaluación → ruta → clase por conceptos,
+// con una comprobación corta tras cada explicación
+type PathModuleStatus = "locked" | "available" | "in_progress" | "completed" | "assumed"
+type TeachingPhase = "assessment" | "teaching" | "check" | "remediation" | "advance" | "completed"
+type CheckOutcome = "understood" | "partial" | "not_understood"
+
+interface PathModule {
+  title: string
+  concept: string
+  // "prerequisite": algo que hace falta saber antes del tema
+  kind: "content" | "prerequisite"
+  status: PathModuleStatus
+  mastery: number
+  position: number
+}
+
+interface TeachingState {
+  phase: TeachingPhase
+  concept: string | null
+  concept_title: string | null
+  // En un repaso: el concepto al que se vuelve después
+  return_to: string | null
+  return_to_title: string | null
+  variant: string | null
+  pending_check_quiz_id: string | null
+  last_outcome: CheckOutcome | null
+  passed_concepts: string[]
+  reason: string | null
+}
+
+interface LearningPath {
+  id: string
+  topic?: string | null
+  title?: string | null
+  modules: PathModule[]
+  teaching: TeachingState
+}
+
+interface LessonResponse {
+  path: LearningPath
+  markdown: string | null
+  // La comprobación (sin respuestas); null cuando la ruta está completada
+  check: QuizResponse | null
+}
+
+interface CheckNext {
+  phase: TeachingPhase
+  concept: string | null
+  concept_title: string | null
+  variant: string | null
+  reason: string | null
+}
+
+interface CheckResponse {
+  outcome: CheckOutcome
+  score: number
+  total_points: number
+  questions: QuizAttemptQuestion[]
+  next: CheckNext
+  path: LearningPath
+}
+
 type PlacementLevel = "basico" | "intermedio" | "avanzado"
 
 // Cómo prefiere que le expliquen; vale para todo, con y sin material
@@ -578,6 +640,26 @@ export const lariaAPI = {
     },
   },
 
+  paths: {
+    // Idempotente: si la ruta del tema ya existe, devuelve la misma con su estado
+    fromTopic: (topic: string) =>
+      fetchAPI<LearningPath>("/learning/paths/from-topic", { method: "POST", body: JSON.stringify({ topic }) }),
+
+    get: (pathId: string) => fetchAPI<LearningPath>(`/learning/paths/${segment(pathId)}`),
+
+    // Con una comprobación pendiente devuelve la MISMA: recargar la clase es seguro
+    lesson: (pathId: string) => fetchAPI<LessonResponse>(`/learning/paths/${segment(pathId)}/lesson`, { method: "POST" }),
+
+    check: (pathId: string, quizId: string, answers: Record<number, string>) =>
+      fetchAPI<CheckResponse>(`/learning/paths/${segment(pathId)}/check`, {
+        method: "POST",
+        body: JSON.stringify({
+          quiz_id: quizId,
+          answers: Object.fromEntries(Object.entries(answers).map(([index, letter]) => [String(index), letter])),
+        }),
+      }),
+  },
+
   learning: {
     history: () => fetchAPI<LearningHistory>("/learning/me"),
     profile: () => fetchAPI<StudentProfile>("/learning/me/profile"),
@@ -633,4 +715,5 @@ export type {
   PedagogicalMemory, DocumentMastery, ConceptMastery,
   QuizResponse, QuizQuestion, QuizAttemptResponse, QuizAttemptQuestion,
   StreamCallbacks, TutorEnvelope, PlacementResult, PlacementLevel, ExplanationStyle,
+  LearningPath, PathModule, PathModuleStatus, TeachingState, TeachingPhase, LessonResponse, CheckResponse, CheckOutcome,
 }
