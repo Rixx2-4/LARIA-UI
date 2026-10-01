@@ -297,7 +297,12 @@ export default function LandingPage() {
             <div className="mx-auto max-w-6xl px-4 py-20 sm:px-6 lg:py-28">
               <Reveal>
                 <h2 className="max-w-3xl text-balance font-display text-4xl leading-tight tracking-tight sm:text-6xl">
-                  ¿Tienes un tema que no termina de entrar? <Marker delay={0.3}>Súbelo</Marker>, o simplemente dile cuál es.
+                  ¿Tienes un tema que no termina de entrar?{" "}
+                  {/* La coma va pegada al subrayado: si no, el salto de línea la deja sola al empezar */}
+                  <span className="whitespace-nowrap">
+                    <Marker delay={0.3}>Súbelo</Marker>,
+                  </span>{" "}
+                  o simplemente dile cuál es.
                 </h2>
                 <Link
                   href={SIGN_UP_HREF}
