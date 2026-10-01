@@ -561,6 +561,7 @@ export function SearchBar({ isOpeningChat = false }: { isOpeningChat?: boolean }
                 size={uf.size}
                 mimeType={uf.mimeType}
                 documentId={uf.document?.id}
+                documentStatus={uf.document?.status}
                 previewDataUrl={uf.dataUrl}
                 onClick={() =>
                   setViewerFile({
