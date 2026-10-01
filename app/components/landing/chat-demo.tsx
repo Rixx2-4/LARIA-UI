@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from "react"
 import { AnimatePresence, m, useReducedMotion } from "motion/react"
+import { Paperclip } from "lucide-react"
 import type { DemoPiece } from "./chat-demo-content"
 
 const QUESTION = "No entiendo la regla de la cadena. ¿Me la explicas con un ejemplo?"
@@ -51,7 +52,7 @@ export function ChatDemo({ answer }: { answer: DemoPiece[][] }) {
     <div
       role="img"
       aria-label="Ejemplo de conversación en Plenum con LARIA: una estudiante sube el tema de derivadas y pregunta por la regla de la cadena; LARIA la explica con la fórmula y un ejemplo."
-      className="overflow-hidden rounded-lg border border-foreground/15 bg-background shadow-[6px_6px_0_0] shadow-foreground/10"
+      className="overflow-hidden rounded-lg border border-foreground/15 bg-card shadow-[6px_6px_0_0] shadow-foreground/10"
     >
       <div className="flex items-center justify-between border-b border-foreground/10 px-4 py-2.5 text-xs text-muted-foreground">
         <span className="font-medium text-foreground">Derivadas: regla de la cadena</span>
@@ -59,7 +60,10 @@ export function ChatDemo({ answer }: { answer: DemoPiece[][] }) {
       </div>
 
       <div aria-hidden className="flex min-h-[23rem] flex-col gap-3 px-4 py-4 text-[13.5px] sm:min-h-[21rem]">
-        <p className="text-center text-xs text-muted-foreground">📎 Subí el archivo: tema3-derivadas.pdf</p>
+        <p className="flex items-center justify-center gap-1.5 text-xs text-muted-foreground">
+          <Paperclip className="h-3.5 w-3.5 shrink-0" />
+          Subí el archivo: tema3-derivadas.pdf
+        </p>
 
         <AnimatePresence>
           {current !== "idle" && (

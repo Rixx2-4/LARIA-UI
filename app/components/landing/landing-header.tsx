@@ -33,7 +33,7 @@ export function LandingHeader() {
 
   return (
     <header
-      className={`sticky top-0 z-40 bg-paper/90 backdrop-blur transition-[border-color] duration-300 ${
+      className={`sticky top-0 z-40 bg-background/90 backdrop-blur transition-[border-color] duration-300 ${
         scrolled ? "border-b border-foreground/10" : "border-b border-transparent"
       }`}
     >

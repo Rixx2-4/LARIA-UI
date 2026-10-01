@@ -537,7 +537,7 @@ describe("ChatScreen", () => {
     const fileInput = container.querySelector<HTMLInputElement>('input[type="file"]')!
     fireEvent.change(fileInput, { target: { files: [new File(["apuntes"], "tema1.txt", { type: "text/plain" })] } })
 
-    const note = await screen.findByText("📎 Subí el archivo: tema1.txt")
+    const note = await screen.findByText("Subí el archivo: tema1.txt")
     expect(sent).toEqual([{ role: "system", content: "📎 Subí el archivo: tema1.txt" }])
     // Una línea de aviso, no una burbuja del tutor
     expect(note.tagName).toBe("P")
