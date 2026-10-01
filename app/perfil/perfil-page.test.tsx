@@ -76,6 +76,9 @@ describe("PerfilPage", () => {
 
     expect(await screen.findByText("2 intentos de quiz completados")).toBeTruthy()
     expect(screen.getByRole("region", { name: "Tu nivel por tema" }).textContent).toContain("Astronomía · básico")
+    // El ritmo (pace "normal") no se presenta como un nivel que contradiga al del tema
+    expect(screen.getByText("Ritmo: normal")).toBeTruthy()
+    expect(screen.queryByText(/Intermedio/)).toBeNull()
     expect(screen.getByText("Parte de tu progreso no se pudo cargar; lo que ves puede estar incompleto.")).toBeTruthy()
     expect(screen.queryByText("No se pudo cargar tu perfil de aprendizaje")).toBeNull()
   })
@@ -101,9 +104,9 @@ describe("PerfilPage", () => {
     expect(await screen.findByText("Aún no hay actividad de aprendizaje")).toBeTruthy()
     expect(screen.getByRole("link", { name: "Hacer un quiz" }).getAttribute("href")).toBe("/quiz")
     expect(screen.getByRole("link", { name: "Nivelarme en un tema" }).getAttribute("href")).toBe("/nivelacion")
-    // El ritmo "normal" por defecto no es un nivel medido
+    // El ritmo "normal" por defecto no es una medida
     expect(screen.getByText("Sin actividad todavía")).toBeTruthy()
-    expect(screen.queryByText(/Nivel:/)).toBeNull()
+    expect(screen.queryByText(/Ritmo:/)).toBeNull()
   })
 
   it("si falla la lista de documentos, lo avisa sin ocultar el resto del perfil", async () => {

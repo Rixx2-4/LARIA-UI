@@ -77,6 +77,9 @@ export default function PerfilPage() {
   )
 }
 
+// Ritmo al que avanza el estudiante, según el backend (pace)
+const PACE_LABEL: Record<string, string> = { fast: "rápido", normal: "normal", slow: "pausado" }
+
 // Dificultades y fortalezas que se leen del perfil, calculadas en un solo sitio
 function profileInsights(profile: StudentProfile | null): { struggle: StruggleItem[]; fortalezas: FortalezaItem[] } {
   const struggleItems: StruggleItem[] = []
@@ -266,10 +269,10 @@ function Perfil() {
       ? timeAgo(learningProfile.updated_at)
       : "nunca"
 
-  const ritmo = learningProfile ? Math.min(100, Math.round((learningProfile.learning_velocity || 0) * 100)) : 0
-  const nivel = learningProfile?.pace
-    ? (learningProfile.pace === "fast" ? "Avanzado" : learningProfile.pace === "slow" ? "Principiante" : "Intermedio")
-    : "Sin datos"
+  // "pace" es a qué velocidad avanzas, no tu nivel: antes salía como "Nivel: Intermedio"
+  // y contradecía el nivel real, que es por tema ("Tu nivel por tema", más abajo)
+  const ritmo = PACE_LABEL[learningProfile?.pace ?? ""] ?? "sin datos"
+  const velocidad = learningProfile ? Math.min(100, Math.round((learningProfile.learning_velocity || 0) * 100)) : 0
 
   const errors = learningProfile?.frequent_errors || []
   const memory = learningProfile?.pedagogical_memory
@@ -325,13 +328,17 @@ function Perfil() {
             <h1 className="text-xl font-medium mb-1">{username}</h1>
             <p className="text-xs text-muted-foreground mb-1.5">{email}</p>
             <div className="flex gap-2.5 items-center flex-wrap">
-              {/* Sin actividad, el nivel y el ritmo serían valores por defecto, no una medida */}
+              {/* Sin actividad, el ritmo sería un valor por defecto, no una medida */}
               {hasNoActivity ? (
                 <span className="text-xs font-medium px-2.5 py-1 rounded-full bg-muted text-muted-foreground border border-border">Sin actividad todavía</span>
               ) : (
                 <>
-                  <span className="text-xs font-semibold px-2.5 py-1 rounded-full bg-primary text-primary-foreground">Nivel: {nivel}</span>
-                  <span className="text-xs font-medium px-2.5 py-1 rounded-full bg-muted text-muted-foreground border border-border">Ritmo: {ritmo}%</span>
+                  <span
+                    title={`Velocidad de aprendizaje: ${velocidad}%`}
+                    className="text-xs font-semibold px-2.5 py-1 rounded-full bg-primary text-primary-foreground"
+                  >
+                    Ritmo: {ritmo}
+                  </span>
                   <span className="text-xs font-medium px-2.5 py-1 rounded-full bg-muted text-muted-foreground border border-border">Última actividad: {lastActivity}</span>
                 </>
               )}

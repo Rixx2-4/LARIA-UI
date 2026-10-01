@@ -671,9 +671,11 @@ export function SearchBar({ isOpeningChat = false }: { isOpeningChat?: boolean }
                   variant="ghost"
                   size="icon"
                   onClick={handleStopGeneration}
-                  className="h-8 w-8 md:h-9 md:w-9 rounded-lg bg-destructive text-destructive-foreground hover:bg-destructive/90 transition-all"
+                  // Mismo botón que "Enviar", en el mismo sitio: parar no es un error ni algo
+                  // peligroso, así que no va en rojo
+                  className="h-8 w-8 md:h-9 md:w-9 rounded-lg bg-primary text-primary-foreground hover:bg-primary/90 transition-all"
                 >
-                  <Square className="h-4 w-4" />
+                  <Square className="h-3 w-3 fill-current" />
                 </Button>
               ) : shownQuery.trim() ? (
                 <Button
