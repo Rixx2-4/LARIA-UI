@@ -242,7 +242,7 @@ export function Sidebar({ onNavigate }: { onNavigate?: () => void } = {}) {
             {openPanel === "documents" && (
               <div className="flex flex-col h-full animate-in fade-in duration-300">
                 <div className="flex items-center justify-between px-3 py-2.5">
-                  <h2 className="text-sm font-semibold">Mis Documentos</h2>
+                  <h2 className="text-sm font-semibold">Mis documentos</h2>
                   <Button
                     aria-label="Fijar panel"
                     variant="ghost"
