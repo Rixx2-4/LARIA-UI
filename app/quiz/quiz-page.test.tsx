@@ -107,6 +107,17 @@ describe("QuizPage", () => {
     expect(requests[1].body).toEqual({ answers: { "1": "B", "2": "B" } })
   })
 
+  it("con un chat sin documento en la URL (p. ej. desde la barra lateral) no deja generar y dice por qué", async () => {
+    const requests = stubServer()
+    renderQuiz("chat=c3")
+
+    expect(await screen.findByText("Este chat no tiene un documento. Sube uno en el chat, o nivélate en un tema aquí abajo.")).toBeTruthy()
+    const generate = screen.getByText("Generar Quiz").closest("button")!
+    expect(generate.disabled).toBe(true)
+    fireEvent.click(generate)
+    expect(requests).toEqual([])
+  })
+
   it("Personalizar permite pedir otro número de preguntas", async () => {
     const requests = stubServer()
     renderQuiz("chat=c1")

@@ -178,3 +178,18 @@
     opacity: 1;
   }
 }
+
+/* Fórmulas en pantallas estrechas: una ecuación en bloque no parte la línea, así que
+   si es larga se desplaza de lado dentro de su caja en vez de salirse del mensaje.
+   Las fórmulas en línea ya parten la línea en sus operadores (KaTeX) */
+.katex-display {
+  max-width: 100%;
+  overflow-x: auto;
+  overflow-y: hidden;
+  padding-bottom: 2px;
+}
+/* Y el texto largo sin espacios (URLs, nombres de variables) tampoco desborda */
+.message-text {
+  overflow-wrap: anywhere;
+  min-width: 0;
+}

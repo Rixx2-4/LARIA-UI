@@ -74,7 +74,7 @@ export function QuestionStep({ questions, current, answers, onAnswer, onPrev, on
           <DifficultyBadge difficulty={question.difficulty} />
         </div>
 
-        <h2 className="text-lg font-medium mb-4">{question.text}</h2>
+        <h2 className="message-text text-lg font-medium mb-4">{question.text}</h2>
 
         <div className="space-y-3">
           {Object.entries(question.options).map(([key, value]) => (

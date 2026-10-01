@@ -128,7 +128,8 @@ export function Sidebar({ onNavigate }: { onNavigate?: () => void } = {}) {
           <div className="relative mb-2 flex flex-col items-center">
             <Button
               variant="ghost"
-              onClick={() => navigate(quizHref(activeChatId))}
+              // Con el chat abierto solo si tiene documento: el quiz es sobre él
+              onClick={() => navigate(quizHref(chats.find((c) => c.id === activeChatId)?.document_id ? activeChatId : null))}
               aria-label="Quiz"
               className="h-10 w-10 shrink-0 mx-auto text-muted-foreground hover:text-foreground hover:bg-accent"
             >

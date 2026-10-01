@@ -391,7 +391,7 @@ function InlineQuestion({
       <div className="h-1 overflow-hidden rounded-full bg-muted">
         <div className="h-full bg-primary transition-all" style={{ width: `${((current + 1) / questions.length) * 100}%` }} />
       </div>
-      <p className="font-medium">{question.text}</p>
+      <p className="message-text font-medium">{question.text}</p>
       <div className="space-y-2">
         {Object.entries(question.options).map(([key, value]) => (
           <button
@@ -399,7 +399,7 @@ function InlineQuestion({
             onClick={() => onAnswer(question, key)}
             aria-pressed={answers[question.index] === key}
             disabled={grading}
-            className={`w-full rounded-lg border px-3 py-2 text-left text-[13.5px] transition-colors ${
+            className={`message-text w-full rounded-lg border px-3 py-2 text-left text-[13.5px] transition-colors ${
               answers[question.index] === key ? "border-primary bg-primary/5" : "border-border hover:border-primary/50"
             }`}
           >
