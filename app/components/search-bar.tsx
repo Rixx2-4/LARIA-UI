@@ -390,9 +390,9 @@ export function SearchBar({ isOpeningChat = false }: { isOpeningChat?: boolean }
 
   const renderMessageContent = (msg: typeof messages[0], isLive: boolean) =>
     msg.role === "user" ? (
-      <div className="text-[14px] whitespace-pre-wrap">{msg.content}</div>
+      <div className="message-text text-[14px] whitespace-pre-wrap">{msg.content}</div>
     ) : (
-      <div className="text-[14px] leading-relaxed">
+      <div className="message-text text-[14px] leading-relaxed">
         <MessageContent content={msg.content} />
         {isLive && (
           <span className="inline-block w-2 h-4 ml-0.5 bg-foreground/70 animate-pulse" />
@@ -457,7 +457,7 @@ export function SearchBar({ isOpeningChat = false }: { isOpeningChat?: boolean }
                 <Fragment key={`${index}-${msg.role}`}>
                 <div className={`flex ${msg.role === "user" ? "justify-end" : "justify-start"}`}>
                   <div
-                    className={`max-w-[80%] rounded-2xl px-4 py-3 ${
+                    className={`min-w-0 max-w-[80%] rounded-2xl px-4 py-3 ${
                       msg.role === "user"
                         ? "bg-primary text-primary-foreground"
                         : "bg-muted text-foreground"

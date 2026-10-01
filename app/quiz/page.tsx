@@ -40,9 +40,13 @@ function Quiz({ chatId }: { chatId: string | null }) {
   const { chats, chatsLoaded } = useChat()
   const selectedChat = chats.find((c) => c.id === chatId)
   const chatMissing = chatsLoaded && !!chatId && !selectedChat
+  // Un quiz de chat es sobre su documento: sin él, el backend respondería 422
+  const chatWithoutDocument = !!selectedChat && !selectedChat.document_id
   // Por qué no se puede generar todavía; sin chats ya lo dice el aviso de arriba
   const generateBlockedReason =
-    !chatsLoaded || chats.length === 0 || chatMissing || chatId
+    chatWithoutDocument
+      ? "Este chat no tiene un documento. Sube uno en el chat, o nivélate en un tema aquí abajo."
+      : !chatsLoaded || chats.length === 0 || chatMissing || chatId
       ? null
       : chats.some((c) => c.document_id)
         ? "Elige un chat para generar el quiz."
@@ -239,7 +243,7 @@ function Quiz({ chatId }: { chatId: string | null }) {
 
               <Button
                 onClick={generateQuiz}
-                disabled={isLoading || !chatId || chatMissing}
+                disabled={isLoading || !chatId || chatMissing || chatWithoutDocument}
                 aria-describedby={generateBlockedReason ? "quiz-blocked-reason" : undefined}
                 className="w-full h-12"
               >
