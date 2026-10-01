@@ -1,6 +1,6 @@
 import { describe, it, expect, afterEach } from "vitest"
 import { render, cleanup } from "@testing-library/react"
-import { MessageContent } from "./message-content"
+import { MathText, MessageContent } from "./message-content"
 
 afterEach(cleanup)
 
@@ -79,5 +79,31 @@ describe("MessageContent", () => {
 
     expect(container.querySelector("code")?.textContent).toBe("\\(x\\)")
     expect(container.querySelector(".katex")).toBeNull()
+  })
+})
+
+describe("MathText (enunciados y opciones de los quizzes)", () => {
+  it("dibuja las fórmulas \\( … \\) con KaTeX, sin párrafos alrededor", () => {
+    const { container } = render(
+      <button>
+        <MathText text={"¿Cuánto es \\( \\frac{3}{4} + \\frac{1}{4} \\)?"} />
+      </button>,
+    )
+    expect(container.querySelector(".katex")).toBeTruthy()
+    expect(container.querySelector("p")).toBeNull()
+    expect(container.textContent).toContain("¿Cuánto es")
+    // Ni los delimitadores sin procesar (la fórmula original solo queda en la anotación MathML de KaTeX)
+    expect(container.querySelector(".katex-html")).toBeTruthy()
+    expect(container.textContent).not.toContain("\\(")
+  })
+
+  it("sin fórmulas deja el texto tal cual: un «1.» o un «*» no se vuelven markdown", () => {
+    const { container } = render(
+      <p>
+        <MathText text="1. Multiplica 3 * 4 * 5" />
+      </p>,
+    )
+    expect(container.textContent).toBe("1. Multiplica 3 * 4 * 5")
+    expect(container.querySelector("ol, em")).toBeNull()
   })
 })

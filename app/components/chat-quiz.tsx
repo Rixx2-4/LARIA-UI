@@ -7,6 +7,7 @@ import { Button } from "@/components/ui/button"
 import { ApiError, lariaAPI, type ExplanationStyle, type PlacementResult, type QuizQuestion, type QuizResponse } from "@/lib/laria-api"
 import { STYLE_OPTIONS, StylePicker } from "./style-picker"
 import { classHref } from "@/lib/routes"
+import { MathText } from "./message-content"
 import {
   LEVEL_COPY,
   LEVEL_NAME,
@@ -391,7 +392,7 @@ function InlineQuestion({
       <div className="h-1 overflow-hidden rounded-full bg-muted">
         <div className="h-full bg-primary transition-all" style={{ width: `${((current + 1) / questions.length) * 100}%` }} />
       </div>
-      <p className="message-text font-medium">{question.text}</p>
+      <p className="message-text font-medium"><MathText text={question.text} /></p>
       <div className="space-y-2">
         {Object.entries(question.options).map(([key, value]) => (
           <button
@@ -404,7 +405,7 @@ function InlineQuestion({
             }`}
           >
             <span className="mr-2 font-medium">{key}.</span>
-            {value}
+            <MathText text={value} />
           </button>
         ))}
       </div>
