@@ -24,7 +24,7 @@ const nextPoll = () => act(() => vi.advanceTimersByTimeAsync(5000))
 describe("FileCard: análisis del documento", () => {
   it("mientras el backend lo analiza dice «Analizando…» y deja de preguntar al terminar", async () => {
     const answers = [doc("analyzing"), doc("analyzing"), doc("analyzed")]
-    const fetchMock = vi.fn(async (_url: string) => answers.shift() ?? doc("analyzed"))
+    const fetchMock = vi.fn<(url: string) => Promise<Response>>(async () => answers.shift() ?? doc("analyzed"))
     vi.stubGlobal("fetch", fetchMock)
     render(<FileCard filename="libro.pdf" mimeType="application/pdf" documentId="d1" documentStatus="uploaded" onClick={() => {}} />)
 
