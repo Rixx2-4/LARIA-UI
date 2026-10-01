@@ -23,3 +23,8 @@ export function placementHref(topic?: string, chatId?: string | null): string {
   const query = params.toString()
   return query ? `/nivelacion?${query}` : "/nivelacion"
 }
+
+// La clase guiada de una ruta de aprendizaje
+export function classHref(pathId: string): string {
+  return `/clase/${encodeURIComponent(pathId)}`
+}

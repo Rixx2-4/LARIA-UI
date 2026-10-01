@@ -8,17 +8,17 @@ import { Button } from "@/components/ui/button"
 import { AppShell } from "../components/app-shell"
 import { RequireAuth } from "../components/require-auth"
 import { LEVEL_COPY, LEVEL_NAME, QuestionStep, ResultsList, StepRow, toResults, type QuizResult, type StepStatus } from "../quiz/quiz-parts"
-import { lariaAPI, type ExplanationStyle, type PlacementResult, type QuizQuestion } from "@/lib/laria-api"
+import { ApiError, lariaAPI, type ExplanationStyle, type PlacementResult, type QuizQuestion } from "@/lib/laria-api"
 import { StylePicker } from "../components/style-picker"
-import { NEW_CHAT_HREF, chatHref } from "@/lib/routes"
+import { NEW_CHAT_HREF, chatHref, classHref } from "@/lib/routes"
 import { markPlacementOffered } from "@/lib/placement"
 import { useChat } from "../contexts/chat-context"
 
 // Nivelación por rondas: una base de 6 preguntas y, si se supera, una avanzada de 8.
 // El cliente no lleva la cuenta de la ronda: pide siempre la siguiente con el mismo
 // tema y el backend sabe cuál toca. El veredicto no es una nota: es el punto de partida.
-// Al terminar se prepara la primera clase: un chat nuevo en el que el tutor empieza
-// a explicar el tema. Cada paso de la animación corresponde a algo que ocurre de verdad.
+// Al terminar se prepara la ruta del tema y se abre su clase guiada (/clase/<ruta>).
+// Cada paso de la animación corresponde a algo que ocurre de verdad.
 
 type Phase = "intro" | "loading" | "questions" | "preparing"
 
@@ -143,12 +143,26 @@ function Placement({ initialTopic, chatId }: { initialTopic: string; chatId: str
     }
   }
 
-  // Ajusta al nivel y crea el chat de la clase; el primer mensaje lo envía el chat al abrirse
+  // Ajusta al nivel y abre la clase guiada de la ruta del tema (/clase/<ruta>). Un
+  // backend sin rutas (404/405) da la clase como antes: un chat que la empieza solo
   const prepareLesson = async (verdict: PlacementResult | null, lessonTopic: string) => {
     setError(null)
     setPrep((p) => ({ ...p, offerNext: false, askStyle: false, level: "active", lesson: "pending" }))
     await pause(STEP_PAUSE_MS)
     setPrep((p) => ({ ...p, level: "done", lesson: "active" }))
+    try {
+      const path = await lariaAPI.paths.fromTopic(lessonTopic)
+      setPrep((p) => ({ ...p, lesson: "done" }))
+      await pause(STEP_PAUSE_MS / 2)
+      router.push(classHref(path.id))
+    } catch (err) {
+      if (err instanceof ApiError && (err.status === 404 || err.status === 405)) return lessonInChat(verdict, lessonTopic)
+      setError(err instanceof Error ? err.message : "No se pudo preparar la clase. Prueba de nuevo.")
+      setPrep((p) => ({ ...p, lesson: "pending" }))
+    }
+  }
+
+  const lessonInChat = async (verdict: PlacementResult | null, lessonTopic: string) => {
     try {
       const chat = await createChat(`Clase: ${lessonTopic}`)
       // Este chat ya viene de una nivelación: no se vuelve a ofrecer
@@ -382,7 +396,7 @@ function PreparingLesson({
         />
         <StepRow
           status={prep.lesson}
-          label="Preparando tu primera clase"
+          label="Preparando tu ruta y tu primera clase"
           detail={prep.lesson === "done" ? "Abriendo el chat…" : null}
         />
       </ol>

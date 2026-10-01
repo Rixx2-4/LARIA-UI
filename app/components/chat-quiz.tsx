@@ -1,10 +1,12 @@
 "use client"
 
 import { useEffect, useRef, useState } from "react"
+import { useRouter } from "next/navigation"
 import { ArrowRight, Loader2 } from "lucide-react"
 import { Button } from "@/components/ui/button"
-import { lariaAPI, type ExplanationStyle, type PlacementResult, type QuizQuestion, type QuizResponse } from "@/lib/laria-api"
+import { ApiError, lariaAPI, type ExplanationStyle, type PlacementResult, type QuizQuestion, type QuizResponse } from "@/lib/laria-api"
 import { STYLE_OPTIONS, StylePicker } from "./style-picker"
+import { classHref } from "@/lib/routes"
 import {
   LEVEL_COPY,
   LEVEL_NAME,
@@ -45,6 +47,7 @@ interface ChatQuizProps {
 }
 
 export function ChatQuiz({ chatId, request, onDismiss, onStartLesson }: ChatQuizProps) {
+  const router = useRouter()
   const isPlacement = request.kind === "placement"
   const isStyleOnly = request.kind === "style"
   const [phase, setPhase] = useState<Phase>(isStyleOnly ? "style" : "offer")
@@ -143,20 +146,32 @@ export function ChatQuiz({ chatId, request, onDismiss, onStartLesson }: ChatQuiz
     }
   }
 
-  // Ajusta al nivel y pide la primera clase en este mismo chat
+  // Tras la nivelación: la ruta del tema y su clase guiada (/clase/<ruta>). Un backend
+  // sin rutas (404/405) da la clase como antes, en este mismo chat
   const startLesson = async (verdict: PlacementResult | null, lessonTopic: string) => {
     setPhase("lesson")
+    setError(null)
     setSteps({ level: "active", lesson: "pending" })
     await pause(STEP_PAUSE_MS)
     setSteps({ level: "done", lesson: "active" })
-    await pause(STEP_PAUSE_MS / 2)
-    onStartLesson(
-      verdict
-        ? `Empecemos la clase de ${lessonTopic}. En la nivelación quedé en nivel ${LEVEL_NAME[verdict.level]}.`
-        : `Empecemos la clase de ${lessonTopic}.`,
-    )
-    setSteps({ level: "done", lesson: "done" })
-    setPhase("done")
+    try {
+      const path = await lariaAPI.paths.fromTopic(lessonTopic)
+      setSteps({ level: "done", lesson: "done" })
+      router.push(classHref(path.id))
+    } catch (err) {
+      if (err instanceof ApiError && (err.status === 404 || err.status === 405)) {
+        onStartLesson(
+          verdict
+            ? `Empecemos la clase de ${lessonTopic}. En la nivelación quedé en nivel ${LEVEL_NAME[verdict.level]}.`
+            : `Empecemos la clase de ${lessonTopic}.`,
+        )
+        setSteps({ level: "done", lesson: "done" })
+        setPhase("done")
+        return
+      }
+      setError(err instanceof Error ? err.message : "No se pudo preparar tu clase")
+      setSteps({ level: "done", lesson: "pending" })
+    }
   }
 
   const title = isPlacement
@@ -239,7 +254,7 @@ export function ChatQuiz({ chatId, request, onDismiss, onStartLesson }: ChatQuiz
                 {error ? "Reintentar" : "Seguir"}
               </Button>
               <Button size="sm" variant="outline" onClick={() => setPhase("style")}>
-                Empezar la clase
+                Empezar mi clase
               </Button>
             </div>
             <Answers results={results} />
@@ -269,8 +284,16 @@ export function ChatQuiz({ chatId, request, onDismiss, onStartLesson }: ChatQuiz
                 label={placement ? `Ajustando la clase a tu nivel (${LEVEL_NAME[placement.level]})` : "Ajustando la clase a tu nivel"}
                 detail={placement ? LEVEL_COPY[placement.level].title : null}
               />
-              <StepRow status={steps.lesson} label="Preparando tu primera clase" />
+              <StepRow status={steps.lesson} label="Preparando tu ruta y tu primera clase" />
             </ol>
+            {error && (
+              <>
+                <ErrorLine message={error} />
+                <Button size="sm" onClick={() => startLesson(placement, topic)}>
+                  Reintentar
+                </Button>
+              </>
+            )}
           </div>
         )}
 

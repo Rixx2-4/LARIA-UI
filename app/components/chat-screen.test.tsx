@@ -157,8 +157,8 @@ describe("ChatScreen", () => {
     type Payload = Record<string, unknown>
     // Servidor como Render: el tutor responde a "quiero aprender…" o "ponme un quiz" con
     // el envelope que se le pase; los quizzes se generan y se califican en el servidor
-    function quizServer({ type = "answer", payload, documentId = null, preferences = true, practiceFailures = 0 }: { type?: string; payload: Payload; documentId?: string | null; preferences?: boolean; practiceFailures?: number }) {
-      const calls = { diagnostics: [] as string[], practice: [] as string[], topicPractice: [] as unknown[], attempts: 0, streamed: [] as string[], styles: [] as unknown[] }
+    function quizServer({ type = "answer", payload, documentId = null, preferences = true, practiceFailures = 0, paths = false }: { type?: string; payload: Payload; documentId?: string | null; preferences?: boolean; practiceFailures?: number; paths?: boolean }) {
+      const calls = { fromTopic: [] as string[], diagnostics: [] as string[], practice: [] as string[], topicPractice: [] as unknown[], attempts: 0, streamed: [] as string[], styles: [] as unknown[] }
       const quiz = (id: string, count: number, extra: Payload = {}) => ({
         id, document_id: documentId, total_points: count * 10, created_at: "", ...extra,
         questions: Array.from({ length: count }, (_, i) => ({
@@ -178,6 +178,12 @@ describe("ChatScreen", () => {
               { role: "assistant", content: "La astronomía estudia los cuerpos celestes.", metadata: { type, emotion: "encouraging", payload: { content: "…", grounded: !!documentId, ...payload } } },
             ],
           })
+        // Sin rutas guiadas (backend anterior) responde 404 y la clase sigue en el chat
+        if (url.endsWith("/learning/paths/from-topic") && method === "POST") {
+          if (!paths) return json({ detail: "Not Found" }, 404)
+          calls.fromTopic.push(JSON.parse(String(init?.body)).topic)
+          return json({ id: "p1", topic: "astronomia", modules: [], teaching: { phase: "teaching" } })
+        }
         if (url.endsWith("/quizzes/diagnostic") && method === "POST") {
           calls.diagnostics.push(JSON.parse(String(init?.body)).topic)
           return json(quiz("diag", 6, { topic: "astronomia", topic_label: "Astronomía" }), 201)
@@ -307,6 +313,20 @@ describe("ChatScreen", () => {
 
       await screen.findByText("La astronomía estudia los cuerpos celestes.")
       expect(screen.queryByLabelText("Tema de la nivelación")).toBeNull()
+    })
+
+    it("con rutas en el backend, «Empezar mi clase» tras la nivelación crea la ruta y abre la clase guiada", async () => {
+      const calls = quizServer({ payload: { intent: "learn", suggest_placement: true, topic_hint: "astronomía" }, paths: true })
+      renderAt("c1")
+
+      fireEvent.click(await screen.findByRole("button", { name: "Empezar" }))
+      await answerAll("tres")
+      fireEvent.click(await screen.findByText("Que lo decida LARIA"))
+
+      await waitFor(() => expect(nav.push).toHaveBeenCalledWith("/clase/p1"))
+      expect(calls.fromTopic).toEqual(["Astronomía"])
+      // La clase no se pide en el chat
+      expect(calls.streamed).toEqual([])
     })
 
     it("«Ahora no» la cierra y ese chat no la vuelve a ofrecer", async () => {
