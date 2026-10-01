@@ -103,13 +103,13 @@ function ChatSnippet() {
   return (
     <div
       aria-hidden
-      className="space-y-2.5 rounded-lg border border-foreground/15 bg-background p-4 text-[13px] shadow-[6px_6px_0_0] shadow-foreground/10"
+      className="space-y-2.5 rounded-lg border border-foreground/15 bg-card p-4 text-[13px] shadow-[6px_6px_0_0] shadow-foreground/10"
     >
       <div className="ml-auto w-fit max-w-[85%] rounded-2xl bg-primary px-3.5 py-2 text-primary-foreground">
         ¿Por qué en el ejemplo multiplica por 3 al final?
       </div>
       <div className="w-fit max-w-[90%] rounded-2xl bg-muted px-3.5 py-2.5 leading-relaxed">
-        Fíjate en lo que hay dentro del paréntesis: 3x + 1. ¿Cuánto vale su derivada?
+        Fíjate en lo que hay dentro del paréntesis: <span className="whitespace-nowrap">3x + 1</span>. ¿Cuánto vale su derivada?
         <div className="mt-2 border-t border-border/40 pt-1.5 text-[11px] text-muted-foreground">
           <span className="rounded bg-secondary/60 px-1.5">Pista</span>
         </div>
@@ -121,7 +121,7 @@ function ChatSnippet() {
 export default function LandingPage() {
   return (
     <LandingMotion>
-      <div className={`${display.variable} min-h-dvh bg-paper text-foreground`}>
+      <div className={`${display.variable} min-h-dvh bg-background text-foreground`}>
         <LandingHeader />
 
         <main>
@@ -129,7 +129,7 @@ export default function LandingPage() {
           <section className="mx-auto grid max-w-6xl items-center gap-12 px-4 pb-20 pt-10 sm:px-6 md:pt-16 lg:grid-cols-[1.05fr_1fr] lg:gap-16 lg:pb-28">
             <div>
               <Reveal>
-                <h1 className="font-display text-[2.6rem] leading-[1.05] tracking-tight sm:text-6xl lg:text-[4.25rem]">
+                <h1 className="text-balance font-display text-[2.6rem] leading-[1.05] tracking-tight sm:text-6xl lg:text-[4.25rem]">
                   Un tutor que se <Marker>adapta</Marker> a cómo aprendes.
                 </h1>
               </Reveal>
@@ -181,7 +181,11 @@ export default function LandingPage() {
                       <ol className="mt-5 space-y-3">
                         {path.steps.map((step, n) => (
                           <li key={step} className="flex gap-3 leading-relaxed">
-                            <span className="font-display text-2xl leading-none text-muted-foreground/70" aria-hidden>
+                            {/* Ancho fijo: en la serif el "1" es más estrecho y movía el texto */}
+                            <span
+                              className="w-5 shrink-0 font-display text-2xl leading-none text-muted-foreground/70"
+                              aria-hidden
+                            >
                               {n + 1}
                             </span>
                             <span>{step}</span>
@@ -226,7 +230,7 @@ export default function LandingPage() {
                 </div>
               </div>
 
-              <div className="mt-24 grid items-center gap-8 rounded-lg border border-foreground/15 bg-background/60 p-6 sm:p-10 md:grid-cols-2 md:gap-14">
+              <div className="mt-24 grid items-center gap-8 rounded-lg border border-foreground/15 bg-card p-6 sm:p-10 md:grid-cols-2 md:gap-14">
                 <Reveal>
                   <h3 className="font-display text-3xl tracking-tight sm:text-4xl">
                     Y tu perfil va <Marker delay={0.2}>tomando nota</Marker>
@@ -292,8 +296,13 @@ export default function LandingPage() {
           <section className="border-t border-foreground/10">
             <div className="mx-auto max-w-6xl px-4 py-20 sm:px-6 lg:py-28">
               <Reveal>
-                <h2 className="max-w-3xl font-display text-4xl leading-tight tracking-tight sm:text-6xl">
-                  ¿Tienes un tema que no termina de entrar? <Marker delay={0.3}>Súbelo</Marker>, o simplemente dile cuál es.
+                <h2 className="max-w-3xl text-balance font-display text-4xl leading-tight tracking-tight sm:text-6xl">
+                  ¿Tienes un tema que no termina de entrar?{" "}
+                  {/* La coma va pegada al subrayado: si no, el salto de línea la deja sola al empezar */}
+                  <span className="whitespace-nowrap">
+                    <Marker delay={0.3}>Súbelo</Marker>,
+                  </span>{" "}
+                  o simplemente dile cuál es.
                 </h2>
                 <Link
                   href={SIGN_UP_HREF}

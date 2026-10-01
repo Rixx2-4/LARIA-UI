@@ -50,3 +50,16 @@ describe("Página de presentación", () => {
     expect(nav.replace).not.toHaveBeenCalled()
   })
 })
+
+describe("Página de presentación tal como sale del servidor", () => {
+  it("no esconde nada: sin JS, con JS lento o al imprimir se lee entera", async () => {
+    const { renderToString } = await import("react-dom/server")
+    const html = renderToString(<LandingPage />)
+
+    expect(html).toContain("Antes de empezar")
+    expect(html).toContain("¿Tienes un tema que no termina de entrar?")
+    // Ningún bloque transparente ni subrayado sin pintar a la espera de que llegue el JS
+    expect(html).not.toMatch(/opacity:\s*0[;"]/)
+    expect(html).not.toMatch(/scaleX\(0\)/)
+  })
+})

@@ -6,7 +6,7 @@ import { Check } from "lucide-react"
 import { FileTypeIcon } from "../file-type-icon"
 import { mimeFromFilename } from "@/lib/file-types"
 
-const frame = "rounded-lg border border-foreground/15 bg-background shadow-[6px_6px_0_0] shadow-foreground/10"
+const frame = "rounded-lg border border-foreground/15 bg-card shadow-[6px_6px_0_0] shadow-foreground/10"
 
 // Cuándo empezar: al entrar en pantalla (o ya, si se pidió reducir movimiento)
 function usePlay<T extends Element>() {

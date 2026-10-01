@@ -23,6 +23,9 @@ import { useDictation } from "@/hooks/use-dictation"
 import { toEmotion, useSpeech } from "@/hooks/use-speech"
 import { takeSpeakable } from "@/lib/speech-chunks"
 
+// Así empieza el aviso que queda en el chat al subir un archivo (los ya guardados lo llevan)
+const UPLOAD_NOTE_PREFIX = "📎 "
+
 // Lo mismo que acepta el backend (file_parser.py): texto, datos, código y cuatro binarios
 const ALLOWED_EXTENSIONS = [
   ".pdf", ".docx", ".pptx", ".xlsx",
@@ -233,7 +236,7 @@ export function SearchBar({ isOpeningChat = false }: { isOpeningChat?: boolean }
 
       // Una nota, no una pregunta: con "user" el backend lanzaría un turno del tutor
       // (llamada a la IA, respuesta fantasma y el perfil del alumno alterado)
-      await addMessage(currentChatId, "system", `📎 Subí el archivo: ${file.name}`)
+      await addMessage(currentChatId, "system", `${UPLOAD_NOTE_PREFIX}Subí el archivo: ${file.name}`)
 
       if (isNewChat) {
         generateTitle(currentChatId, [{ role: "user", content: `Archivo: ${file.name}` }])
@@ -433,8 +436,20 @@ export function SearchBar({ isOpeningChat = false }: { isOpeningChat?: boolean }
               // Notas del sistema (archivo subido, avisos): una línea centrada, no una burbuja
               if (msg.role === "system") {
                 return (
-                  <p key={`${index}-system`} className="text-center text-xs text-muted-foreground">
-                    {msg.content}
+                  <p
+                    key={`${index}-system`}
+                    className="flex items-center justify-center gap-1.5 text-center text-xs text-muted-foreground"
+                  >
+                    {/* El aviso de subida se guarda con 📎: se pinta con el icono, que no depende
+                        de tener una fuente de emojis instalada */}
+                    {msg.content.startsWith(UPLOAD_NOTE_PREFIX) ? (
+                      <>
+                        <Paperclip className="h-3.5 w-3.5 shrink-0" aria-hidden />
+                        {msg.content.slice(UPLOAD_NOTE_PREFIX.length)}
+                      </>
+                    ) : (
+                      msg.content
+                    )}
                   </p>
                 )
               }
@@ -656,9 +671,11 @@ export function SearchBar({ isOpeningChat = false }: { isOpeningChat?: boolean }
                   variant="ghost"
                   size="icon"
                   onClick={handleStopGeneration}
-                  className="h-8 w-8 md:h-9 md:w-9 rounded-lg bg-destructive text-destructive-foreground hover:bg-destructive/90 transition-all"
+                  // Mismo botón que "Enviar", en el mismo sitio: parar no es un error ni algo
+                  // peligroso, así que no va en rojo
+                  className="h-8 w-8 md:h-9 md:w-9 rounded-lg bg-primary text-primary-foreground hover:bg-primary/90 transition-all"
                 >
-                  <Square className="h-4 w-4" />
+                  <Square className="h-3 w-3 fill-current" />
                 </Button>
               ) : shownQuery.trim() ? (
                 <Button

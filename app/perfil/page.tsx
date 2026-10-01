@@ -2,7 +2,7 @@
 
 import { useState, useEffect, useCallback } from "react"
 import Link from "next/link"
-import { Loader2, RefreshCw } from "lucide-react"
+import { AlertTriangle, Loader2, RefreshCw } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { AppShell } from "../components/app-shell"
 import { RequireAuth } from "../components/require-auth"
@@ -76,6 +76,9 @@ export default function PerfilPage() {
     </RequireAuth>
   )
 }
+
+// Ritmo al que avanza el estudiante, según el backend (pace)
+const PACE_LABEL: Record<string, string> = { fast: "rápido", normal: "normal", slow: "pausado" }
 
 // Dificultades y fortalezas que se leen del perfil, calculadas en un solo sitio
 function profileInsights(profile: StudentProfile | null): { struggle: StruggleItem[]; fortalezas: FortalezaItem[] } {
@@ -266,10 +269,10 @@ function Perfil() {
       ? timeAgo(learningProfile.updated_at)
       : "nunca"
 
-  const ritmo = learningProfile ? Math.min(100, Math.round((learningProfile.learning_velocity || 0) * 100)) : 0
-  const nivel = learningProfile?.pace
-    ? (learningProfile.pace === "fast" ? "Avanzado" : learningProfile.pace === "slow" ? "Principiante" : "Intermedio")
-    : "Sin datos"
+  // "pace" es a qué velocidad avanzas, no tu nivel: antes salía como "Nivel: Intermedio"
+  // y contradecía el nivel real, que es por tema ("Tu nivel por tema", más abajo)
+  const ritmo = PACE_LABEL[learningProfile?.pace ?? ""] ?? "sin datos"
+  const velocidad = learningProfile ? Math.min(100, Math.round((learningProfile.learning_velocity || 0) * 100)) : 0
 
   const errors = learningProfile?.frequent_errors || []
   const memory = learningProfile?.pedagogical_memory
@@ -288,11 +291,15 @@ function Perfil() {
     .toUpperCase()
     .slice(0, 2)
 
-  const struggleSameConcept: Record<string, number> = {}
-  struggleList.forEach((s) => {
-    struggleSameConcept[s.concepto] = (struggleSameConcept[s.concepto] || 0) + 1
-  })
-  const repeated = Object.entries(struggleSameConcept).find(([, n]) => n >= 2)
+  // Dificultad repetida: el concepto con más fallos seguidos (2 o más). No se cuenta
+  // cuántas veces sale en la lista de dificultades: ahí cada concepto va una sola vez
+  // y lo único repetido es la etiqueta genérica "Error frecuente"
+  const repeated = (learningProfile?.mastery_by_concept ?? [])
+    .filter((c) => c.error_streak >= 2)
+    .reduce<{ concept_key: string; error_streak: number } | null>(
+      (worst, c) => (!worst || c.error_streak > worst.error_streak ? c : worst),
+      null,
+    )
 
   // Clave interna del tema → lo que se muestra: su nombre con tildes, o la clave si es antigua
   const levelsByTopic = Object.entries(learningProfile?.level_by_topic ?? {}).map(([key, level]) => ({
@@ -321,13 +328,17 @@ function Perfil() {
             <h1 className="text-xl font-medium mb-1">{username}</h1>
             <p className="text-xs text-muted-foreground mb-1.5">{email}</p>
             <div className="flex gap-2.5 items-center flex-wrap">
-              {/* Sin actividad, el nivel y el ritmo serían valores por defecto, no una medida */}
+              {/* Sin actividad, el ritmo sería un valor por defecto, no una medida */}
               {hasNoActivity ? (
                 <span className="text-xs font-medium px-2.5 py-1 rounded-full bg-muted text-muted-foreground border border-border">Sin actividad todavía</span>
               ) : (
                 <>
-                  <span className="text-xs font-semibold px-2.5 py-1 rounded-full bg-primary text-primary-foreground">Nivel: {nivel}</span>
-                  <span className="text-xs font-medium px-2.5 py-1 rounded-full bg-muted text-muted-foreground border border-border">Ritmo: {ritmo}%</span>
+                  <span
+                    title={`Velocidad de aprendizaje: ${velocidad}%`}
+                    className="text-xs font-semibold px-2.5 py-1 rounded-full bg-primary text-primary-foreground"
+                  >
+                    Ritmo: {ritmo}
+                  </span>
                   <span className="text-xs font-medium px-2.5 py-1 rounded-full bg-muted text-muted-foreground border border-border">Última actividad: {lastActivity}</span>
                 </>
               )}
@@ -364,11 +375,12 @@ function Perfil() {
           </section>
         )}
 
-        {repeated && repeated.length > 0 && (
+        {repeated && (
           <div className="mx-6 mb-5 p-3 px-4 bg-destructive/10 border border-destructive/20 rounded-[10px] text-sm text-destructive flex gap-2.5 items-start leading-relaxed">
-            <span className="text-[15px] mt-px">⚠️</span>
+            <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0" aria-hidden />
             <span>
-              Muestras dificultad repetida en <strong className="font-bold">{repeated[0][0]}</strong>. Podrías beneficiarte de apoyo adicional además de LARIA.
+              Muestras dificultad repetida en <strong className="font-bold">{repeated.concept_key}</strong> ({repeated.error_streak}{" "}
+              fallos seguidos). Podrías beneficiarte de apoyo adicional además de LARIA.
             </span>
           </div>
         )}

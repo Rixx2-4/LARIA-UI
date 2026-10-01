@@ -76,6 +76,9 @@ describe("PerfilPage", () => {
 
     expect(await screen.findByText("2 intentos de quiz completados")).toBeTruthy()
     expect(screen.getByRole("region", { name: "Tu nivel por tema" }).textContent).toContain("Astronomía · básico")
+    // El ritmo (pace "normal") no se presenta como un nivel que contradiga al del tema
+    expect(screen.getByText("Ritmo: normal")).toBeTruthy()
+    expect(screen.queryByText(/Intermedio/)).toBeNull()
     expect(screen.getByText("Parte de tu progreso no se pudo cargar; lo que ves puede estar incompleto.")).toBeTruthy()
     expect(screen.queryByText("No se pudo cargar tu perfil de aprendizaje")).toBeNull()
   })
@@ -101,9 +104,9 @@ describe("PerfilPage", () => {
     expect(await screen.findByText("Aún no hay actividad de aprendizaje")).toBeTruthy()
     expect(screen.getByRole("link", { name: "Hacer un quiz" }).getAttribute("href")).toBe("/quiz")
     expect(screen.getByRole("link", { name: "Nivelarme en un tema" }).getAttribute("href")).toBe("/nivelacion")
-    // El ritmo "normal" por defecto no es un nivel medido
+    // El ritmo "normal" por defecto no es una medida
     expect(screen.getByText("Sin actividad todavía")).toBeTruthy()
-    expect(screen.queryByText(/Nivel:/)).toBeNull()
+    expect(screen.queryByText(/Ritmo:/)).toBeNull()
   })
 
   it("si falla la lista de documentos, lo avisa sin ocultar el resto del perfil", async () => {
@@ -210,5 +213,63 @@ describe("PerfilPage", () => {
 
     await screen.findByText(/intentos de quiz completados/)
     expect(screen.queryByRole("region", { name: "Cómo prefieres que te explique" })).toBeNull()
+  })
+
+  it("avisa de dificultad repetida con el nombre entero del concepto que acumula fallos seguidos", async () => {
+    const concept = (concept_key: string, error_streak: number) => ({
+      concept_key, error_streak, attempts: 3, mastery: 30, last_score_ratio: 0, effective_mastery: 30,
+      confidence: 0, last_practiced_at: null, subject: null, help_requests: 0,
+    })
+    vi.stubGlobal("fetch", async (url: string) => {
+      if (url.endsWith("/users/me")) return json({ id: "u1", username: "ana", email: "a@a.a" })
+      if (url.endsWith("/chats/")) return json({ chats: [] })
+      if (url.endsWith("/documents/")) return json([])
+      if (url.endsWith("/profile"))
+        return json({
+          student_id: "u1", pace: "normal", total_attempts: 3, total_struggle_signals: 0, updated_at: "",
+          // Varios errores frecuentes: antes contaban como "dificultad repetida" y salía su inicial, "E"
+          frequent_errors: ["signo", "paréntesis"],
+          learning_velocity: 0, pedagogical_memory: null, mastery_by_document: [],
+          mastery_by_concept: [concept("etiquetas html", 0), concept("límites laterales", 3), concept("css", 2)],
+        })
+      if (url.endsWith("/learning/me")) return json({ attempts: [], tutor_interactions: [], recommendations: [] })
+      throw new Error(`Petición inesperada: ${url}`)
+    })
+    render(
+      <AuthProvider>
+        <ChatProvider>
+          <PerfilPage />
+        </ChatProvider>
+      </AuthProvider>,
+    )
+
+    const alert = (await screen.findByText(/Muestras dificultad repetida en/)).closest("span")!
+    expect(alert.textContent).toContain("límites laterales (3 fallos seguidos)")
+  })
+
+  it("sin rachas de fallos no avisa de dificultad repetida, aunque haya errores frecuentes", async () => {
+    vi.stubGlobal("fetch", async (url: string) => {
+      if (url.endsWith("/users/me")) return json({ id: "u1", username: "ana", email: "a@a.a" })
+      if (url.endsWith("/chats/")) return json({ chats: [] })
+      if (url.endsWith("/documents/")) return json([])
+      if (url.endsWith("/profile"))
+        return json({
+          student_id: "u1", pace: "normal", total_attempts: 3, total_struggle_signals: 0, updated_at: "",
+          frequent_errors: ["signo", "paréntesis", "unidades"],
+          learning_velocity: 0, pedagogical_memory: null, mastery_by_document: [], mastery_by_concept: [],
+        })
+      if (url.endsWith("/learning/me")) return json({ attempts: [], tutor_interactions: [], recommendations: [] })
+      throw new Error(`Petición inesperada: ${url}`)
+    })
+    render(
+      <AuthProvider>
+        <ChatProvider>
+          <PerfilPage />
+        </ChatProvider>
+      </AuthProvider>,
+    )
+
+    expect(await screen.findByText("3 intentos de quiz completados")).toBeTruthy()
+    expect(screen.queryByText(/Muestras dificultad repetida/)).toBeNull()
   })
 })
