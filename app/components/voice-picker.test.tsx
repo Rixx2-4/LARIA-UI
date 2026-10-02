@@ -16,7 +16,7 @@ const VOICES = {
   ],
   default: "coral",
   selected: null,
-  sample_text: "Hola, soy LARIA.",
+  sample_text: "Hola, soy LARIA, tu tutora de Plenum.",
 }
 
 beforeEach(() => {
@@ -68,8 +68,31 @@ describe("VoicePicker", () => {
 
     fireEvent.click(await screen.findByRole("button", { name: "Escuchar Onyx" }))
 
-    await waitFor(() => expect(calls.speech).toEqual([{ text: "Hola, soy LARIA.", emotion: "calm", voice: "onyx" }]))
+    await waitFor(() => expect(calls.speech).toEqual([{ text: "Hola, soy LARIA, tu tutor de Plenum.", emotion: "calm", voice: "onyx" }]))
     expect(calls.saved).toEqual([])
+  })
+
+  it("la frase de ejemplo concuerda con la voz: «tu tutora» en femenino, «tu tutor» en masculino", async () => {
+    const calls = stubServer()
+    render(<VoicePicker />)
+
+    fireEvent.click(await screen.findByRole("button", { name: "Escuchar Nova" }))
+    await waitFor(() => expect(calls.speech).toHaveLength(1))
+    fireEvent.click(screen.getByRole("button", { name: "Escuchar Ash" }))
+    await waitFor(() => expect(calls.speech).toHaveLength(2))
+
+    expect(calls.speech.map((c) => (c as { text: string }).text)).toEqual([
+      "Hola, soy LARIA, tu tutora de Plenum.",
+      "Hola, soy LARIA, tu tutor de Plenum.",
+    ])
+  })
+
+  it("si el backend manda una frase por género, usa esa", async () => {
+    const calls = stubServer({ voices: { ...VOICES, sample_texts: { masculina: "Hola, soy tu tutor LARIA." } } })
+    render(<VoicePicker />)
+
+    fireEvent.click(await screen.findByRole("button", { name: "Escuchar Echo" }))
+    await waitFor(() => expect(calls.speech).toEqual([{ text: "Hola, soy tu tutor LARIA.", emotion: "calm", voice: "echo" }]))
   })
 
   it("elegir una voz la guarda en el perfil; volver a la de por defecto guarda null", async () => {
