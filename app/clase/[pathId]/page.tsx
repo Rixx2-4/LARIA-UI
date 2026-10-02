@@ -1,13 +1,14 @@
 "use client"
 
-import { useCallback, useEffect, useRef, useState } from "react"
+import { useCallback, useEffect, useState } from "react"
 import Link from "next/link"
 import { useParams } from "next/navigation"
-import { Check, Circle, CircleDot, Lock, Loader2, RefreshCw, Square, Volume2 } from "lucide-react"
+import { Check, Circle, CircleDot, Lock, Loader2, RefreshCw } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { AppShell } from "@/app/components/app-shell"
 import { RequireAuth } from "@/app/components/require-auth"
-import { MessageContent } from "@/app/components/message-content"
+import { LariaMascot } from "@/app/components/laria-mascot"
+import { ClassBoard } from "../class-board"
 import { QuestionStep, ResultsList, toResults } from "@/app/quiz/quiz-parts"
 import { useSpeech } from "@/hooks/use-speech"
 import { ApiError, lariaAPI, type CheckResponse, type LearningPath, type PathModule, type QuizResponse } from "@/lib/laria-api"
@@ -73,17 +74,8 @@ function Clase() {
     loadLesson()
   }, [loadLesson])
 
-  // Con «Leer en voz», la explicación se lee sola al llegar, como en el chat
-  const lessonKey = view.kind === "lesson" ? `clase:${pathId}:${view.check.id}` : null
-  const lessonText = view.kind === "lesson" ? view.markdown : ""
-  const readAloud = speech.enabled && speech.mode === "voice"
-  const { playMessage, stop: stopSpeech } = speech
-  const spokenRef = useRef<string | null>(null)
-  useEffect(() => {
-    if (!lessonKey || !readAloud || spokenRef.current === lessonKey) return
-    spokenRef.current = lessonKey
-    playMessage(lessonKey, lessonText, "calm")
-  }, [lessonKey, lessonText, readAloud, playMessage])
+  // La lectura de la pizarra se corta al salir de la clase
+  const { stop: stopSpeech } = speech
   useEffect(() => stopSpeech, [stopSpeech])
 
   const submit = async () => {
@@ -123,9 +115,12 @@ function Clase() {
             </header>
 
             {view.kind === "loading" && (
-              <div role="status" className="flex flex-col items-center gap-3 py-20 text-center text-muted-foreground">
-                <Loader2 className="h-6 w-6 animate-spin motion-reduce:animate-none" aria-hidden />
-                <p>Preparando tu lección…</p>
+              <div role="status" className="flex flex-col items-center gap-3 py-16 text-center text-muted-foreground">
+                <LariaMascot state="thinking" className="w-24" />
+                <p className="flex items-center gap-2">
+                  <Loader2 className="h-4 w-4 animate-spin motion-reduce:animate-none" aria-hidden />
+                  Preparando tu lección…
+                </p>
                 <p className="text-sm">Suele tardar unos segundos.</p>
               </div>
             )}
@@ -150,38 +145,26 @@ function Clase() {
               <>
                 {/* Por qué toca esto ahora: otra explicación, un repaso previo… */}
                 {teaching?.reason && <p className="rounded-lg bg-muted px-4 py-3 text-sm">{teaching.reason}</p>}
-                <article className="space-y-3 leading-relaxed">
-                  <MessageContent content={view.markdown} />
-                </article>
-                {speech.enabled && lessonKey && (
-                  <Button
-                    variant="outline"
-                    size="sm"
-                    className="gap-2"
-                    onClick={() => (speech.speakingKey === lessonKey ? speech.stop() : speech.playMessage(lessonKey, view.markdown, "calm"))}
-                  >
-                    {speech.speakingKey === lessonKey ? <Square className="h-4 w-4" aria-hidden /> : <Volume2 className="h-4 w-4" aria-hidden />}
-                    {speech.speakingKey === lessonKey ? "Detener" : "Escuchar la explicación"}
-                  </Button>
-                )}
-
-                <section aria-labelledby="comprobacion" className="space-y-4 border-t border-border pt-6">
-                  <h2 id="comprobacion" className="text-lg font-medium">
-                    Comprueba lo que has aprendido
-                  </h2>
-                  {view.check.questions[current] && (
-                    <QuestionStep
-                      questions={view.check.questions}
-                      current={current}
-                      answers={answers}
-                      onAnswer={(question, letter) => setAnswers((prev) => ({ ...prev, [question.index]: letter }))}
-                      onPrev={() => setCurrent((n) => Math.max(0, n - 1))}
-                      onNext={() => (current < view.check.questions.length - 1 ? setCurrent((n) => n + 1) : submit())}
-                      isSubmitting={submitting}
-                      error={checkError}
-                    />
-                  )}
-                </section>
+                {/* La explicación en la pizarra; la comprobación aparece cuando está entera */}
+                <ClassBoard key={view.check.id} lessonKey={`clase:${pathId}:${view.check.id}`} markdown={view.markdown} speech={speech}>
+                  <section aria-labelledby="comprobacion" className="space-y-4 border-t border-border pt-6">
+                    <h2 id="comprobacion" className="text-lg font-medium">
+                      Comprueba lo que has aprendido
+                    </h2>
+                    {view.check.questions[current] && (
+                      <QuestionStep
+                        questions={view.check.questions}
+                        current={current}
+                        answers={answers}
+                        onAnswer={(question, letter) => setAnswers((prev) => ({ ...prev, [question.index]: letter }))}
+                        onPrev={() => setCurrent((n) => Math.max(0, n - 1))}
+                        onNext={() => (current < view.check.questions.length - 1 ? setCurrent((n) => n + 1) : submit())}
+                        isSubmitting={submitting}
+                        error={checkError}
+                      />
+                    )}
+                  </section>
+                </ClassBoard>
               </>
             )}
 

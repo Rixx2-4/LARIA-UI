@@ -34,16 +34,24 @@ interface QueueItem {
   emotion: SpeechEmotion
   // De qué mensaje es: para marcar su botón como «Detener» mientras suena
   key: string
+  // Qué trozo es dentro de lo que se mandó a leer (la pizarra lo sigue)
+  index: number
   status: "waiting" | "fetching" | "ready"
   audio?: Blob | null
 }
 
 export function useSpeech() {
   const [enabled, setEnabled] = useState(false)
+  // Ya se sabe si hay voz (la consulta nunca falla: sin voz, enabled = false)
+  const [configLoaded, setConfigLoaded] = useState(false)
   const [maxChars, setMaxChars] = useState(1200)
   // Por defecto solo texto: cada audio cuesta dinero
   const [mode, setModeState] = useState<SpeechMode>("text")
-  const [speakingKey, setSpeakingKey] = useState<string | null>(null)
+  // Qué está sonando ahora: el mensaje y el trozo
+  const [speaking, setSpeaking] = useState<{ key: string; index: number } | null>(null)
+  // De qué mensaje queda algo por leer (pedido, en camino o sonando); null al acabar,
+  // al detenerse o si falla: así quien sigue la lectura sabe que terminó
+  const [pendingKey, setPendingKey] = useState<string | null>(null)
 
   const queueRef = useRef<QueueItem[]>([])
   const playingRef = useRef(false)
@@ -61,6 +69,7 @@ export function useSpeech() {
       if (cancelled) return
       setEnabled(config.enabled)
       setMaxChars(config.max_chars)
+      setConfigLoaded(true)
     })
     return () => {
       cancelled = true
@@ -85,7 +94,8 @@ export function useSpeech() {
     playingRef.current = false
     audioRef.current?.pause()
     releaseUrl()
-    setSpeakingKey(null)
+    setSpeaking(null)
+    setPendingKey(null)
   }, [])
 
   // Dentro del clic (enviar, ▶, activar la voz): así el navegador deja sonar lo que llegue
@@ -109,13 +119,17 @@ export function useSpeech() {
   const pump = useCallback(function pump(): void {
     const generation = generationRef.current
     const queue = queueRef.current
+    if (!playingRef.current && !queue.length) {
+      setPendingKey(null)
+      return
+    }
 
     // Sonar la primera si ya está
     if (!playingRef.current && queue[0]?.status === "ready") {
       const item = queue.shift()!
       if (!item.audio) return pump()
       playingRef.current = true
-      setSpeakingKey(item.key)
+      setSpeaking({ key: item.key, index: item.index })
       const element = audio()
       releaseUrl()
       urlRef.current = URL.createObjectURL(item.audio)
@@ -123,7 +137,7 @@ export function useSpeech() {
       element.onended = () => {
         if (generation !== generationRef.current) return
         playingRef.current = false
-        if (!queueRef.current.length) setSpeakingKey(null)
+        if (!queueRef.current.length) setSpeaking(null)
         pump()
       }
       Promise.resolve(element.play()).catch((error: unknown) => {
@@ -173,10 +187,13 @@ export function useSpeech() {
   }, [audio, fail, stop])
 
   const enqueue = useCallback(
-    (chunks: string[], emotion: SpeechEmotion, key: string) => {
-      const items = chunks.map((chunk) => chunk.trim()).filter(Boolean).map((text): QueueItem => ({ text, emotion, key, status: "waiting" }))
+    (chunks: string[], emotion: SpeechEmotion, key: string, firstIndex = 0) => {
+      const items = chunks
+        .map((chunk, i): QueueItem => ({ text: chunk.trim(), emotion, key, index: firstIndex + i, status: "waiting" }))
+        .filter((item) => item.text)
       if (!items.length) return
       queueRef.current.push(...items)
+      setPendingKey(key)
       pump()
     },
     [pump],
@@ -208,5 +225,5 @@ export function useSpeech() {
 
   useEffect(() => stop, [stop])
 
-  return { enabled, maxChars, mode, setMode, speakingKey, enqueue, playMessage, prime, stop }
+  return { enabled, configLoaded, maxChars, mode, setMode, speaking, speakingKey: speaking?.key ?? null, pendingKey, enqueue, playMessage, prime, stop }
 }

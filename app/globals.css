@@ -193,3 +193,70 @@
   overflow-wrap: anywhere;
   min-width: 0;
 }
+
+/* LARIA, la mascota (app/components/laria-mascot.tsx). Solo transform y opacity:
+   las mueve la tarjeta gráfica, sin recalcular la página */
+.laria-mascot * {
+  transform-box: fill-box;
+}
+.laria-mascot .mascot-mouth-open {
+  opacity: 0;
+  transform-origin: center;
+}
+/* Señala con el brazo que mira a la pizarra (está a su izquierda) */
+.laria-mascot .mascot-arm-left {
+  transform-origin: 90% 10%;
+  transition: transform 0.4s ease;
+}
+.laria-mascot .mascot-head {
+  transform-origin: 50% 90%;
+  transition: transform 0.5s ease;
+}
+.laria-mascot .mascot-eyes {
+  transform-origin: center;
+  transition: transform 0.4s ease;
+}
+.laria-mascot[data-state="thinking"] .mascot-head {
+  transform: rotate(-7deg);
+}
+.laria-mascot[data-state="thinking"] .mascot-eyes {
+  transform: translate(-3px, -5px);
+}
+.laria-mascot[data-state="speaking"] .mascot-arm-left {
+  transform: rotate(40deg);
+}
+.laria-mascot[data-state="speaking"] .mascot-mouth-closed {
+  opacity: 0;
+}
+.laria-mascot[data-state="speaking"] .mascot-mouth-open {
+  opacity: 1;
+}
+@media (prefers-reduced-motion: no-preference) {
+  .laria-mascot .mascot-float {
+    animation: mascot-float 4s ease-in-out infinite;
+  }
+  .laria-mascot .mascot-eyes {
+    animation: mascot-blink 5s infinite;
+  }
+  .laria-mascot[data-state="thinking"] .mascot-eyes {
+    animation: none;
+  }
+  .laria-mascot[data-state="speaking"] .mascot-mouth-open {
+    animation: mascot-talk 0.32s ease-in-out infinite alternate;
+  }
+  .laria-mascot[data-state="speaking"] .mascot-float {
+    animation-duration: 2s;
+  }
+}
+@keyframes mascot-float {
+  0%, 100% { transform: translateY(0); }
+  50% { transform: translateY(-5px); }
+}
+@keyframes mascot-blink {
+  0%, 94%, 100% { transform: scaleY(1); }
+  96% { transform: scaleY(0.1); }
+}
+@keyframes mascot-talk {
+  from { transform: scale(1, 0.35); }
+  to { transform: scale(1, 1.1); }
+}
