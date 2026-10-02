@@ -57,7 +57,7 @@ function Clase() {
       const lesson = await lariaAPI.paths.lesson(pathId)
       setPath(lesson.path)
       if (lesson.check) setView({ kind: "lesson", markdown: lesson.markdown ?? "", check: lesson.check })
-      else if (lesson.path.teaching.phase === "completed") setView({ kind: "completed" })
+      else if (lesson.path.teaching?.phase === "completed") setView({ kind: "completed" })
       else setView({ kind: "error", message: "No hay ninguna lección preparada ahora mismo.", needsPlacement: false })
     } catch (error) {
       // 409: el tema aún no tiene nivelación. La ruta se pide aparte para saber qué tema es
@@ -249,7 +249,7 @@ function PathOutline({ path }: { path: LearningPath }) {
         </summary>
         <ol className="mt-3 space-y-2">
           {modules.map((module) => {
-            const current = module.concept === path.teaching.concept
+            const current = module.concept === path.teaching?.concept
             return (
               <li
                 key={module.concept}

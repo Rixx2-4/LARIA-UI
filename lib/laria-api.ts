@@ -229,10 +229,30 @@ interface TeachingState {
 
 interface LearningPath {
   id: string
+  // Tema de la clase; vacío en las rutas creadas a mano (no son clases)
   topic?: string | null
   title?: string | null
   modules: PathModule[]
-  teaching: TeachingState
+  // De 0 a 1: módulos completados sobre el total
+  progress?: number
+  updated_at?: string
+  teaching: TeachingState | null
+}
+
+// Voces del tutor (ADR-030): 3 masculinas y 3 femeninas; la elegida se guarda en el perfil
+interface TutorVoice {
+  id: string
+  label: string
+  gender: "masculina" | "femenina"
+  description: string
+}
+
+interface VoicesResponse {
+  voices: TutorVoice[]
+  default: string
+  // La elegida; null = la de por defecto
+  selected: string | null
+  sample_text: string
 }
 
 interface LessonResponse {
@@ -621,6 +641,12 @@ export const lariaAPI = {
   // Voz del tutor (ADR-026): el backend limpia el texto (markdown, fórmulas, código)
   // y devuelve MP3. Se manda el trozo tal cual se ve en pantalla
   speech: {
+    voices: () => fetchAPI<VoicesResponse>("/speech/voices"),
+
+    // null vuelve a la voz por defecto
+    setVoice: (voice: string | null) =>
+      fetchAPI<{ voice: string | null }>("/speech/voice", { method: "PUT", body: JSON.stringify({ voice }) }),
+
     // Sin el endpoint (backend antiguo) o sin conexión, no hay voz: se lee solo texto
     config: async (): Promise<SpeechConfig> => {
       try {
@@ -632,9 +658,10 @@ export const lariaAPI = {
       }
     },
 
-    // null (204) si, limpio, no queda nada que decir
-    synthesize: async (text: string, emotion: SpeechEmotion, signal?: AbortSignal): Promise<Blob | null> => {
-      const response = await request("/speech", { method: "POST", body: JSON.stringify({ text, emotion }), signal }, "No se pudo leer en voz")
+    // null (204) si, limpio, no queda nada que decir. Sin voice, la que eligió el estudiante
+    synthesize: async (text: string, emotion: SpeechEmotion, signal?: AbortSignal, voice?: string): Promise<Blob | null> => {
+      const body = voice ? { text, emotion, voice } : { text, emotion }
+      const response = await request("/speech", { method: "POST", body: JSON.stringify(body), signal }, "No se pudo leer en voz")
       if (response.status === 204) return null
       return response.blob()
     },
@@ -644,6 +671,8 @@ export const lariaAPI = {
     // Idempotente: si la ruta del tema ya existe, devuelve la misma con su estado
     fromTopic: (topic: string) =>
       fetchAPI<LearningPath>("/learning/paths/from-topic", { method: "POST", body: JSON.stringify({ topic }) }),
+
+    list: async (): Promise<LearningPath[]> => (await fetchAPI<{ paths: LearningPath[] }>("/learning/paths")).paths ?? [],
 
     get: (pathId: string) => fetchAPI<LearningPath>(`/learning/paths/${segment(pathId)}`),
 
@@ -717,5 +746,6 @@ export type {
   PedagogicalMemory, DocumentMastery, ConceptMastery,
   QuizResponse, QuizQuestion, QuizAttemptResponse, QuizAttemptQuestion,
   StreamCallbacks, TutorEnvelope, PlacementResult, PlacementLevel, ExplanationStyle,
+  TutorVoice, VoicesResponse,
   LearningPath, PathModule, PathModuleStatus, TeachingState, TeachingPhase, LessonResponse, CheckResponse, CheckOutcome,
 }
