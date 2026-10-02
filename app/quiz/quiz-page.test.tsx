@@ -127,8 +127,8 @@ describe("QuizPage", () => {
 
     fireEvent.click(await screen.findByText("Generar Quiz"))
     await screen.findByText(/¿Cuánto es/)
-    // Una fórmula en el enunciado y una en cada opción
-    expect(container.querySelectorAll(".katex-html")).toHaveLength(3)
+    // Una fórmula en el enunciado y una en cada opción (KaTeX llega un instante después)
+    await waitFor(() => expect(container.querySelectorAll(".katex-html")).toHaveLength(3))
     expect(container.textContent).not.toContain("\\(")
   })
 

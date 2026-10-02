@@ -4,7 +4,7 @@ import { useEffect, useState } from "react"
 import Link from "next/link"
 import { useRouter } from "next/navigation"
 import { useMotionValueEvent, useScroll } from "motion/react"
-import { getSessionState, onSessionChange } from "@/lib/laria-api"
+import { looksSignedIn } from "@/lib/session-hint"
 import { PlenumLogo } from "../plenum-logo"
 import { NEW_CHAT_HREF, SIGN_IN_HREF, SIGN_UP_HREF } from "@/lib/routes"
 
@@ -23,12 +23,7 @@ export function LandingHeader() {
 
   // Quien ya tiene sesión viene a estudiar, no a leer la presentación
   useEffect(() => {
-    const goIfSignedIn = () => {
-      if (getSessionState() === "signed-in") router.replace(NEW_CHAT_HREF)
-    }
-    goIfSignedIn()
-    // Clerk tarda un momento en saber si hay sesión
-    return onSessionChange(goIfSignedIn)
+    if (looksSignedIn()) router.replace(NEW_CHAT_HREF)
   }, [router])
 
   return (

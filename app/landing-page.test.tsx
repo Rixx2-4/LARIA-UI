@@ -1,7 +1,6 @@
 import { describe, it, expect, vi, afterEach, beforeEach } from "vitest"
 import { render, screen, cleanup, waitFor } from "@testing-library/react"
 import LandingPage from "./page"
-import { setAuthToken } from "@/lib/laria-api"
 
 const nav = vi.hoisted(() => ({ replace: vi.fn() }))
 vi.mock("next/navigation", () => ({
@@ -14,7 +13,8 @@ vi.mock("next/font/google", () => ({ Instrument_Serif: () => ({ variable: "font-
 beforeEach(() => nav.replace.mockReset())
 afterEach(() => {
   cleanup()
-  setAuthToken(null)
+  document.cookie = "__client_uat=0; path=/"
+  document.cookie = "__client_uat_abc123=0; path=/"
 })
 
 describe("Página de presentación", () => {
@@ -36,8 +36,8 @@ describe("Página de presentación", () => {
     screen.getAllByRole("link", { name: "Entrar" }).forEach((link) => expect(link.getAttribute("href")).toBe("/sign-in"))
   })
 
-  it("quien ya tiene sesión va directo a la app", async () => {
-    setAuthToken("token")
+  it("quien ya tiene sesión (cookie de Clerk) va directo a la app", async () => {
+    document.cookie = "__client_uat_abc123=1790000000; path=/"
     render(<LandingPage />)
 
     await waitFor(() => expect(nav.replace).toHaveBeenCalledWith("/chat"))

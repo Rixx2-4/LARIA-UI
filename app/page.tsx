@@ -1,6 +1,8 @@
 import type { Metadata } from "next"
 import Link from "next/link"
 import { Instrument_Serif } from "next/font/google"
+// Las fórmulas de la demo llegan ya en HTML (KaTeX en el servidor): solo falta su CSS
+import "katex/dist/katex.min.css"
 import { ArrowRight } from "lucide-react"
 import { SIGN_IN_HREF, SIGN_UP_HREF } from "@/lib/routes"
 import { LandingHeader } from "./components/landing/landing-header"

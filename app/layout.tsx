@@ -1,17 +1,16 @@
 import type React from "react"
 import type { Metadata } from "next"
-import "katex/dist/katex.min.css"
 import "./globals.css"
-import { ChatProvider } from "./contexts/chat-context"
-import { AuthProvider } from "./contexts/auth-context"
+import { Geist, Geist_Mono } from "next/font/google"
 import { ThemeProvider } from "next-themes"
 import { ThemedToaster } from "./components/themed-toaster"
-import { ClerkProvider } from "@clerk/nextjs"
-import { clerkLocalization } from "@/lib/clerk-localization"
-import { shadcn } from "@clerk/ui/themes"
-import { ClerkBridge, NoAuthBridge } from "./components/clerk-bridge"
-import { clerkConfigured, clerkPublishableKey } from "@/lib/clerk-config"
-import { SIGN_IN_HREF, SIGN_UP_HREF, NEW_CHAT_HREF } from "@/lib/routes"
+import { AppProviders } from "./components/app-providers"
+
+// Las fuentes se sirven desde el propio dominio (next/font), sin pedir nada a
+// Google al cargar y sin bloquear el primer pintado (display: swap)
+const geist = Geist({ subsets: ["latin"], variable: "--font-geist", display: "swap" })
+// La monoespaciada solo aparece en bloques de código: no se precarga
+const geistMono = Geist_Mono({ subsets: ["latin"], variable: "--font-geist-mono", display: "swap", preload: false })
 
 export const metadata: Metadata = {
   title: { default: "Plenum", template: "%s · Plenum" },
@@ -47,43 +46,14 @@ export default function RootLayout({
 }: Readonly<{
   children: React.ReactNode
 }>) {
-  const app = (
-    <ThemeProvider attribute="class" defaultTheme="system" enableSystem disableTransitionOnChange>
-      <AuthProvider>
-        <ChatProvider>
-          {children}
-          <ThemedToaster />
-        </ChatProvider>
-      </AuthProvider>
-    </ThemeProvider>
-  )
-
   return (
     // next-themes pone la clase del tema en <html> antes de hidratar
-    <html lang="es" suppressHydrationWarning>
+    <html lang="es" suppressHydrationWarning className={`${geist.variable} ${geistMono.variable}`}>
       <body className={`font-sans antialiased`}>
-        {/* Clerk lleva la cuenta (entrar, registrarse, perfil); tras entrar, al chat.
-            Sin su clave, la app sigue en pie, sin sesión */}
-        {clerkConfigured ? (
-          <ClerkProvider
-            publishableKey={clerkPublishableKey}
-            localization={clerkLocalization}
-            appearance={{ theme: shadcn }}
-            signInUrl={SIGN_IN_HREF}
-            signUpUrl={SIGN_UP_HREF}
-            signInFallbackRedirectUrl={NEW_CHAT_HREF}
-            signUpFallbackRedirectUrl={NEW_CHAT_HREF}
-            afterSignOutUrl="/"
-          >
-            <ClerkBridge />
-            {app}
-          </ClerkProvider>
-        ) : (
-          <>
-            <NoAuthBridge />
-            {app}
-          </>
-        )}
+        <ThemeProvider attribute="class" defaultTheme="system" enableSystem disableTransitionOnChange>
+          <AppProviders>{children}</AppProviders>
+          <ThemedToaster />
+        </ThemeProvider>
       </body>
     </html>
   )
