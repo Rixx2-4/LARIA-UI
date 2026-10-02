@@ -178,16 +178,12 @@ describe("Clase guiada", () => {
 describe("Clase guiada: pizarra con la voz de LARIA", () => {
   const FIRST = "Una ecuación es una igualdad entre dos expresiones con una incógnita."
   const SECOND = "Resolverla es encontrar el valor de la x que hace cierta la igualdad."
-  let playing: HTMLMediaElement | null = null
+  let play: { mock: { contexts: unknown[] } }
 
   beforeEach(() => {
     localStorage.setItem("laria_voz", "voice")
-    playing = null
     // Audio de mentira: «suena» hasta que el test diga que terminó
-    vi.spyOn(HTMLMediaElement.prototype, "play").mockImplementation(function (this: HTMLMediaElement) {
-      if (!this.src.startsWith("data:")) playing = this
-      return Promise.resolve()
-    })
+    play = vi.spyOn(HTMLMediaElement.prototype, "play").mockResolvedValue(undefined)
     vi.spyOn(HTMLMediaElement.prototype, "pause").mockImplementation(() => {})
     URL.createObjectURL = vi.fn(() => "blob:audio")
     URL.revokeObjectURL = vi.fn()
@@ -216,7 +212,13 @@ describe("Clase guiada: pizarra con la voz de LARIA", () => {
     return spoken
   }
 
-  const finishAudio = () => act(() => playing?.onended?.(new Event("ended")))
+  // Termina lo que está sonando (el último audio de verdad; el silencio inicial no cuenta)
+  const finishAudio = () =>
+    act(() => {
+      const audios = play.mock.contexts as HTMLMediaElement[]
+      const playing = audios.filter((audio) => !audio.src.startsWith("data:")).at(-1)
+      playing?.onended?.(new Event("ended"))
+    })
 
   it("cada frase aparece al decirla LARIA y la comprobación llega al terminar", async () => {
     const spoken = voiceServer()
