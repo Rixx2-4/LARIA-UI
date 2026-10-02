@@ -60,6 +60,9 @@ export function useSpeech() {
   const audioRef = useRef<HTMLAudioElement | null>(null)
   const urlRef = useRef<string | null>(null)
   const cacheRef = useRef(new Map<string, Blob | null>())
+  // Para mover la boca de la mascota con el volumen real de lo que suena
+  const analyserRef = useRef<AnalyserNode | null>(null)
+  const levelBufferRef = useRef<Uint8Array<ArrayBuffer> | null>(null)
 
   useEffect(() => {
     // localStorage solo existe en el cliente: se lee al montar
@@ -98,14 +101,58 @@ export function useSpeech() {
     setPendingKey(null)
   }, [])
 
+  // El audio pasa por un analizador de Web Audio. Ojo: una vez conectado, el sonido
+  // SOLO sale por ese contexto; si estuviera suspendido, LARIA se quedaría muda. Por
+  // eso se conecta únicamente cuando el contexto ya está en marcha; si no, no hay
+  // analizador y la boca usa su animación en bucle
+  const connectAnalyser = useCallback((element: HTMLAudioElement) => {
+    if (element.dataset.analyser) return
+    const Context = typeof window !== "undefined" ? window.AudioContext : undefined
+    if (!Context) return
+    element.dataset.analyser = "pending"
+    try {
+      const context = new Context()
+      Promise.resolve(context.resume())
+        .then(() => {
+          if (context.state !== "running") {
+            // Se reintentará en el próximo gesto
+            delete element.dataset.analyser
+            return context.close()
+          }
+          const analyser = context.createAnalyser()
+          analyser.fftSize = 512
+          context.createMediaElementSource(element).connect(analyser)
+          analyser.connect(context.destination)
+          analyserRef.current = analyser
+          levelBufferRef.current = new Uint8Array(analyser.fftSize)
+          element.dataset.analyser = "on"
+        })
+        .catch(() => {})
+    } catch {
+      // Sin Web Audio: la boca usa su animación en bucle
+    }
+  }, [])
+
+  // Volumen de lo que suena ahora (de 0 a 1), o null si no se puede medir
+  const getLevel = useCallback((): number | null => {
+    const analyser = analyserRef.current
+    const buffer = levelBufferRef.current
+    if (!analyser || !buffer) return null
+    analyser.getByteTimeDomainData(buffer)
+    let sum = 0
+    for (const value of buffer) sum += ((value - 128) / 128) ** 2
+    return Math.sqrt(sum / buffer.length)
+  }, [])
+
   // Dentro del clic (enviar, ▶, activar la voz): así el navegador deja sonar lo que llegue
   const prime = useCallback(() => {
     const element = audio()
+    connectAnalyser(element)
     if (playingRef.current || element.dataset.primed) return
     element.dataset.primed = "1"
     element.src = SILENCE
     element.play()?.catch(() => {})
-  }, [audio])
+  }, [audio, connectAnalyser])
 
   const fail = useCallback(
     (error: unknown) => {
@@ -225,5 +272,5 @@ export function useSpeech() {
 
   useEffect(() => stop, [stop])
 
-  return { enabled, configLoaded, maxChars, mode, setMode, speaking, speakingKey: speaking?.key ?? null, pendingKey, enqueue, playMessage, prime, stop }
+  return { enabled, configLoaded, maxChars, mode, setMode, speaking, speakingKey: speaking?.key ?? null, pendingKey, getLevel, enqueue, playMessage, prime, stop }
 }

@@ -1,3 +1,4 @@
+import type { Ref } from "react"
 import { cn } from "@/lib/utils"
 
 // LARIA, la mascota: el astronauta del logo de Plenum redibujado con sus partes por
@@ -14,9 +15,12 @@ const STATE_LABEL: Record<MascotState, string> = {
   speaking: "LARIA está explicando",
 }
 
-export function LariaMascot({ state = "idle", className }: { state?: MascotState; className?: string }) {
+// Con `ref`, quien tenga el volumen del audio puede mover la boca: pone en el SVG
+// data-lipsync y la variable --mouth (de 0 a 1), y la boca deja el bucle
+export function LariaMascot({ state = "idle", className, ref }: { state?: MascotState; className?: string; ref?: Ref<SVGSVGElement> }) {
   return (
     <svg
+      ref={ref}
       viewBox="0 0 200 230"
       role="img"
       aria-label={STATE_LABEL[state]}

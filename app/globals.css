@@ -248,6 +248,12 @@
     animation-duration: 2s;
   }
 }
+/* Boca al ritmo del audio: la clase pone --mouth con el volumen de lo que suena */
+.laria-mascot[data-lipsync][data-state="speaking"] .mascot-mouth-open {
+  animation: none;
+  transform: scale(1, calc(0.3 + var(--mouth, 0.6) * 0.9));
+  transition: transform 0.06s linear;
+}
 @keyframes mascot-float {
   0%, 100% { transform: translateY(0); }
   50% { transform: translateY(-5px); }

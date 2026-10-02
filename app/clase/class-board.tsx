@@ -42,7 +42,7 @@ export function ClassBoard({
   const [reading, setReading] = useState(false)
   // Pidió ver todo sin esperar a que LARIA termine de hablar
   const [skipped, setSkipped] = useState(false)
-  const { enqueue, prime, stop, speaking, pendingKey } = speech
+  const { enqueue, prime, stop, speaking, pendingKey, getLevel } = speech
 
   const start = useCallback(() => {
     stop()
@@ -77,6 +77,33 @@ export function ClassBoard({
   // La comprobación, cuando LARIA termina de explicar (o al pedir verlo todo)
   const complete = revealed >= chunks.length && (!reading || skipped)
   const mascot: MascotState = speakingIndex !== null ? "speaking" : reading ? "thinking" : "idle"
+
+  // Mientras habla, la boca sigue el volumen real del audio (un fotograma cada vez,
+  // tocando solo una variable CSS). Sin medición, o con «reducir movimiento», nada
+  const mascotRef = useRef<SVGSVGElement>(null)
+  const talking = mascot === "speaking"
+  useEffect(() => {
+    const svg = mascotRef.current
+    if (!talking || !svg || window.matchMedia?.("(prefers-reduced-motion: reduce)").matches) return
+    let frame = 0
+    let smooth = 0
+    const tick = () => {
+      const level = getLevel()
+      if (level !== null) {
+        // El habla ronda 0,02–0,25 de volumen: se amplía y se suaviza para que no tiemble
+        smooth = smooth * 0.5 + Math.min(1, level * 5) * 0.5
+        svg.dataset.lipsync = "on"
+        svg.style.setProperty("--mouth", smooth.toFixed(2))
+      }
+      frame = requestAnimationFrame(tick)
+    }
+    frame = requestAnimationFrame(tick)
+    return () => {
+      cancelAnimationFrame(frame)
+      delete svg.dataset.lipsync
+      svg.style.removeProperty("--mouth")
+    }
+  }, [talking, getLevel])
   const shown = chunks.slice(0, revealed).join("")
 
   return (
@@ -88,6 +115,7 @@ export function ClassBoard({
           </div>
         </div>
         <LariaMascot
+          ref={mascotRef}
           state={mascot}
           className="pointer-events-none absolute -bottom-3 right-2 w-16 sm:w-20 lg:static lg:w-36 lg:shrink-0"
         />
