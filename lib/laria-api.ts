@@ -253,6 +253,8 @@ interface VoicesResponse {
   // La elegida; null = la de por defecto
   selected: string | null
   sample_text: string
+  // Frase de ejemplo por género («tu tutor» / «tu tutora»), si el backend la manda
+  sample_texts?: Partial<Record<TutorVoice["gender"], string>>
 }
 
 interface LessonResponse {

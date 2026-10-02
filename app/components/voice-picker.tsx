@@ -3,7 +3,16 @@
 import { useEffect, useRef, useState } from "react"
 import { Check, Loader2, Play, Square } from "lucide-react"
 import { toast } from "sonner"
-import { lariaAPI, type VoicesResponse } from "@/lib/laria-api"
+import { lariaAPI, type TutorVoice, type VoicesResponse } from "@/lib/laria-api"
+
+// La frase de ejemplo viene en femenino («tu tutora»); con una voz masculina se dice
+// en masculino. Si el backend manda una frase por género (sample_texts), se usa esa
+export function sampleFor(data: VoicesResponse, gender: TutorVoice["gender"] | undefined): string {
+  const own = gender ? data.sample_texts?.[gender] : undefined
+  if (own) return own
+  if (gender !== "masculina") return data.sample_text
+  return data.sample_text.replace(/\btutora\b/gi, (word) => word.slice(0, -1))
+}
 
 // La voz con la que LARIA lee en voz alta: 3 masculinas y 3 femeninas. La elección
 // se guarda en el perfil (vale en cualquier dispositivo); cada voz se puede escuchar
@@ -51,7 +60,8 @@ export function VoicePicker({ className = "" }: { className?: string }) {
     // Dentro del clic: así el navegador deja sonar el audio cuando llegue
     audioRef.current ??= new Audio()
     try {
-      const blob = await lariaAPI.speech.synthesize(data.sample_text, "calm", undefined, id)
+      const voice = data.voices.find((v) => v.id === id)
+      const blob = await lariaAPI.speech.synthesize(sampleFor(data, voice?.gender), "calm", undefined, id)
       if (!blob) return setPreview(null)
       urlRef.current = URL.createObjectURL(blob)
       const audio = audioRef.current
