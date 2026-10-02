@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, afterEach, beforeEach } from "vitest"
-import { render, screen, cleanup, fireEvent, waitFor } from "@testing-library/react"
+import { render, screen, cleanup, fireEvent, waitFor, act } from "@testing-library/react"
 import { AuthProvider } from "@/app/contexts/auth-context"
 import { ChatProvider } from "@/app/contexts/chat-context"
 import ClasePage from "./[pathId]/page"
@@ -172,5 +172,87 @@ describe("Clase guiada", () => {
     expect(await screen.findByText("El servicio de IA no respondió.")).toBeTruthy()
     fireEvent.click(screen.getByRole("button", { name: "Reintentar" }))
     await waitFor(() => expect(server.lessons).toBe(2))
+  })
+})
+
+describe("Clase guiada: pizarra con la voz de LARIA", () => {
+  const FIRST = "Una ecuación es una igualdad entre dos expresiones con una incógnita."
+  const SECOND = "Resolverla es encontrar el valor de la x que hace cierta la igualdad."
+  let playing: HTMLMediaElement | null = null
+
+  beforeEach(() => {
+    localStorage.setItem("laria_voz", "voice")
+    playing = null
+    // Audio de mentira: «suena» hasta que el test diga que terminó
+    vi.spyOn(HTMLMediaElement.prototype, "play").mockImplementation(function (this: HTMLMediaElement) {
+      if (!this.src.startsWith("data:")) playing = this
+      return Promise.resolve()
+    })
+    vi.spyOn(HTMLMediaElement.prototype, "pause").mockImplementation(() => {})
+    URL.createObjectURL = vi.fn(() => "blob:audio")
+    URL.revokeObjectURL = vi.fn()
+  })
+  afterEach(() => {
+    localStorage.clear()
+    vi.restoreAllMocks()
+  })
+
+  function voiceServer({ speechStatus = 200 } = {}) {
+    const spoken: string[] = []
+    vi.stubGlobal("fetch", async (url: string, init?: RequestInit) => {
+      const method = init?.method ?? "GET"
+      if (url.endsWith("/users/me")) return json({ id: "u1", username: "ana", email: "a@a.a" })
+      if (url.endsWith("/chats/")) return json({ chats: [] })
+      if (url.endsWith("/documents/")) return json([])
+      if (url.endsWith("/speech/config")) return json({ enabled: true, max_chars: 1200 })
+      if (url.endsWith("/speech") && method === "POST") {
+        spoken.push(JSON.parse(String(init?.body)).text)
+        if (speechStatus !== 200) return json({ detail: "La voz no está disponible ahora." }, speechStatus)
+        return new Response(new Blob(["mp3"], { type: "audio/mpeg" }))
+      }
+      if (url.endsWith("/learning/paths/p1/lesson")) return json({ path: path("check", "ecuacion"), markdown: `${FIRST} ${SECOND}`, check: check("q1") })
+      throw new Error(`Petición inesperada: ${method} ${url}`)
+    })
+    return spoken
+  }
+
+  const finishAudio = () => act(() => playing?.onended?.(new Event("ended")))
+
+  it("cada frase aparece al decirla LARIA y la comprobación llega al terminar", async () => {
+    const spoken = voiceServer()
+    renderPage()
+
+    expect(await screen.findByText(FIRST)).toBeTruthy()
+    expect(screen.getByRole("img", { name: "LARIA está explicando" })).toBeTruthy()
+    expect(screen.queryByText(SECOND, { exact: false })).toBeNull()
+    expect(screen.queryByText("q1: ¿Qué es una ecuación?")).toBeNull()
+
+    await finishAudio()
+    expect(await screen.findByText(SECOND, { exact: false })).toBeTruthy()
+    expect(spoken).toEqual([FIRST, SECOND])
+    expect(screen.queryByText("q1: ¿Qué es una ecuación?")).toBeNull()
+
+    await finishAudio()
+    expect(await screen.findByText("q1: ¿Qué es una ecuación?")).toBeTruthy()
+    expect(screen.getByRole("img", { name: "LARIA" })).toBeTruthy()
+  })
+
+  it("«Mostrar todo» enseña la pizarra entera y la comprobación sin esperar a la voz", async () => {
+    voiceServer()
+    renderPage()
+
+    await screen.findByText(FIRST)
+    fireEvent.click(screen.getByRole("button", { name: "Mostrar todo" }))
+    expect(screen.getByText(SECOND, { exact: false })).toBeTruthy()
+    expect(screen.getByText("q1: ¿Qué es una ecuación?")).toBeTruthy()
+  })
+
+  it("si la voz falla, la pizarra se ve entera igualmente", async () => {
+    voiceServer({ speechStatus: 503 })
+    renderPage()
+
+    expect(await screen.findByText("q1: ¿Qué es una ecuación?")).toBeTruthy()
+    expect(screen.getByText(FIRST, { exact: false })).toBeTruthy()
+    expect(screen.getByText(SECOND, { exact: false })).toBeTruthy()
   })
 })
