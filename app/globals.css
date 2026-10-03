@@ -201,11 +201,6 @@
   opacity: 0;
   transform-origin: center;
 }
-/* Señala con el brazo que mira a la pizarra (está a su izquierda) */
-.laria-mascot .mascot-arm-left {
-  transform-origin: 90% 10%;
-  transition: transform 0.4s ease;
-}
 .laria-mascot .mascot-head {
   transform-origin: 50% 90%;
   transition: transform 0.5s ease;
@@ -218,10 +213,11 @@
   transform: rotate(-7deg);
 }
 .laria-mascot[data-state="thinking"] .mascot-eyes {
-  transform: translate(-3px, -5px);
+  transform: translate(-6px, -10px);
 }
-.laria-mascot[data-state="speaking"] .mascot-arm-left {
-  transform: rotate(40deg);
+/* Al hablar se inclina hacia la pizarra (está a su izquierda) */
+.laria-mascot[data-state="speaking"] .mascot-head {
+  transform: rotate(-4deg);
 }
 .laria-mascot[data-state="speaking"] .mascot-mouth-closed {
   opacity: 0;
