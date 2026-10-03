@@ -1,6 +1,6 @@
 import { describe, it, expect, vi, afterEach } from "vitest"
 import { render, screen, cleanup, waitFor } from "@testing-library/react"
-import { ClassBoard } from "./class-board"
+import { ClassBoard, isImportant } from "./class-board"
 import type { useSpeech } from "@/hooks/use-speech"
 
 afterEach(cleanup)
@@ -35,5 +35,28 @@ describe("ClassBoard: la boca de LARIA", () => {
     const mascot = screen.getByRole("img", { name: "LARIA está explicando" })
     await new Promise((r) => setTimeout(r, 50))
     expect(mascot.hasAttribute("data-lipsync")).toBe(false)
+  })
+})
+
+describe("ClassBoard: LARIA señala los datos importantes", () => {
+  it("reconoce un dato importante: negrita, fórmula aparte, cita o frase que lo anuncia", () => {
+    expect(isImportant("La **hipotenusa** es el lado mayor.")).toBe(true)
+    expect(isImportant("$$a^2 + b^2 = c^2$$")).toBe(true)
+    expect(isImportant("> Un número primo solo se divide entre 1 y él mismo.")).toBe(true)
+    expect(isImportant("Recuerda: el orden de los factores no altera el producto.")).toBe(true)
+    expect(isImportant("Esta es la idea clave del tema.")).toBe(true)
+    expect(isImportant("Ahora veamos un caso sencillo con números pequeños.")).toBe(false)
+  })
+
+  it("mientras dice un dato importante, señala la pizarra; con una frase normal, no", () => {
+    const lesson = "Ahora veamos un caso sencillo con números pequeños. Recuerda: la **suma** de los ángulos es 180°."
+    const at = (index: number) =>
+      ({ ...speaking(() => null), speaking: { key: "k", index } }) as unknown as ReturnType<typeof useSpeech>
+
+    const { rerender } = render(<ClassBoard lessonKey="k" markdown={lesson} speech={at(0)}><p>c</p></ClassBoard>)
+    expect(screen.getByRole("img", { name: "LARIA está explicando" })).toBeTruthy()
+
+    rerender(<ClassBoard lessonKey="k" markdown={lesson} speech={at(1)}><p>c</p></ClassBoard>)
+    expect(screen.getByRole("img", { name: "LARIA está explicando, sorprendida, señalando la pizarra" })).toBeTruthy()
   })
 })

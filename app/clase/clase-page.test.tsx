@@ -125,6 +125,8 @@ describe("Clase guiada", () => {
     // No lo entiende: ve qué falló y por qué se explica de otra manera
     await answerCheck("B", "q1")
     expect(await screen.findByText("Todavía no")).toBeTruthy()
+    // LARIA reacciona: paciente si no se entendió, lo celebra si sí
+    expect(screen.getByRole("img", { name: "LARIA, paciente" })).toBeTruthy()
     expect(screen.getByText("Acertaste 0 de 2.")).toBeTruthy()
     expect(screen.getByText("Lo explico de otra manera…")).toBeTruthy()
     expect(server.checks[0]).toEqual({ quiz_id: "q1", answers: { "0": "B", "1": "B" } })
@@ -133,6 +135,7 @@ describe("Clase guiada", () => {
     expect(await screen.findByText("Lo explico de otra manera, con una balanza.")).toBeTruthy()
     await answerCheck("A", "q2")
     expect(await screen.findByText("¡Entendido!")).toBeTruthy()
+    expect(screen.getByRole("img", { name: "LARIA, celebrándolo" })).toBeTruthy()
 
     fireEvent.click(screen.getByRole("button", { name: "Continuar" }))
     expect(await screen.findByRole("heading", { level: 1, name: "Despejar la x" })).toBeTruthy()
@@ -165,6 +168,24 @@ describe("Clase guiada", () => {
     await waitFor(() => expect(link.getAttribute("href")).toBe("/nivelacion?tema=ecuaciones+lineales"))
   })
 
+  it("un tema que el backend no trabaja (422) se explica sin «Reintentar» y deja elegir otro", async () => {
+    stubServer({ lessonError: json({ detail: "Ese tema no lo puedo trabajar contigo.", reason: "unsafe_topic", safety: "refuse" }, 422) })
+    renderPage()
+
+    expect(await screen.findByText("Ese tema no lo puedo trabajar contigo.")).toBeTruthy()
+    expect(screen.queryByRole("button", { name: "Reintentar" })).toBeNull()
+    expect(screen.getByRole("link", { name: "Elegir otro tema" }).getAttribute("href")).toBe("/nivelacion")
+  })
+
+  it("un 422 que no es del filtro (sin reason) sigue dejando reintentar", async () => {
+    stubServer({ lessonError: json({ detail: "Indica el tema de la ruta." }, 422) })
+    renderPage()
+
+    expect(await screen.findByText("Indica el tema de la ruta.")).toBeTruthy()
+    expect(screen.getByRole("button", { name: "Reintentar" })).toBeTruthy()
+    expect(screen.queryByRole("link", { name: "Elegir otro tema" })).toBeNull()
+  })
+
   it("si la lección no se pudo generar (502), deja reintentar", async () => {
     const server = stubServer({ lessonError: json({ detail: "El servicio de IA no respondió." }, 502) })
     renderPage()
@@ -172,6 +193,31 @@ describe("Clase guiada", () => {
     expect(await screen.findByText("El servicio de IA no respondió.")).toBeTruthy()
     fireEvent.click(screen.getByRole("button", { name: "Reintentar" }))
     await waitFor(() => expect(server.lessons).toBe(2))
+  })
+})
+
+describe("Clase guiada: tramos", () => {
+  it("al terminar un tramo no dice «ruta completada»: ofrece la prueba de paso, y la ruta se ve por tramos", async () => {
+    const tramo = {
+      ...path("completed", null, { ecuacion: "completed", despejar: "completed" }, "Haz la prueba de paso de «ecuaciones» para abrir el tramo intermedio, con clases nuevas"),
+      tiers: ["basico"],
+      next_tier: "intermedio",
+      modules: modules({ ecuacion: "completed", despejar: "completed" }).map((m) => ({ ...m, tier: "basico" })),
+    }
+    vi.stubGlobal("fetch", async (url: string) => {
+      if (url.endsWith("/users/me")) return json({ id: "u1", username: "ana", email: "a@a.a" })
+      if (url.endsWith("/chats/")) return json({ chats: [] })
+      if (url.endsWith("/learning/paths/p1/lesson")) return json({ path: tramo, markdown: null, check: null })
+      return json({ detail: "Not Found" }, 404)
+    })
+    renderPage()
+
+    expect(await screen.findByRole("heading", { name: "¡Tramo básico terminado!" })).toBeTruthy()
+    expect(screen.queryByText("¡Ruta completada!")).toBeNull()
+    expect(screen.getByText(/Haz la prueba de paso de «ecuaciones»/)).toBeTruthy()
+    expect(screen.getByRole("link", { name: "Hacer la prueba de paso" }).getAttribute("href")).toBe("/nivelacion?tema=ecuaciones+lineales")
+    expect(screen.getByRole("region", { name: "Tramo básico" })).toBeTruthy()
+    expect(screen.getByText("Tramo intermedio: se abre con la prueba de paso")).toBeTruthy()
   })
 })
 

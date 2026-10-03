@@ -22,6 +22,9 @@ interface TutorEnvelope {
     ask_learning_style?: boolean
     // Contestó en el chat ("la 4", "paso a paso") y el backend ya lo guardó; null = que decida LARIA
     explanation_style_chosen?: ExplanationStyle | null
+    // Filtro de seguridad del backend: "refuse" (tema que no trabaja) o "support"
+    // (señal de autolesión: un mensaje de apoyo fijo)
+    safety?: "refuse" | "support"
     [key: string]: unknown
   }
   [key: string]: unknown
@@ -211,6 +214,8 @@ interface PathModule {
   status: PathModuleStatus
   mastery: number
   position: number
+  // Tramo al que pertenece (las rutas crecen por tramos); null en rutas creadas a mano
+  tier?: PlacementLevel | null
 }
 
 interface TeachingState {
@@ -233,8 +238,12 @@ interface LearningPath {
   topic?: string | null
   title?: string | null
   modules: PathModule[]
-  // De 0 a 1: módulos completados sobre el total
+  // De 0 a 1: módulos completados sobre el total (baja al abrir un tramo nuevo)
   progress?: number
+  // Tramos abiertos, en orden (["basico", "intermedio"]) y el que abre la próxima
+  // prueba de paso; sin next_tier y completada, la ruta terminó de verdad
+  tiers?: PlacementLevel[]
+  next_tier?: PlacementLevel | null
   updated_at?: string
   teaching: TeachingState | null
 }
@@ -403,9 +412,20 @@ function authHeaders(token: string | null): Record<string, string> {
 }
 
 export class ApiError extends Error {
-  constructor(message: string, readonly status: number) {
+  constructor(
+    message: string,
+    readonly status: number,
+    // Por qué lo rechaza el backend, si lo dice (p. ej. "unsafe_topic")
+    readonly reason: string | null = null,
+    readonly safety: "refuse" | "support" | null = null,
+  ) {
     super(message)
   }
+}
+
+// El filtro de seguridad no trabaja este tema: reintentar no sirve, hay que elegir otro
+export function isUnsafeTopic(error: unknown): error is ApiError {
+  return error instanceof ApiError && error.reason === "unsafe_topic"
 }
 
 // Quien necesite enterarse de que la sesión caducó (el AuthProvider) se suscribe aquí
@@ -464,7 +484,13 @@ async function responseError(response: Response, fallback: string, sentToken: st
   if (response.status === 401 && sentToken) {
     unauthorizedListeners.forEach((listener) => listener())
   }
-  return new ApiError(describeErrorDetail(body.detail, `Error ${response.status}`), response.status)
+  const safety = body.safety === "refuse" || body.safety === "support" ? body.safety : null
+  return new ApiError(
+    describeErrorDetail(body.detail, `Error ${response.status}`),
+    response.status,
+    typeof body.reason === "string" ? body.reason : null,
+    safety,
+  )
 }
 
 // Un id va siempre como un solo tramo de la ruta: uno manipulado en la URL
