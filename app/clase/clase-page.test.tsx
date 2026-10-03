@@ -125,6 +125,8 @@ describe("Clase guiada", () => {
     // No lo entiende: ve qué falló y por qué se explica de otra manera
     await answerCheck("B", "q1")
     expect(await screen.findByText("Todavía no")).toBeTruthy()
+    // LARIA reacciona: paciente si no se entendió, lo celebra si sí
+    expect(screen.getByRole("img", { name: "LARIA, paciente" })).toBeTruthy()
     expect(screen.getByText("Acertaste 0 de 2.")).toBeTruthy()
     expect(screen.getByText("Lo explico de otra manera…")).toBeTruthy()
     expect(server.checks[0]).toEqual({ quiz_id: "q1", answers: { "0": "B", "1": "B" } })
@@ -133,6 +135,7 @@ describe("Clase guiada", () => {
     expect(await screen.findByText("Lo explico de otra manera, con una balanza.")).toBeTruthy()
     await answerCheck("A", "q2")
     expect(await screen.findByText("¡Entendido!")).toBeTruthy()
+    expect(screen.getByRole("img", { name: "LARIA, celebrándolo" })).toBeTruthy()
 
     fireEvent.click(screen.getByRole("button", { name: "Continuar" }))
     expect(await screen.findByRole("heading", { level: 1, name: "Despejar la x" })).toBeTruthy()
