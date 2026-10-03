@@ -406,9 +406,20 @@ function authHeaders(token: string | null): Record<string, string> {
 }
 
 export class ApiError extends Error {
-  constructor(message: string, readonly status: number) {
+  constructor(
+    message: string,
+    readonly status: number,
+    // Por qué lo rechaza el backend, si lo dice (p. ej. "unsafe_topic")
+    readonly reason: string | null = null,
+    readonly safety: "refuse" | "support" | null = null,
+  ) {
     super(message)
   }
+}
+
+// El filtro de seguridad no trabaja este tema: reintentar no sirve, hay que elegir otro
+export function isUnsafeTopic(error: unknown): error is ApiError {
+  return error instanceof ApiError && error.reason === "unsafe_topic"
 }
 
 // Quien necesite enterarse de que la sesión caducó (el AuthProvider) se suscribe aquí
@@ -467,7 +478,13 @@ async function responseError(response: Response, fallback: string, sentToken: st
   if (response.status === 401 && sentToken) {
     unauthorizedListeners.forEach((listener) => listener())
   }
-  return new ApiError(describeErrorDetail(body.detail, `Error ${response.status}`), response.status)
+  const safety = body.safety === "refuse" || body.safety === "support" ? body.safety : null
+  return new ApiError(
+    describeErrorDetail(body.detail, `Error ${response.status}`),
+    response.status,
+    typeof body.reason === "string" ? body.reason : null,
+    safety,
+  )
 }
 
 // Un id va siempre como un solo tramo de la ruta: uno manipulado en la URL

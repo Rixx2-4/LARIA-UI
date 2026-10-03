@@ -166,12 +166,21 @@ describe("Clase guiada", () => {
   })
 
   it("un tema que el backend no trabaja (422) se explica sin «Reintentar» y deja elegir otro", async () => {
-    stubServer({ lessonError: json({ detail: "Ese tema no lo puedo trabajar contigo." }, 422) })
+    stubServer({ lessonError: json({ detail: "Ese tema no lo puedo trabajar contigo.", reason: "unsafe_topic", safety: "refuse" }, 422) })
     renderPage()
 
     expect(await screen.findByText("Ese tema no lo puedo trabajar contigo.")).toBeTruthy()
     expect(screen.queryByRole("button", { name: "Reintentar" })).toBeNull()
     expect(screen.getByRole("link", { name: "Elegir otro tema" }).getAttribute("href")).toBe("/nivelacion")
+  })
+
+  it("un 422 que no es del filtro (sin reason) sigue dejando reintentar", async () => {
+    stubServer({ lessonError: json({ detail: "Indica el tema de la ruta." }, 422) })
+    renderPage()
+
+    expect(await screen.findByText("Indica el tema de la ruta.")).toBeTruthy()
+    expect(screen.getByRole("button", { name: "Reintentar" })).toBeTruthy()
+    expect(screen.queryByRole("link", { name: "Elegir otro tema" })).toBeNull()
   })
 
   it("si la lección no se pudo generar (502), deja reintentar", async () => {

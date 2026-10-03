@@ -8,7 +8,7 @@ import { Button } from "@/components/ui/button"
 import { AppShell } from "../components/app-shell"
 import { RequireAuth } from "../components/require-auth"
 import { LEVEL_COPY, LEVEL_NAME, QuestionStep, ResultsList, StepRow, toResults, type QuizResult, type StepStatus } from "../quiz/quiz-parts"
-import { ApiError, lariaAPI, type ExplanationStyle, type PlacementResult, type QuizQuestion } from "@/lib/laria-api"
+import { ApiError, isUnsafeTopic, lariaAPI, type ExplanationStyle, type PlacementResult, type QuizQuestion } from "@/lib/laria-api"
 import { StylePicker } from "../components/style-picker"
 import { StudyGoalsPicker } from "../components/study-goals-picker"
 import { NEW_CHAT_HREF, chatHref, classHref } from "@/lib/routes"
@@ -65,7 +65,7 @@ function Placement({ initialTopic, chatId }: { initialTopic: string; chatId: str
   const [results, setResults] = useState<QuizResult[]>([])
   const [placement, setPlacement] = useState<PlacementResult | null>(null)
   const [error, setError] = useState<string | null>(null)
-  // El backend no trabaja este tema (422, filtro de seguridad): reintentar no sirve
+  // El backend no trabaja este tema (filtro de seguridad): reintentar no sirve
   const [refused, setRefused] = useState(false)
   const [prep, setPrep] = useState<Preparation>({ review: "pending", offerNext: false, askStyle: false, level: "pending", lesson: "pending" })
   const router = useRouter()
@@ -118,6 +118,7 @@ function Placement({ initialTopic, chatId }: { initialTopic: string; chatId: str
       setPhase("questions")
     } catch (err) {
       setError(err instanceof Error ? err.message : "No se pudieron preparar las preguntas")
+      setRefused(isUnsafeTopic(err))
       setPhase(from)
     }
   }
@@ -161,7 +162,7 @@ function Placement({ initialTopic, chatId }: { initialTopic: string; chatId: str
     } catch (err) {
       if (err instanceof ApiError && (err.status === 404 || err.status === 405)) return lessonInChat(verdict, lessonTopic)
       setError(err instanceof Error ? err.message : "No se pudo preparar la clase. Prueba de nuevo.")
-      setRefused(err instanceof ApiError && err.status === 422)
+      setRefused(isUnsafeTopic(err))
       setPrep((p) => ({ ...p, lesson: "pending" }))
     }
   }
@@ -193,7 +194,17 @@ function Placement({ initialTopic, chatId }: { initialTopic: string; chatId: str
       <div className="h-full overflow-auto">
         <div className="mx-auto max-w-3xl px-6 py-8">
           {phase === "intro" && (
-            <Intro topic={topic} onTopicChange={setTopic} onStart={() => startRound("intro")} error={error} backHref={backHref} />
+            <Intro
+              topic={topic}
+              onTopicChange={(next) => {
+                setTopic(next)
+                setRefused(false)
+              }}
+              onStart={() => startRound("intro")}
+              error={error}
+              refused={refused}
+              backHref={backHref}
+            />
           )}
 
           {phase === "loading" && (
@@ -260,12 +271,15 @@ function Intro({
   onTopicChange,
   onStart,
   error,
+  refused,
   backHref,
 }: {
   topic: string
   onTopicChange: (topic: string) => void
   onStart: () => void
   error: string | null
+  // El tema no se trabaja: se explica sin rojo (y se puede escribir otro)
+  refused: boolean
   backHref: string
 }) {
   const ready = topic.trim().length >= 2
@@ -301,7 +315,7 @@ function Intro({
         />
       </div>
 
-      {error && <ErrorBox message={error} />}
+      {error && <ErrorBox message={error} neutral={refused} />}
 
       <div className="flex flex-wrap gap-3">
         <Button type="submit" disabled={!ready}>
@@ -424,7 +438,7 @@ function PreparingLesson({
       {error && prep.offerNext && <ErrorBox message={error} />}
       {error && !prep.offerNext && (
         <div className="space-y-3">
-          <ErrorBox message={error} />
+          <ErrorBox message={error} neutral={refused} />
           <div className="flex flex-wrap gap-3">
             {refused ? (
               <Button onClick={onChooseAnother}>Elegir otro tema</Button>
@@ -443,9 +457,13 @@ function PreparingLesson({
   )
 }
 
-function ErrorBox({ message }: { message: string }) {
+// neutral: no es un fallo (un tema que no se trabaja): se explica, sin rojo
+function ErrorBox({ message, neutral = false }: { message: string; neutral?: boolean }) {
   return (
-    <div role="alert" className="rounded-lg border border-destructive/20 bg-destructive/10 p-4 text-sm text-destructive">
+    <div
+      role={neutral ? "status" : "alert"}
+      className={`rounded-lg border p-4 text-sm ${neutral ? "border-border bg-card text-foreground" : "border-destructive/20 bg-destructive/10 text-destructive"}`}
+    >
       {message}
     </div>
   )

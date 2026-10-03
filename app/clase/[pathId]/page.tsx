@@ -14,7 +14,7 @@ import { useSpeech } from "@/hooks/use-speech"
 import { useStudyTime } from "@/hooks/use-study-time"
 import { ClassStudyBar } from "@/app/components/study-progress"
 import { NextSuggestions } from "@/app/components/next-suggestions"
-import { ApiError, lariaAPI, type CheckResponse, type LearningPath, type PathModule, type QuizResponse } from "@/lib/laria-api"
+import { ApiError, isUnsafeTopic, lariaAPI, type CheckResponse, type LearningPath, type PathModule, type QuizResponse } from "@/lib/laria-api"
 import { NEW_CHAT_HREF, placementHref } from "@/lib/routes"
 
 // La clase guiada de una ruta: explicación de un concepto, una comprobación corta y,
@@ -23,7 +23,7 @@ import { NEW_CHAT_HREF, placementHref } from "@/lib/routes"
 
 type View =
   | { kind: "loading" }
-  // refused: el backend no trabaja este tema (422, filtro de seguridad): reintentar no sirve
+  // refused: el backend no trabaja este tema (filtro de seguridad): reintentar no sirve
   | { kind: "error"; message: string; needsPlacement: boolean; refused?: boolean }
   | { kind: "lesson"; markdown: string; check: QuizResponse }
   | { kind: "result"; result: CheckResponse; check: QuizResponse }
@@ -70,7 +70,7 @@ function Clase() {
       // 409: el tema aún no tiene nivelación. La ruta se pide aparte para saber qué tema es
       const needsPlacement = error instanceof ApiError && error.status === 409
       if (needsPlacement) lariaAPI.paths.get(pathId).then(setPath).catch(() => {})
-      const refused = error instanceof ApiError && error.status === 422
+      const refused = isUnsafeTopic(error)
       setView({ kind: "error", message: error instanceof Error ? error.message : "No se pudo preparar la lección", needsPlacement, refused })
     }
   }, [pathId])
