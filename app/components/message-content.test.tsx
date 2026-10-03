@@ -1,8 +1,18 @@
 import { describe, it, expect, afterEach } from "vitest"
-import { render, cleanup } from "@testing-library/react"
+import { render, cleanup, act } from "@testing-library/react"
 import { MathText, MessageContent } from "./message-content"
 
 afterEach(cleanup)
+
+// KaTeX se carga aparte (solo cuando hay fórmulas): se pinta y se espera a que llegue
+async function renderMath(ui: React.ReactElement) {
+  const result = render(ui)
+  await act(async () => {
+    await import("./math-markdown")
+    await new Promise((resolve) => setTimeout(resolve, 0))
+  })
+  return result
+}
 
 describe("MessageContent", () => {
   it("pinta Markdown: negritas, listas y tablas", () => {
@@ -15,22 +25,22 @@ describe("MessageContent", () => {
     expect(container.querySelector("table td")?.textContent).toBe("Núcleo")
   })
 
-  it("pinta fórmulas LaTeX en línea y en bloque", () => {
-    const { container } = render(<MessageContent content={"Energía: $E=mc^2$\n\n$$\\frac{a}{b}$$"} />)
+  it("pinta fórmulas LaTeX en línea y en bloque", async () => {
+    const { container } = await renderMath(<MessageContent content={"Energía: $E=mc^2$\n\n$$\\frac{a}{b}$$"} />)
 
     expect(container.querySelectorAll(".katex")).toHaveLength(2)
     expect(container.querySelector(".katex-display")).not.toBeNull()
   })
 
-  it("acepta también la notación \\( \\) y \\[ \\] que usan muchos modelos", () => {
-    const { container } = render(<MessageContent content={"Sea \\(x^2\\):\n\n\\[\\int_0^1 x\\,dx\\]"} />)
+  it("acepta también la notación \\( \\) y \\[ \\] que usan muchos modelos", async () => {
+    const { container } = await renderMath(<MessageContent content={"Sea \\(x^2\\):\n\n\\[\\int_0^1 x\\,dx\\]"} />)
 
     expect(container.querySelectorAll(".katex")).toHaveLength(2)
     expect(container.querySelector(".katex-display")).not.toBeNull()
   })
 
-  it("no toca los $ dentro de un bloque de código", () => {
-    const { container } = render(<MessageContent content={"```bash\necho $$HOME$$\n```"} />)
+  it("no toca los $ dentro de un bloque de código", async () => {
+    const { container } = await renderMath(<MessageContent content={"```bash\necho $$HOME$$\n```"} />)
 
     expect(container.querySelector(".katex")).toBeNull()
     expect(container.querySelector("pre code")?.textContent).toContain("echo $$HOME$$")
@@ -51,15 +61,15 @@ describe("MessageContent", () => {
     expect(container.textContent).toContain("hola")
   })
 
-  it("las cantidades de dinero no se confunden con fórmulas", () => {
-    const { container } = render(<MessageContent content={"El libro cuesta $5 y el cuaderno $10. Área: $x^2$"} />)
+  it("las cantidades de dinero no se confunden con fórmulas", async () => {
+    const { container } = await renderMath(<MessageContent content={"El libro cuesta $5 y el cuaderno $10. Área: $x^2$"} />)
 
     expect(container.textContent).toContain("cuesta $5 y el cuaderno $10")
     expect(container.querySelectorAll(".katex")).toHaveLength(1)
   })
 
-  it("una fórmula que empieza por número sí se pinta (respuesta real del tutor)", () => {
-    const { container } = render(
+  it("una fórmula que empieza por número sí se pinta (respuesta real del tutor)", async () => {
+    const { container } = await renderMath(
       <MessageContent content={"Por ejemplo, en la ecuación $2x + 3 = 7$ despejas x. Otra: $3x+1$. Y un número suelto: $2$."} />,
     )
 
@@ -67,15 +77,15 @@ describe("MessageContent", () => {
     expect(container.querySelector(".katex-error")).toBeNull()
   })
 
-  it("dinero y fórmulas en la misma línea", () => {
-    const { container } = render(<MessageContent content={"Con $20 compras 4, así que cada uno vale $\\frac{20}{4} = 5$"} />)
+  it("dinero y fórmulas en la misma línea", async () => {
+    const { container } = await renderMath(<MessageContent content={"Con $20 compras 4, así que cada uno vale $\\frac{20}{4} = 5$"} />)
 
     expect(container.textContent).toContain("Con $20 compras")
     expect(container.querySelectorAll(".katex")).toHaveLength(1)
   })
 
-  it("no toca la notación LaTeX escrita dentro de código en línea", () => {
-    const { container } = render(<MessageContent content={"Escribe `\\(x\\)` para una fórmula"} />)
+  it("no toca la notación LaTeX escrita dentro de código en línea", async () => {
+    const { container } = await renderMath(<MessageContent content={"Escribe `\\(x\\)` para una fórmula"} />)
 
     expect(container.querySelector("code")?.textContent).toBe("\\(x\\)")
     expect(container.querySelector(".katex")).toBeNull()
@@ -83,8 +93,8 @@ describe("MessageContent", () => {
 })
 
 describe("MathText (enunciados y opciones de los quizzes)", () => {
-  it("dibuja las fórmulas \\( … \\) con KaTeX, sin párrafos alrededor", () => {
-    const { container } = render(
+  it("dibuja las fórmulas \\( … \\) con KaTeX, sin párrafos alrededor", async () => {
+    const { container } = await renderMath(
       <button>
         <MathText text={"¿Cuánto es \\( \\frac{3}{4} + \\frac{1}{4} \\)?"} />
       </button>,
