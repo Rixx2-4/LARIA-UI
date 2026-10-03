@@ -57,6 +57,8 @@ describe("Mis clases", () => {
       path("p2", "Fracciones", "completed", "2026-09-30T10:00:00Z", { progress: 1 }),
       path("p3", "Astronomía", "assessment", "2026-09-29T10:00:00Z"),
       path("p4", "Derivadas", "teaching", "2026-10-01T12:00:00Z"),
+      // Terminó el tramo básico: le toca la prueba de paso al intermedio
+      path("p6", "Geometría", "completed", "2026-09-28T10:00:00Z", { tiers: ["basico"], next_tier: "intermedio" }),
       // Ruta creada a mano (sin tema): no es una clase
       path("p5", "Plan propio", "teaching", "2026-10-01T13:00:00Z", { topic: "" }),
     ])
@@ -69,6 +71,8 @@ describe("Mis clases", () => {
     expect(within(inProgress).getAllByRole("link", { name: "Continuar" }).map((a) => a.getAttribute("href"))).toEqual(["/clase/p4", "/clase/p1"])
 
     const placement = screen.getByRole("region", { name: "Pendientes de nivelación" })
+    expect(within(placement).getByRole("link", { name: "Hacer la prueba de paso" }).getAttribute("href")).toBe("/nivelacion?tema=geometr%C3%ADa")
+    expect(within(placement).getByText(/haz la prueba de paso para abrir el intermedio/)).toBeTruthy()
     expect(within(placement).getByRole("link", { name: "Hacer la nivelación" }).getAttribute("href")).toBe("/nivelacion?tema=astronom%C3%ADa")
 
     const completed = screen.getByRole("region", { name: "Completadas" })
