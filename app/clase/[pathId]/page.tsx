@@ -11,6 +11,9 @@ import { LariaMascot } from "@/app/components/laria-mascot"
 import { ClassBoard } from "../class-board"
 import { QuestionStep, ResultsList, toResults } from "@/app/quiz/quiz-parts"
 import { useSpeech } from "@/hooks/use-speech"
+import { useStudyTime } from "@/hooks/use-study-time"
+import { ClassStudyBar } from "@/app/components/study-progress"
+import { NextSuggestions } from "@/app/components/next-suggestions"
 import { ApiError, lariaAPI, type CheckResponse, type LearningPath, type PathModule, type QuizResponse } from "@/lib/laria-api"
 import { NEW_CHAT_HREF, placementHref } from "@/lib/routes"
 
@@ -48,6 +51,8 @@ function Clase() {
   const [submitting, setSubmitting] = useState(false)
   const [checkError, setCheckError] = useState<string | null>(null)
   const speech = useSpeech()
+  // El tiempo de estudio (cuenta también mientras LARIA explica, aunque no se toque nada)
+  const { summary: studySummary, sessionSeconds } = useStudyTime({ busy: !!speech.speaking })
 
   const loadLesson = useCallback(async () => {
     setView({ kind: "loading" })
@@ -107,6 +112,7 @@ function Clase() {
           {path && <PathOutline path={path} />}
 
           <main className="min-w-0 space-y-6 lg:col-start-2">
+            <ClassStudyBar summary={studySummary} sessionSeconds={sessionSeconds} />
             <header className="space-y-1">
               <p className="text-sm text-muted-foreground">Clase · {title}</p>
               {teaching?.concept_title && view.kind !== "completed" && (
@@ -197,6 +203,10 @@ function Clase() {
                   </Button>
                 </div>
               </section>
+            )}
+
+            {view.kind === "completed" && (
+              <NextSuggestions pathId={pathId} />
             )}
           </main>
         </div>

@@ -32,6 +32,10 @@ function stubServer(paths: unknown[]) {
     if (url.endsWith("/chats/")) return json({ chats: [] })
     if (url.endsWith("/documents/")) return json([])
     if (url.endsWith("/learning/paths")) return json({ paths })
+    if (url.endsWith("/learning/me/study-time?tz=" + encodeURIComponent(Intl.DateTimeFormat().resolvedOptions().timeZone)))
+      return json({ today_minutes: 12, daily_goal_minutes: 30, session_minutes: 20, goal_met_today: false, streak_days: 2, last_7_days: [] })
+    if (url.endsWith("/learning/paths/p2/next"))
+      return json({ suggestions: [{ topic: "porcentajes", label: "Porcentajes", kind: "advance", reason: "Se construye sobre fracciones", needs_placement: false }] })
     throw new Error(`Petición inesperada: ${url}`)
   })
 }
@@ -72,6 +76,11 @@ describe("Mis clases", () => {
     expect(within(completed).getByRole("link", { name: "Abrir" }).getAttribute("href")).toBe("/clase/p2")
 
     expect(screen.queryByText("Plan propio")).toBeNull()
+
+    // El objetivo de hoy y cómo seguir tras la última ruta completada (Fracciones)
+    expect(await screen.findByLabelText("12 de 30 min hoy")).toBeTruthy()
+    const next = await screen.findByRole("region", { name: "Después de Fracciones" })
+    expect(within(next).getByText("Porcentajes")).toBeTruthy()
   })
 
   it("sin clases invita a nivelarse en un tema", async () => {
