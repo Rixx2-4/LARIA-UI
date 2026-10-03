@@ -635,6 +635,20 @@ describe("ChatScreen", () => {
       expect(screen.getByRole("button", { name: "Dictar" })).toBeTruthy()
     })
 
+    it("en un navegador sin servicio de dictado (Brave, Chromium) explica qué hacer y quita el micrófono", async () => {
+      ;(window as { SpeechRecognition?: unknown }).SpeechRecognition = FakeSpeechRecognition
+      serverWithEmptyChat()
+      const toastError = vi.spyOn(toast, "error")
+      renderAt()
+
+      fireEvent.click(await screen.findByRole("button", { name: "Dictar" }))
+      act(() => FakeSpeechRecognition.instances[0].fail("network"))
+
+      expect(toastError).toHaveBeenCalledWith("Este navegador no tiene servicio de dictado. Prueba en Chrome, Edge o Safari, o escribe tu mensaje.")
+      expect(screen.queryByRole("button", { name: "Dictar" })).toBeNull()
+      toastError.mockRestore()
+    })
+
     it("el texto va apareciendo mientras se dicta y se fija al terminar la frase", async () => {
       ;(window as { SpeechRecognition?: unknown }).SpeechRecognition = FakeSpeechRecognition
       serverWithEmptyChat()

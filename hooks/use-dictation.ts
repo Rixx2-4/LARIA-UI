@@ -22,6 +22,32 @@ function getRecognitionCtor(): SpeechRecognitionCtor | null {
   return w.SpeechRecognition ?? w.webkitSpeechRecognition ?? null
 }
 
+// Qué decirle al usuario según el error del reconocimiento de voz. El navegador
+// transcribe en sus servidores (Google en Chrome, Microsoft en Edge, Apple en
+// Safari): Brave, Chromium, Opera o Vivaldi traen la función pero no ese servicio, y
+// fallan con "network" en cuanto se pulsa el micrófono
+export function dictationErrorMessage(error: string): string | null {
+  switch (error) {
+    case "aborted":
+    case "no-speech":
+      return null
+    case "not-allowed":
+      return "Permite el acceso al micrófono para dictar (en el candado de la barra de direcciones)."
+    case "audio-capture":
+      return "No se encontró ningún micrófono."
+    case "network":
+      return "Este navegador no tiene servicio de dictado. Prueba en Chrome, Edge o Safari, o escribe tu mensaje."
+    case "service-not-allowed":
+      return "El dictado está desactivado en este navegador o en el sistema. Prueba en Chrome, Edge o Safari."
+    case "language-not-supported":
+      return "Este navegador no dicta en español. Prueba en Chrome, Edge o Safari."
+    default:
+      return "No se pudo usar el dictado. Prueba de nuevo o escribe tu mensaje."
+  }
+}
+
+const UNAVAILABLE = new Set(["network", "service-not-allowed", "language-not-supported"])
+
 interface DictationCallbacks {
   // Una frase ya reconocida y definitiva
   onFinal: (text: string) => void
@@ -32,7 +58,7 @@ interface DictationCallbacks {
 
 // Dictado con el reconocimiento de voz del navegador (Chrome, Edge, Safari; no Firefox)
 export function useDictation(callbacks: DictationCallbacks) {
-  const [isSupported] = useState(() => getRecognitionCtor() !== null)
+  const [isSupported, setIsSupported] = useState(() => getRecognitionCtor() !== null)
   const [isListening, setIsListening] = useState(false)
   const recognitionRef = useRef<SpeechRecognitionLike | null>(null)
   const callbacksRef = useRef(callbacks)
@@ -75,13 +101,10 @@ export function useDictation(callbacks: DictationCallbacks) {
       callbacksRef.current.onInterim?.(interim.trim())
     }
     recognition.onerror = (event) => {
-      if (event.error === "not-allowed" || event.error === "service-not-allowed") {
-        callbacksRef.current.onError?.("Permite el acceso al micrófono para dictar")
-      } else if (event.error === "audio-capture") {
-        callbacksRef.current.onError?.("No se encontró ningún micrófono")
-      } else if (event.error !== "aborted" && event.error !== "no-speech") {
-        callbacksRef.current.onError?.("No se pudo usar el dictado")
-      }
+      const message = dictationErrorMessage(event.error)
+      if (message) callbacksRef.current.onError?.(message)
+      // Sin servicio de dictado no se arreglará reintentando: fuera el micrófono
+      if (UNAVAILABLE.has(event.error)) setIsSupported(false)
     }
     recognition.onend = () => {
       recognitionRef.current = null
@@ -92,7 +115,7 @@ export function useDictation(callbacks: DictationCallbacks) {
     try {
       recognition.start()
     } catch {
-      callbacksRef.current.onError?.("No se pudo usar el dictado")
+      callbacksRef.current.onError?.(dictationErrorMessage("start-failed")!)
       return
     }
     recognitionRef.current = recognition
