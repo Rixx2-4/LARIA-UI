@@ -214,6 +214,8 @@ interface PathModule {
   status: PathModuleStatus
   mastery: number
   position: number
+  // Tramo al que pertenece (las rutas crecen por tramos); null en rutas creadas a mano
+  tier?: PlacementLevel | null
 }
 
 interface TeachingState {
@@ -236,8 +238,12 @@ interface LearningPath {
   topic?: string | null
   title?: string | null
   modules: PathModule[]
-  // De 0 a 1: módulos completados sobre el total
+  // De 0 a 1: módulos completados sobre el total (baja al abrir un tramo nuevo)
   progress?: number
+  // Tramos abiertos, en orden (["basico", "intermedio"]) y el que abre la próxima
+  // prueba de paso; sin next_tier y completada, la ruta terminó de verdad
+  tiers?: PlacementLevel[]
+  next_tier?: PlacementLevel | null
   updated_at?: string
   teaching: TeachingState | null
 }
