@@ -7,7 +7,7 @@ import { Check, Circle, CircleDot, Lock, Loader2, RefreshCw } from "lucide-react
 import { Button } from "@/components/ui/button"
 import { AppShell } from "@/app/components/app-shell"
 import { RequireAuth } from "@/app/components/require-auth"
-import { LariaMascot } from "@/app/components/laria-mascot"
+import { LariaMascot, type MascotEmotion } from "@/app/components/laria-mascot"
 import { ClassBoard } from "../class-board"
 import { QuestionStep, ResultsList, toResults } from "@/app/quiz/quiz-parts"
 import { useSpeech } from "@/hooks/use-speech"
@@ -34,6 +34,20 @@ export default function ClasePage() {
       <Clase />
     </RequireAuth>
   )
+}
+
+// Cómo reacciona LARIA al resultado: lo celebra, anima o tiene paciencia
+const OUTCOME_EMOTION: Record<CheckResponse["outcome"], MascotEmotion> = {
+  understood: "celebratory",
+  partial: "encouraging",
+  not_understood: "patient",
+}
+
+// Al explicar: paciente si vuelve a explicarlo o repasa algo previo, animada en un repaso
+function lessonEmotion(teaching: LearningPath["teaching"] | undefined): MascotEmotion {
+  if (teaching?.phase === "remediation" || teaching?.last_outcome === "not_understood") return "patient"
+  if (teaching?.variant === "review") return "encouraging"
+  return "calm"
 }
 
 const OUTCOME: Record<CheckResponse["outcome"], string> = {
@@ -152,7 +166,13 @@ function Clase() {
                 {/* Por qué toca esto ahora: otra explicación, un repaso previo… */}
                 {teaching?.reason && <p className="rounded-lg bg-muted px-4 py-3 text-sm">{teaching.reason}</p>}
                 {/* La explicación en la pizarra; la comprobación aparece cuando está entera */}
-                <ClassBoard key={view.check.id} lessonKey={`clase:${pathId}:${view.check.id}`} markdown={view.markdown} speech={speech}>
+                <ClassBoard
+                  key={view.check.id}
+                  lessonKey={`clase:${pathId}:${view.check.id}`}
+                  markdown={view.markdown}
+                  speech={speech}
+                  emotion={lessonEmotion(teaching)}
+                >
                   <section aria-labelledby="comprobacion" className="space-y-4 border-t border-border pt-6">
                     <h2 id="comprobacion" className="text-lg font-medium">
                       Comprueba lo que has aprendido
@@ -176,11 +196,14 @@ function Clase() {
 
             {view.kind === "result" && (
               <section aria-live="polite" className="space-y-5">
-                <div className="space-y-1">
-                  <h2 className="text-xl font-semibold">{OUTCOME[view.result.outcome]}</h2>
-                  <p className="text-sm text-muted-foreground">
-                    Acertaste {view.result.questions.filter((q) => q.is_correct).length} de {view.result.questions.length}.
-                  </p>
+                <div className="flex items-center gap-4">
+                  <LariaMascot emotion={OUTCOME_EMOTION[view.result.outcome]} className="w-20 shrink-0" />
+                  <div className="space-y-1">
+                    <h2 className="text-xl font-semibold">{OUTCOME[view.result.outcome]}</h2>
+                    <p className="text-sm text-muted-foreground">
+                      Acertaste {view.result.questions.filter((q) => q.is_correct).length} de {view.result.questions.length}.
+                    </p>
+                  </div>
                 </div>
                 <ResultsList results={toResults(view.check.questions, view.result.questions)} />
                 {view.result.next.reason && <p className="rounded-lg bg-muted px-4 py-3 text-sm">{view.result.next.reason}</p>}
@@ -190,7 +213,10 @@ function Clase() {
 
             {view.kind === "completed" && (
               <section className="space-y-4 rounded-xl border border-border bg-card p-6">
-                <h1 className="text-2xl font-semibold">¡Ruta completada!</h1>
+                <div className="flex items-center gap-4">
+                  <LariaMascot emotion="celebratory" className="w-24 shrink-0" />
+                  <h1 className="text-2xl font-semibold">¡Ruta completada!</h1>
+                </div>
                 <p className="text-muted-foreground">
                   Has terminado la ruta de {title}. Puedes seguir preguntando a LARIA en el chat o ver tu progreso en el perfil.
                 </p>
