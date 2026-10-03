@@ -65,6 +65,8 @@ function Placement({ initialTopic, chatId }: { initialTopic: string; chatId: str
   const [results, setResults] = useState<QuizResult[]>([])
   const [placement, setPlacement] = useState<PlacementResult | null>(null)
   const [error, setError] = useState<string | null>(null)
+  // El backend no trabaja este tema (422, filtro de seguridad): reintentar no sirve
+  const [refused, setRefused] = useState(false)
   const [prep, setPrep] = useState<Preparation>({ review: "pending", offerNext: false, askStyle: false, level: "pending", lesson: "pending" })
   const router = useRouter()
   const { createChat, queueFirstMessage } = useChat()
@@ -159,6 +161,7 @@ function Placement({ initialTopic, chatId }: { initialTopic: string; chatId: str
     } catch (err) {
       if (err instanceof ApiError && (err.status === 404 || err.status === 405)) return lessonInChat(verdict, lessonTopic)
       setError(err instanceof Error ? err.message : "No se pudo preparar la clase. Prueba de nuevo.")
+      setRefused(err instanceof ApiError && err.status === 422)
       setPrep((p) => ({ ...p, lesson: "pending" }))
     }
   }
@@ -234,6 +237,15 @@ function Placement({ initialTopic, chatId }: { initialTopic: string; chatId: str
               savingStyle={savingStyle}
               onChooseStyle={chooseStyle}
               onRetry={() => prepareLesson(placement, topic)}
+              refused={refused}
+              onChooseAnother={() => {
+                // De vuelta al principio, con el campo del tema vacío
+                setError(null)
+                setRefused(false)
+                setTopic("")
+                setPhase("intro")
+                router.replace("/nivelacion")
+              }}
               backHref={backHref}
             />
           )}
@@ -315,6 +327,8 @@ function PreparingLesson({
   onContinue,
   onStop,
   onRetry,
+  refused,
+  onChooseAnother,
   backHref,
   styleValue,
   savingStyle,
@@ -330,6 +344,8 @@ function PreparingLesson({
   onContinue: () => void
   onStop: () => void
   onRetry: () => void
+  refused: boolean
+  onChooseAnother: () => void
   backHref: string
   styleValue: ExplanationStyle | null | undefined
   savingStyle: boolean
@@ -400,7 +416,7 @@ function PreparingLesson({
         <StepRow
           status={prep.lesson}
           label="Preparando tu ruta y tu primera clase"
-          detail={prep.lesson === "done" ? "Abriendo el chat…" : null}
+          detail={prep.lesson === "done" ? "Abriendo tu clase…" : null}
         />
       </ol>
 
@@ -410,7 +426,11 @@ function PreparingLesson({
         <div className="space-y-3">
           <ErrorBox message={error} />
           <div className="flex flex-wrap gap-3">
-            <Button onClick={onRetry}>Reintentar</Button>
+            {refused ? (
+              <Button onClick={onChooseAnother}>Elegir otro tema</Button>
+            ) : (
+              <Button onClick={onRetry}>Reintentar</Button>
+            )}
             <Button asChild variant="outline">
               <Link href={backHref}>Volver al chat</Link>
             </Button>

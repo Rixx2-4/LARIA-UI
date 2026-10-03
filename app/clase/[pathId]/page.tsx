@@ -23,7 +23,8 @@ import { NEW_CHAT_HREF, placementHref } from "@/lib/routes"
 
 type View =
   | { kind: "loading" }
-  | { kind: "error"; message: string; needsPlacement: boolean }
+  // refused: el backend no trabaja este tema (422, filtro de seguridad): reintentar no sirve
+  | { kind: "error"; message: string; needsPlacement: boolean; refused?: boolean }
   | { kind: "lesson"; markdown: string; check: QuizResponse }
   | { kind: "result"; result: CheckResponse; check: QuizResponse }
   | { kind: "completed" }
@@ -69,7 +70,8 @@ function Clase() {
       // 409: el tema aún no tiene nivelación. La ruta se pide aparte para saber qué tema es
       const needsPlacement = error instanceof ApiError && error.status === 409
       if (needsPlacement) lariaAPI.paths.get(pathId).then(setPath).catch(() => {})
-      setView({ kind: "error", message: error instanceof Error ? error.message : "No se pudo preparar la lección", needsPlacement })
+      const refused = error instanceof ApiError && error.status === 422
+      setView({ kind: "error", message: error instanceof Error ? error.message : "No se pudo preparar la lección", needsPlacement, refused })
     }
   }, [pathId])
 
@@ -134,7 +136,16 @@ function Clase() {
             {view.kind === "error" && (
               <div role="alert" className="space-y-4 rounded-xl border border-border bg-card p-5">
                 <p>{view.message}</p>
-                {view.needsPlacement ? (
+                {view.refused ? (
+                  <div className="flex flex-wrap gap-2">
+                    <Button asChild>
+                      <Link href={placementHref()}>Elegir otro tema</Link>
+                    </Button>
+                    <Button asChild variant="outline">
+                      <Link href="/clases">Mis clases</Link>
+                    </Button>
+                  </div>
+                ) : view.needsPlacement ? (
                   <Button asChild>
                     <Link href={placementHref(path?.topic ?? path?.title ?? undefined)}>Hacer la nivelación</Link>
                   </Button>

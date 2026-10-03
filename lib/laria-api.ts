@@ -22,6 +22,9 @@ interface TutorEnvelope {
     ask_learning_style?: boolean
     // Contestó en el chat ("la 4", "paso a paso") y el backend ya lo guardó; null = que decida LARIA
     explanation_style_chosen?: ExplanationStyle | null
+    // Filtro de seguridad del backend: "refuse" (tema que no trabaja) o "support"
+    // (señal de autolesión: un mensaje de apoyo fijo)
+    safety?: "refuse" | "support"
     [key: string]: unknown
   }
   [key: string]: unknown

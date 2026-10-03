@@ -357,7 +357,8 @@ export function SearchBar({ isOpeningChat = false }: { isOpeningChat?: boolean }
   const lastIndex = messages.length - 1
   const lastEnvelope = lastIndex >= 0 && messages[lastIndex].role === "assistant" ? tutorEnvelope(messages[lastIndex]) : null
   const offerFor = (payload: NonNullable<typeof lastEnvelope>["payload"]): ChatQuizRequest | null => {
-    if (!payload || !chatId) return null
+    // Tras un mensaje del filtro de seguridad no se propone nada
+    if (!payload || !chatId || payload.safety) return null
     if (payload.ask_learning_style) return { kind: "style" }
     if (payload.suggest_placement && !wasPlacementOffered(chatId)) return { kind: "placement", topic: payload.topic_hint ?? "" }
     if (payload.offer_quiz && activeDocumentId) return { kind: "practice" }
@@ -431,8 +432,11 @@ export function SearchBar({ isOpeningChat = false }: { isOpeningChat?: boolean }
               // La respuesta que se está escribiendo ahora mismo
               const isLive = isStreaming && index === messages.length - 1 && msg.role === "assistant"
               const envelope = tutorEnvelope(msg)
-              const label = envelopeLabel(envelope)
-              const grounded = envelopeGrounded(envelope)
+              // Las respuestas del filtro de seguridad van sin etiquetas de tutoría; la de
+              // apoyo, además, con un estilo sobrio
+              const safety = envelope?.payload?.safety
+              const label = safety ? null : envelopeLabel(envelope)
+              const grounded = safety ? null : envelopeGrounded(envelope)
               // Notas del sistema (archivo subido, avisos): una línea centrada, no una burbuja
               if (msg.role === "system") {
                 return (
@@ -460,7 +464,9 @@ export function SearchBar({ isOpeningChat = false }: { isOpeningChat?: boolean }
                     className={`min-w-0 max-w-[80%] rounded-2xl px-4 py-3 ${
                       msg.role === "user"
                         ? "bg-primary text-primary-foreground"
-                        : "bg-muted text-foreground"
+                        : safety === "support"
+                          ? "border border-border bg-background text-foreground"
+                          : "bg-muted text-foreground"
                     }`}
                   >
                     {renderMessageContent(msg, isLive)}

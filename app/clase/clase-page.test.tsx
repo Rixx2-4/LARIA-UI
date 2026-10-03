@@ -165,6 +165,15 @@ describe("Clase guiada", () => {
     await waitFor(() => expect(link.getAttribute("href")).toBe("/nivelacion?tema=ecuaciones+lineales"))
   })
 
+  it("un tema que el backend no trabaja (422) se explica sin «Reintentar» y deja elegir otro", async () => {
+    stubServer({ lessonError: json({ detail: "Ese tema no lo puedo trabajar contigo." }, 422) })
+    renderPage()
+
+    expect(await screen.findByText("Ese tema no lo puedo trabajar contigo.")).toBeTruthy()
+    expect(screen.queryByRole("button", { name: "Reintentar" })).toBeNull()
+    expect(screen.getByRole("link", { name: "Elegir otro tema" }).getAttribute("href")).toBe("/nivelacion")
+  })
+
   it("si la lección no se pudo generar (502), deja reintentar", async () => {
     const server = stubServer({ lessonError: json({ detail: "El servicio de IA no respondió." }, 502) })
     renderPage()
