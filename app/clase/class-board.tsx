@@ -4,7 +4,7 @@ import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } fro
 import { ChevronsDown, Square, Volume2, VolumeX } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { MessageContent } from "@/app/components/message-content"
-import { LariaMascot, type MascotState } from "@/app/components/laria-mascot"
+import { LariaMascot, type MascotEmotion, type MascotState } from "@/app/components/laria-mascot"
 import { takeSpeakable } from "@/lib/speech-chunks"
 import type { useSpeech } from "@/hooks/use-speech"
 
@@ -23,15 +23,26 @@ function canAutoplay(): boolean {
   return activation ? activation.hasBeenActive : true
 }
 
+// Un dato importante: algo en negrita, una fórmula aparte, una cita o una frase que
+// lo anuncia («recuerda», «clave», «fíjate»…). Mientras LARIA lo dice, señala la pizarra
+const IMPORTANT = /\*\*[^*\n]+\*\*|\$\$|\\\[|^\s*>|\b(importante|recuerda|clave|fíjate|ojo|regla|fórmula|definición)\b/im
+
+export function isImportant(chunk: string): boolean {
+  return IMPORTANT.test(chunk)
+}
+
 export function ClassBoard({
   lessonKey,
   markdown,
   speech,
+  emotion = "calm",
   children,
 }: {
   lessonKey: string
   markdown: string
   speech: Speech
+  // Cómo se siente LARIA al explicar esta lección (p. ej. paciente al repetirla)
+  emotion?: MascotEmotion
   children: ReactNode
 }) {
   const chunks = useMemo(() => takeSpeakable(markdown, true, speech.maxChars).chunks, [markdown, speech.maxChars])
@@ -77,6 +88,7 @@ export function ClassBoard({
   // La comprobación, cuando LARIA termina de explicar (o al pedir verlo todo)
   const complete = revealed >= chunks.length && (!reading || skipped)
   const mascot: MascotState = speakingIndex !== null ? "speaking" : reading ? "thinking" : "idle"
+  const pointing = speakingIndex !== null && isImportant(chunks[speakingIndex] ?? "")
 
   // Mientras habla, la boca sigue el volumen real del audio (un fotograma cada vez,
   // tocando solo una variable CSS). Sin medición, o con «reducir movimiento», nada
@@ -117,6 +129,8 @@ export function ClassBoard({
         <LariaMascot
           ref={mascotRef}
           state={mascot}
+          emotion={pointing ? "surprised" : emotion}
+          pointing={pointing}
           className="pointer-events-none absolute -bottom-3 right-2 w-16 sm:w-20 lg:static lg:w-36 lg:shrink-0"
         />
       </div>
