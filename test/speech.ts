@@ -32,6 +32,12 @@ export class FakeSpeechRecognition {
   say(transcript: string) {
     this.onresult?.({ resultIndex: 0, results: [{ 0: { transcript }, isFinal: true }] })
   }
+  // El navegador falla (p. ej. "network" en Brave o Chromium, sin servicio de dictado)
+  fail(error: string) {
+    this.onerror?.({ error })
+    this.listening = false
+    this.onend?.()
+  }
   // Lo que el navegador va entendiendo mientras la frase no ha terminado
   sayInterim(transcript: string) {
     this.onresult?.({ resultIndex: 0, results: [{ 0: { transcript }, isFinal: false }] })
