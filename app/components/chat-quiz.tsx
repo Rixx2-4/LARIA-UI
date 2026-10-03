@@ -8,6 +8,7 @@ import { ApiError, lariaAPI, type ExplanationStyle, type PlacementResult, type Q
 import { STYLE_OPTIONS, StylePicker } from "./style-picker"
 import { classHref } from "@/lib/routes"
 import { MathText } from "./message-content"
+import { StudyGoalsPicker } from "./study-goals-picker"
 import {
   LEVEL_COPY,
   LEVEL_NAME,
@@ -269,6 +270,8 @@ export function ChatQuiz({ chatId, request, onDismiss, onStartLesson }: ChatQuiz
                 Tu punto de partida en {topic}: <span className="font-medium text-foreground">{LEVEL_NAME[placement.level]}</span>.
               </p>
             )}
+            {/* Tras la nivelación, antes de empezar la clase: cuánto estudiar */}
+            {isPlacement && <StudyGoalsPicker />}
             <p className="font-medium">¿Cómo prefieres que te explique?</p>
             <StylePicker value={style} onChoose={chooseStyle} disabled={savingStyle} compact />
             <p className="text-xs text-muted-foreground">Vale para todos los temas. Puedes cambiarlo en tu perfil.</p>

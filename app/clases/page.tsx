@@ -9,6 +9,10 @@ import { RequireAuth } from "../components/require-auth"
 import { lariaAPI, type LearningPath } from "@/lib/laria-api"
 import { classHref, placementHref } from "@/lib/routes"
 import { classGroups } from "@/lib/classes"
+import { DailyProgress } from "../components/study-progress"
+import { NextSuggestions } from "../components/next-suggestions"
+import { timezone } from "@/hooks/use-study-time"
+import type { StudyTimeSummary } from "@/lib/laria-api"
 
 // Las clases guiadas del estudiante (una por tema), agrupadas por cómo van:
 // en curso, a falta de la nivelación y completadas
@@ -23,6 +27,18 @@ export default function ClasesPage() {
 function Clases() {
   const [paths, setPaths] = useState<LearningPath[] | null>(null)
   const [error, setError] = useState<string | null>(null)
+  // El objetivo de hoy y la racha; sin el endpoint (backend anterior), no se muestra
+  const [study, setStudy] = useState<StudyTimeSummary | null>(null)
+  useEffect(() => {
+    let cancelled = false
+    lariaAPI.study
+      .summary(timezone())
+      .then((loaded) => !cancelled && setStudy(loaded))
+      .catch(() => {})
+    return () => {
+      cancelled = true
+    }
+  }, [])
 
   const load = useCallback(async () => {
     setError(null)
@@ -47,7 +63,10 @@ function Clases() {
     <AppShell>
       <div className="h-full overflow-auto">
         <div className="mx-auto max-w-3xl space-y-8 px-4 py-6 sm:px-6">
-          <h1 className="text-2xl font-semibold tracking-tight">Mis clases</h1>
+          <div className="flex flex-wrap items-center justify-between gap-3">
+            <h1 className="text-2xl font-semibold tracking-tight">Mis clases</h1>
+            {study && <DailyProgress summary={study} />}
+          </div>
 
           {!paths && !error && (
             <p role="status" className="flex items-center gap-2 text-muted-foreground">
@@ -102,6 +121,11 @@ function Clases() {
                 />
               ))}
             </ClassSection>
+          )}
+
+          {/* Tras terminar una ruta, cómo seguir (desde la última completada) */}
+          {groups && groups.completed.length > 0 && (
+            <NextSuggestions pathId={groups.completed[0].id} title={`Después de ${groups.completed[0].title || groups.completed[0].topic}`} />
           )}
 
           {groups && groups.completed.length > 0 && (

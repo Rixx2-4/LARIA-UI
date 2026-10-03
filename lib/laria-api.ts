@@ -239,6 +239,35 @@ interface LearningPath {
   teaching: TeachingState | null
 }
 
+// Cómo seguir tras completar una ruta: el mismo tema a otro nivel o temas nuevos
+interface NextSuggestion {
+  topic: string
+  label: string
+  // level_up: el mismo tema, un nivel más (siempre con nivelación)
+  kind: "advance" | "level_up" | "related"
+  reason: string
+  needs_placement: boolean
+}
+
+// Cuánto estudiar: duración de cada sesión de clase y objetivo diario (null = sin límite)
+type SessionMinutes = 10 | 20 | 30 | 45
+type DailyGoalMinutes = 10 | 15 | 30 | 45 | 60
+
+interface StudyGoals {
+  session_minutes: SessionMinutes | null
+  daily_goal_minutes: DailyGoalMinutes | null
+}
+
+interface StudyTimeSummary {
+  today_minutes: number
+  daily_goal_minutes: number | null
+  session_minutes: number | null
+  goal_met_today: boolean
+  // Días seguidos cumpliendo el objetivo (o estudiando algo, sin objetivo)
+  streak_days: number
+  last_7_days: { date: string; minutes: number }[]
+}
+
 // Voces del tutor (ADR-030): 3 masculinas y 3 femeninas; la elegida se guarda en el perfil
 interface TutorVoice {
   id: string
@@ -674,6 +703,10 @@ export const lariaAPI = {
     fromTopic: (topic: string) =>
       fetchAPI<LearningPath>("/learning/paths/from-topic", { method: "POST", body: JSON.stringify({ topic }) }),
 
+    // Hasta 3 formas de seguir tras completarla (la primera vez tarda ~2 s)
+    next: async (pathId: string): Promise<NextSuggestion[]> =>
+      (await fetchAPI<{ suggestions: NextSuggestion[] }>(`/learning/paths/${segment(pathId)}/next`)).suggestions ?? [],
+
     list: async (): Promise<LearningPath[]> => (await fetchAPI<{ paths: LearningPath[] }>("/learning/paths")).paths ?? [],
 
     get: (pathId: string) => fetchAPI<LearningPath>(`/learning/paths/${segment(pathId)}`),
@@ -689,6 +722,21 @@ export const lariaAPI = {
           answers: Object.fromEntries(Object.entries(answers).map(([index, letter]) => [String(index), letter])),
         }),
       }),
+  },
+
+  study: {
+    goals: () => fetchAPI<StudyGoals>("/learning/me/study-goals"),
+
+    setGoals: (goals: StudyGoals) =>
+      fetchAPI<StudyGoals>("/learning/me/study-goals", { method: "PUT", body: JSON.stringify(goals) }),
+
+    // Un aviso por minuto estudiado; el servidor acota lo que cuenta (varias
+    // pestañas no suman doble) y devuelve el resumen del día
+    ping: (seconds: number, timezone: string) =>
+      fetchAPI<StudyTimeSummary>("/learning/me/study-time", { method: "POST", body: JSON.stringify({ seconds, timezone }) }),
+
+    summary: (timezone: string) =>
+      fetchAPI<StudyTimeSummary>(`/learning/me/study-time?tz=${encodeURIComponent(timezone)}`),
   },
 
   learning: {
@@ -748,6 +796,6 @@ export type {
   PedagogicalMemory, DocumentMastery, ConceptMastery,
   QuizResponse, QuizQuestion, QuizAttemptResponse, QuizAttemptQuestion,
   StreamCallbacks, TutorEnvelope, PlacementResult, PlacementLevel, ExplanationStyle,
-  TutorVoice, VoicesResponse,
+  TutorVoice, VoicesResponse, NextSuggestion, StudyGoals, StudyTimeSummary, SessionMinutes, DailyGoalMinutes,
   LearningPath, PathModule, PathModuleStatus, TeachingState, TeachingPhase, LessonResponse, CheckResponse, CheckOutcome,
 }

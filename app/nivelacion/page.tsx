@@ -10,6 +10,7 @@ import { RequireAuth } from "../components/require-auth"
 import { LEVEL_COPY, LEVEL_NAME, QuestionStep, ResultsList, StepRow, toResults, type QuizResult, type StepStatus } from "../quiz/quiz-parts"
 import { ApiError, lariaAPI, type ExplanationStyle, type PlacementResult, type QuizQuestion } from "@/lib/laria-api"
 import { StylePicker } from "../components/style-picker"
+import { StudyGoalsPicker } from "../components/study-goals-picker"
 import { NEW_CHAT_HREF, chatHref, classHref } from "@/lib/routes"
 import { markPlacementOffered } from "@/lib/placement"
 import { useChat } from "../contexts/chat-context"
@@ -383,6 +384,8 @@ function PreparingLesson({
                 Tu punto de partida: <span className="font-medium text-foreground">{LEVEL_NAME[placement.level]}</span>.
               </p>
             )}
+            {/* Antes de empezar la clase: cuánto estudiar */}
+            <StudyGoalsPicker />
             <p className="font-medium">¿Cómo prefieres que te explique?</p>
             <StylePicker value={styleValue} onChoose={onChooseStyle} disabled={savingStyle} />
             <p className="text-xs text-muted-foreground">Vale para todos los temas. Puedes cambiarlo en tu perfil.</p>
