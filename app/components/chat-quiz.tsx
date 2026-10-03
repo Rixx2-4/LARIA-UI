@@ -4,7 +4,7 @@ import { useEffect, useRef, useState } from "react"
 import { useRouter } from "next/navigation"
 import { ArrowRight, Loader2 } from "lucide-react"
 import { Button } from "@/components/ui/button"
-import { ApiError, lariaAPI, type ExplanationStyle, type PlacementResult, type QuizQuestion, type QuizResponse } from "@/lib/laria-api"
+import { ApiError, isUnsafeTopic, lariaAPI, type ExplanationStyle, type PlacementResult, type QuizQuestion, type QuizResponse } from "@/lib/laria-api"
 import { STYLE_OPTIONS, StylePicker } from "./style-picker"
 import { classHref } from "@/lib/routes"
 import { MathText } from "./message-content"
@@ -62,6 +62,8 @@ export function ChatQuiz({ chatId, request, onDismiss, onStartLesson }: ChatQuiz
   const [placement, setPlacement] = useState<PlacementResult | null>(null)
   const [steps, setSteps] = useState<{ level: StepStatus; lesson: StepStatus }>({ level: "pending", lesson: "pending" })
   const [error, setError] = useState<string | null>(null)
+  // El backend no trabaja este tema (filtro de seguridad): reintentar no sirve
+  const [refused, setRefused] = useState(false)
   // La preferencia actual, para marcarla al preguntar (undefined mientras se carga)
   const [style, setStyle] = useState<ExplanationStyle | null | undefined>(undefined)
   const [savingStyle, setSavingStyle] = useState(false)
@@ -124,6 +126,7 @@ export function ChatQuiz({ chatId, request, onDismiss, onStartLesson }: ChatQuiz
       setPhase("question")
     } catch (err) {
       setError(err instanceof Error ? err.message : "No se pudieron preparar las preguntas")
+      setRefused(isUnsafeTopic(err))
       setPhase(placement ? "next-offer" : "offer")
     }
   }
@@ -172,6 +175,7 @@ export function ChatQuiz({ chatId, request, onDismiss, onStartLesson }: ChatQuiz
         return
       }
       setError(err instanceof Error ? err.message : "No se pudo preparar tu clase")
+      setRefused(isUnsafeTopic(err))
       setSteps({ level: "done", lesson: "pending" })
     }
   }
@@ -194,7 +198,10 @@ export function ChatQuiz({ chatId, request, onDismiss, onStartLesson }: ChatQuiz
                   <input
                     aria-label="Tema de la nivelación"
                     value={topic}
-                    onChange={(e) => setTopic(e.target.value)}
+                    onChange={(e) => {
+                      setTopic(e.target.value)
+                      setRefused(false)
+                    }}
                     placeholder="el tema"
                     maxLength={120}
                     size={Math.max(8, topic.length + 1)}
@@ -213,11 +220,14 @@ export function ChatQuiz({ chatId, request, onDismiss, onStartLesson }: ChatQuiz
                 <p className="text-xs text-muted-foreground">Cuenta para tu perfil de aprendizaje; no cambia tu nivel.</p>
               </>
             )}
-            {error && <ErrorLine message={error} />}
+            {error && <ErrorLine message={error} neutral={refused} />}
             <div className="flex gap-2">
-              <Button size="sm" onClick={load} disabled={isPlacement && topic.trim().length < 2}>
-                {error ? "Reintentar" : "Empezar"}
-              </Button>
+              {/* Un tema rechazado solo se puede cambiar (en la nivelación se escribe otro) */}
+              {(!refused || isPlacement) && (
+                <Button size="sm" onClick={load} disabled={isPlacement && topic.trim().length < 2}>
+                  {error && !refused ? "Reintentar" : "Empezar"}
+                </Button>
+              )}
               <Button size="sm" variant="ghost" onClick={onDismiss}>
                 Ahora no
               </Button>
@@ -250,7 +260,7 @@ export function ChatQuiz({ chatId, request, onDismiss, onStartLesson }: ChatQuiz
           <div className="space-y-3">
             <p className="font-medium">Base de {topic}, superada: acertaste {score} de {results.length}.</p>
             <p>¿Seguimos con 8 preguntas algo más difíciles para afinar tu nivel?</p>
-            {error && <ErrorLine message={error} />}
+            {error && <ErrorLine message={error} neutral={refused} />}
             <div className="flex flex-wrap gap-2">
               <Button size="sm" onClick={load}>
                 {error ? "Reintentar" : "Seguir"}
@@ -292,10 +302,12 @@ export function ChatQuiz({ chatId, request, onDismiss, onStartLesson }: ChatQuiz
             </ol>
             {error && (
               <>
-                <ErrorLine message={error} />
-                <Button size="sm" onClick={() => startLesson(placement, topic)}>
-                  Reintentar
-                </Button>
+                <ErrorLine message={error} neutral={refused} />
+                {!refused && (
+                  <Button size="sm" onClick={() => startLesson(placement, topic)}>
+                    Reintentar
+                  </Button>
+                )}
               </>
             )}
           </div>
@@ -339,9 +351,10 @@ export function ChatQuiz({ chatId, request, onDismiss, onStartLesson }: ChatQuiz
   )
 }
 
-function ErrorLine({ message }: { message: string }) {
+// neutral: no es un fallo (un tema que no se trabaja): se explica, sin rojo
+function ErrorLine({ message, neutral = false }: { message: string; neutral?: boolean }) {
   return (
-    <p role="alert" className="text-sm text-destructive">
+    <p role={neutral ? "status" : "alert"} className={`text-sm ${neutral ? "text-foreground" : "text-destructive"}`}>
       {message}
     </p>
   )

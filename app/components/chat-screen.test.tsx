@@ -382,6 +382,16 @@ describe("ChatScreen", () => {
       expect(calls.topicPractice).toEqual([{ topic: "fracciones", num_questions: 5 }])
     })
 
+    it("una respuesta del filtro de seguridad no lleva etiquetas ni propone nada; la de apoyo, con estilo sobrio", async () => {
+      quizServer({ payload: { intent: "learn", suggest_placement: true, topic_hint: "x", safety: "support" } })
+      renderAt("c1")
+
+      const text = await screen.findByText("La astronomía estudia los cuerpos celestes.")
+      expect(screen.queryByText("Chat libre")).toBeNull()
+      expect(screen.queryByText(/Nivelación|Cuestionario sobre/)).toBeNull()
+      expect(text.closest(".rounded-2xl")?.className).toContain("border")
+    })
+
     it("sin offer_quiz no se abre nada, aunque la intención sea quiz", async () => {
       quizServer({ payload: { intent: "quiz" }, documentId: "d1" })
       renderAt("c1")
