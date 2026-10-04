@@ -8,7 +8,8 @@ import { AppShell } from "../components/app-shell"
 import { RequireAuth } from "../components/require-auth"
 import { lariaAPI, type LearningPath } from "@/lib/laria-api"
 import { classHref, placementHref } from "@/lib/routes"
-import { classGroups } from "@/lib/classes"
+import { classGroups, currentTier, tierDone, tierProgress } from "@/lib/classes"
+import { LEVEL_NAME } from "../quiz/quiz-parts"
 import { DailyProgress } from "../components/study-progress"
 import { NextSuggestions } from "../components/next-suggestions"
 import { timezone } from "@/hooks/use-study-time"
@@ -116,8 +117,14 @@ function Clases() {
                 <ClassRow
                   key={path.id}
                   path={path}
-                  detail="Antes de empezar, unas preguntas para saber tu nivel"
-                  action={<Link href={placementHref(path.topic ?? undefined)}>Hacer la nivelación</Link>}
+                  detail={
+                    tierDone(path) && path.next_tier
+                      ? `Tramo terminado: haz la prueba de paso para abrir el ${LEVEL_NAME[path.next_tier]}, con clases nuevas`
+                      : "Antes de empezar, unas preguntas para saber tu nivel"
+                  }
+                  action={
+                    <Link href={placementHref(path.topic ?? undefined)}>{tierDone(path) ? "Hacer la prueba de paso" : "Hacer la nivelación"}</Link>
+                  }
                 />
               ))}
             </ClassSection>
@@ -167,7 +174,10 @@ function ClassRow({
   action: React.ReactNode
   secondary?: boolean
 }) {
-  const percent = Math.round(Math.min(1, Math.max(0, path.progress ?? 0)) * 100)
+  // Con tramos, el progreso es el del tramo en curso (el de la ruta baja al abrir uno)
+  const tier = currentTier(path)
+  const progress = tier ? tierProgress(path, tier) : (path.progress ?? 0)
+  const percent = Math.round(Math.min(1, Math.max(0, progress)) * 100)
   return (
     <li className="flex flex-col gap-3 rounded-xl border border-border bg-card p-4 sm:flex-row sm:items-center sm:justify-between">
       <div className="flex min-w-0 items-start gap-3">
@@ -179,7 +189,9 @@ function ClassRow({
             <div className="h-1.5 w-32 overflow-hidden rounded-full bg-muted">
               <div className="h-full rounded-full bg-primary" style={{ width: `${percent}%` }} />
             </div>
-            <span className="text-xs text-muted-foreground">{percent}%</span>
+            <span className="text-xs text-muted-foreground">
+              {percent}%{tier ? ` · tramo ${LEVEL_NAME[tier]}` : ""}
+            </span>
           </div>
         </div>
       </div>

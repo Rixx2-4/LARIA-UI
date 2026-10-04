@@ -196,6 +196,31 @@ describe("Clase guiada", () => {
   })
 })
 
+describe("Clase guiada: tramos", () => {
+  it("al terminar un tramo no dice «ruta completada»: ofrece la prueba de paso, y la ruta se ve por tramos", async () => {
+    const tramo = {
+      ...path("completed", null, { ecuacion: "completed", despejar: "completed" }, "Haz la prueba de paso de «ecuaciones» para abrir el tramo intermedio, con clases nuevas"),
+      tiers: ["basico"],
+      next_tier: "intermedio",
+      modules: modules({ ecuacion: "completed", despejar: "completed" }).map((m) => ({ ...m, tier: "basico" })),
+    }
+    vi.stubGlobal("fetch", async (url: string) => {
+      if (url.endsWith("/users/me")) return json({ id: "u1", username: "ana", email: "a@a.a" })
+      if (url.endsWith("/chats/")) return json({ chats: [] })
+      if (url.endsWith("/learning/paths/p1/lesson")) return json({ path: tramo, markdown: null, check: null })
+      return json({ detail: "Not Found" }, 404)
+    })
+    renderPage()
+
+    expect(await screen.findByRole("heading", { name: "¡Tramo básico terminado!" })).toBeTruthy()
+    expect(screen.queryByText("¡Ruta completada!")).toBeNull()
+    expect(screen.getByText(/Haz la prueba de paso de «ecuaciones»/)).toBeTruthy()
+    expect(screen.getByRole("link", { name: "Hacer la prueba de paso" }).getAttribute("href")).toBe("/nivelacion?tema=ecuaciones+lineales")
+    expect(screen.getByRole("region", { name: "Tramo básico" })).toBeTruthy()
+    expect(screen.getByText("Tramo intermedio: se abre con la prueba de paso")).toBeTruthy()
+  })
+})
+
 describe("Clase guiada: pizarra con la voz de LARIA", () => {
   const FIRST = "Una ecuación es una igualdad entre dos expresiones con una incógnita."
   const SECOND = "Resolverla es encontrar el valor de la x que hace cierta la igualdad."
