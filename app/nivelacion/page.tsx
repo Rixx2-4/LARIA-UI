@@ -11,6 +11,7 @@ import { LEVEL_COPY, LEVEL_NAME, QuestionStep, ResultsList, StepRow, toResults, 
 import { ApiError, isUnsafeTopic, lariaAPI, type ExplanationStyle, type PlacementResult, type QuizQuestion } from "@/lib/laria-api"
 import { StylePicker } from "../components/style-picker"
 import { StudyGoalsPicker } from "../components/study-goals-picker"
+import { useSlow } from "@/lib/use-slow"
 import { NEW_CHAT_HREF, chatHref, classHref } from "@/lib/routes"
 import { markPlacementOffered } from "@/lib/placement"
 import { useChat } from "../contexts/chat-context"
@@ -365,6 +366,8 @@ function PreparingLesson({
   savingStyle: boolean
   onChooseStyle: (style: ExplanationStyle | null) => void
 }) {
+  // Abrir un tramo nuevo investiga en internet: si tarda, se explica
+  const slowLesson = useSlow(prep.lesson === "active")
   const working = [prep.review, prep.level, prep.lesson].includes("active")
   const level = placement ? LEVEL_COPY[placement.level] : null
 
@@ -430,7 +433,7 @@ function PreparingLesson({
         <StepRow
           status={prep.lesson}
           label="Preparando tu ruta y tu primera clase"
-          detail={prep.lesson === "done" ? "Abriendo tu clase…" : null}
+          detail={prep.lesson === "done" ? "Abriendo tu clase…" : slowLesson ? "Buscando fuentes en internet para tus clases: la primera vez puede tardar hasta medio minuto." : null}
         />
       </ol>
 

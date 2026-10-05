@@ -9,6 +9,8 @@ import { AppShell } from "@/app/components/app-shell"
 import { RequireAuth } from "@/app/components/require-auth"
 import { LariaMascot, type MascotEmotion } from "@/app/components/laria-mascot"
 import { ClassBoard } from "../class-board"
+import { ModuleSources } from "../module-sources"
+import { useSlow } from "@/lib/use-slow"
 import { LEVEL_NAME, QuestionStep, ResultsList, toResults } from "@/app/quiz/quiz-parts"
 import { useSpeech } from "@/hooks/use-speech"
 import { useStudyTime } from "@/hooks/use-study-time"
@@ -118,6 +120,10 @@ function Clase() {
     }
   }
 
+  // Abrir un tramo nuevo investiga en internet y tarda: si la espera se alarga, se explica
+  const slowLoading = useSlow(view.kind === "loading")
+  const upcomingTier = path?.next_tier ?? null
+
   const title = path?.title || path?.topic || "Tu clase"
   const teaching = path?.teaching
 
@@ -143,7 +149,11 @@ function Clase() {
                   <Loader2 className="h-4 w-4 animate-spin motion-reduce:animate-none" aria-hidden />
                   Preparando tu lección…
                 </p>
-                <p className="text-sm">Suele tardar unos segundos.</p>
+                <p className="text-sm">
+                  {slowLoading
+                    ? `LARIA está preparando ${upcomingTier ? `el tramo ${LEVEL_NAME[upcomingTier]}` : "las clases"} con fuentes de internet. La primera vez puede tardar hasta medio minuto.`
+                    : "Suele tardar unos segundos."}
+                </p>
               </div>
             )}
 
@@ -202,6 +212,8 @@ function Clase() {
                     )}
                   </section>
                 </ClassBoard>
+                {/* En los tramos intermedio y avanzado, en qué se basa la explicación */}
+                <ModuleSources sources={path?.modules.find((m) => m.concept === teaching?.concept)?.sources} />
               </>
             )}
 
@@ -305,6 +317,17 @@ function ModuleItem({ module, current }: { module: PathModule; current: boolean 
           {MODULE_STATUS[module.status]}
           {module.kind === "prerequisite" && " · Repaso previo"}
         </span>
+        {/* Tramos intermedio y avanzado: las ideas clave del concepto, al desplegar */}
+        {!!module.key_points?.length && (
+          <details className="mt-1 text-xs">
+            <summary className="cursor-pointer text-muted-foreground hover:text-foreground">Lo que verás</summary>
+            <ul className="mt-1 list-disc space-y-0.5 pl-4 text-muted-foreground">
+              {module.key_points.map((point) => (
+                <li key={point}>{point}</li>
+              ))}
+            </ul>
+          </details>
+        )}
       </span>
     </li>
   )
