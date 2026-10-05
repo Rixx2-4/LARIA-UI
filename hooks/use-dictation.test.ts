@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest"
-import { dictationErrorMessage } from "./use-dictation"
+import { dictationErrorMessage, transcriptFrom } from "./use-dictation"
 
 describe("dictationErrorMessage", () => {
   it("cada error del navegador dice qué pasa y qué hacer", () => {
@@ -14,5 +14,29 @@ describe("dictationErrorMessage", () => {
   it("parar o no decir nada no es un error que haya que contar", () => {
     expect(dictationErrorMessage("aborted")).toBeNull()
     expect(dictationErrorMessage("no-speech")).toBeNull()
+  })
+})
+
+const results = (...items: [string, boolean][]) => items.map(([transcript, isFinal]) => ({ 0: { transcript }, isFinal }))
+
+describe("transcriptFrom (lo que entrega Chrome en Android)", () => {
+  it("la misma frase repetida 12 veces como definitiva cuenta una sola vez", () => {
+    const repeated = Array.from({ length: 12 }, () => ["hola qué tal", true] as [string, boolean])
+    expect(transcriptFrom(results(...repeated))).toEqual({ finalText: "hola qué tal", interim: "" })
+  })
+
+  it("las versiones acumuladas («hola», «hola qué», «hola qué tal») dan la última", () => {
+    expect(transcriptFrom(results(["hola", true], ["hola qué", true], ["hola qué tal", true])).finalText).toBe("hola qué tal")
+  })
+
+  it("frases distintas se juntan, y lo provisional va aparte", () => {
+    expect(transcriptFrom(results(["la fotosíntesis", true], ["ocurre en las hojas", true], ["de las", false]))).toEqual({
+      finalText: "la fotosíntesis ocurre en las hojas",
+      interim: "de las",
+    })
+  })
+
+  it("lo provisional que repite lo ya definitivo no se muestra dos veces", () => {
+    expect(transcriptFrom(results(["hola", true], ["hola", false]))).toEqual({ finalText: "hola", interim: "" })
   })
 })
