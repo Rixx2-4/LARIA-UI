@@ -68,6 +68,8 @@ interface User {
   is_active: boolean
   created_at: string
   auth_provider?: string
+  // Ya vio el tutorial de bienvenida (sin el campo, backend anterior: se da por visto)
+  onboarding_completed?: boolean
 }
 
 interface QuizAttemptSummary {
@@ -531,6 +533,9 @@ export const lariaAPI = {
   auth: {
     // Entrar, registrarse y salir lo hace Clerk; el backend solo dice quién eres
     me: () => fetchAPI<User>("/users/me"),
+
+    // Marca el tutorial de bienvenida como visto (al terminarlo o al saltarlo)
+    completeOnboarding: () => fetchAPI<User>("/users/me/onboarding", { method: "POST" }),
   },
 
   chats: {

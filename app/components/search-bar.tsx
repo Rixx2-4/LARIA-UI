@@ -615,6 +615,7 @@ export function SearchBar({ isOpeningChat = false }: { isOpeningChat?: boolean }
                   handleSend()
                 }
               }}
+              data-tour="chat"
               placeholder={isStreaming ? "Generando respuesta…" : "Pregunta lo que quieras…"}
               aria-label="Mensaje"
               disabled={isStreaming}
@@ -635,6 +636,7 @@ export function SearchBar({ isOpeningChat = false }: { isOpeningChat?: boolean }
                 }}
               />
               <Button
+                data-tour="adjuntar"
                 aria-label="Adjuntar archivo"
                 variant="ghost"
                 size="icon"
@@ -673,6 +675,7 @@ export function SearchBar({ isOpeningChat = false }: { isOpeningChat?: boolean }
                   size="icon"
                   disabled={isStreaming}
                   onClick={dictation.isListening ? dictation.stop : startDictation}
+                  data-tour="dictar"
                   aria-label={dictation.isListening ? "Parar dictado" : "Dictar"}
                   aria-pressed={dictation.isListening}
                   className={`h-8 w-8 md:h-9 md:w-9 rounded-lg transition-all hover:bg-accent/60 ${

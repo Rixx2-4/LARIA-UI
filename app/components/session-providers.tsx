@@ -10,6 +10,7 @@ import { clerkLocalization } from "@/lib/clerk-localization"
 import { clerkConfigured, clerkPublishableKey } from "@/lib/clerk-config"
 import { NEW_CHAT_HREF, SIGN_IN_HREF, SIGN_UP_HREF } from "@/lib/routes"
 import { ClerkBridge, NoAuthBridge } from "./clerk-bridge"
+import { OnboardingTour } from "./onboarding-tour"
 
 // La sesión de la app: Clerk (entrar, registrarse, perfil; tras entrar, al chat),
 // quién eres en Plenum y tus chats. Se carga aparte (AppProviders) para que la
@@ -18,7 +19,11 @@ import { ClerkBridge, NoAuthBridge } from "./clerk-bridge"
 export default function SessionProviders({ children }: { children: ReactNode }) {
   const app = (
     <AuthProvider>
-      <ChatProvider>{children}</ChatProvider>
+      <ChatProvider>
+        {children}
+        {/* La primera vez que se entra: LARIA presenta la app */}
+        <OnboardingTour />
+      </ChatProvider>
     </AuthProvider>
   )
   if (!clerkConfigured) {

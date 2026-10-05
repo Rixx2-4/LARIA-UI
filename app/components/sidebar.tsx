@@ -119,7 +119,8 @@ export function Sidebar({ onNavigate }: { onNavigate?: () => void } = {}) {
           variant="ghost"
           className="mb-8 h-10 w-10 shrink-0 text-muted-foreground hover:text-foreground hover:bg-accent rounded-full bg-muted/50"
           onClick={handleNewChat}
-          aria-label="Nuevo chat"
+          data-tour="nuevo-chat"
+              aria-label="Nuevo chat"
         >
           <Plus className="h-5 w-5 shrink-0" />
         </Button>
@@ -159,6 +160,7 @@ export function Sidebar({ onNavigate }: { onNavigate?: () => void } = {}) {
             <Button
               variant="ghost"
               onClick={() => navigate("/clases")}
+              data-tour="clases"
               aria-label={classesInProgress ? `Mis clases (${classesInProgress} en curso)` : "Mis clases"}
               className="relative h-10 w-10 shrink-0 mx-auto text-muted-foreground hover:text-foreground hover:bg-accent"
             >
@@ -176,6 +178,7 @@ export function Sidebar({ onNavigate }: { onNavigate?: () => void } = {}) {
             <Button
               variant="ghost"
               onClick={() => navigate("/perfil")}
+              data-tour="perfil"
               aria-label="Perfil"
               className="h-10 w-10 shrink-0 mx-auto text-muted-foreground hover:text-foreground hover:bg-accent"
             >
@@ -189,6 +192,7 @@ export function Sidebar({ onNavigate }: { onNavigate?: () => void } = {}) {
               variant="ghost"
               onClick={() => handlePanelChange("documents")}
               aria-expanded={openPanel === "documents"}
+              data-tour="documentos"
               aria-label="Documentos"
               className={`h-10 w-10 shrink-0 mx-auto transition-colors ${
                 openPanel === "documents"
