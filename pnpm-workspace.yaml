@@ -1,3 +1,5 @@
 allowBuilds:
+  # Su postinstall solo imprime un mensaje; sin decidirlo, pnpm 11 falla al instalar
+  core-js: false
   sharp: false
   unrs-resolver: false
