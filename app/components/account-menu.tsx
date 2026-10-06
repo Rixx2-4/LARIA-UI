@@ -3,8 +3,9 @@
 import { useEffect, useRef, useSyncExternalStore } from "react"
 import Link from "next/link"
 import { useTheme } from "next-themes"
-import { BrainCircuit, LogOut, Monitor, Moon, Sun, UserCog } from "lucide-react"
+import { BrainCircuit, CircleHelp, LogOut, Monitor, Moon, Sun, UserCog } from "lucide-react"
 import { useAuth } from "@/app/contexts/auth-context"
+import { replayOnboarding } from "@/lib/onboarding"
 
 const THEMES = [
   { value: "system", label: "Sistema", Icon: Monitor },
@@ -112,6 +113,18 @@ export function AccountMenu({ isOpen, onClose, onNavigate }: AccountMenuProps) {
             <UserCog className="h-4 w-4 shrink-0" />
             Gestionar cuenta
           </Link>
+          <button
+            type="button"
+            onClick={() => {
+              onClose()
+              onNavigate?.()
+              replayOnboarding()
+            }}
+            className="flex w-full items-center gap-3 rounded px-3 py-2.5 text-sm transition-colors hover:bg-accent"
+          >
+            <CircleHelp className="h-4 w-4 shrink-0" />
+            Ver el tutorial de nuevo
+          </button>
           <button
             onClick={() => {
               onClose()
