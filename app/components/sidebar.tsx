@@ -1,6 +1,6 @@
 "use client"
 
-import { useRef, useState } from "react"
+import { useEffect, useRef, useState } from "react"
 import { useRouter } from "next/navigation"
 import { toast } from "sonner"
 import { Button } from "@/components/ui/button"
@@ -10,6 +10,7 @@ import {
   Pin,
   Brain,
   ClipboardList,
+  GraduationCap,
   Trash2,
   FileText,
   Pencil,
@@ -22,6 +23,8 @@ import { useChat } from "@/app/contexts/chat-context"
 import { useAuth } from "@/app/contexts/auth-context"
 import { NEW_CHAT_HREF, chatHref, quizHref } from "@/lib/routes"
 import { useDocuments, documentState, type DocumentState } from "@/hooks/use-documents"
+import { lariaAPI } from "@/lib/laria-api"
+import { inProgressCount } from "@/lib/classes"
 
 const DOCUMENT_STATE_LABEL: Record<DocumentState, string> = {
   ready: "Analizado",
@@ -34,6 +37,20 @@ export function Sidebar({ onNavigate }: { onNavigate?: () => void } = {}) {
   const router = useRouter()
   const { chats, chatsLoaded, activeChatId, deleteChat, renameChat } = useChat()
   const { isAuthenticated, user } = useAuth()
+  // Cuántas clases hay a medias, para el contador del botón Clases. Sin el endpoint
+  // (backend anterior) o sin conexión, simplemente no hay contador
+  const [classesInProgress, setClassesInProgress] = useState(0)
+  useEffect(() => {
+    if (!isAuthenticated) return
+    let cancelled = false
+    lariaAPI.paths
+      .list()
+      .then((paths) => !cancelled && setClassesInProgress(inProgressCount(paths)))
+      .catch(() => {})
+    return () => {
+      cancelled = true
+    }
+  }, [isAuthenticated])
   const [openPanel, setOpenPanel] = useState<string | null>(null)
   const [pinnedPanel, setPinnedPanel] = useState<string | null>(null)
   // Solo una fila del historial puede estar renombrándose o pidiendo confirmación
@@ -102,7 +119,8 @@ export function Sidebar({ onNavigate }: { onNavigate?: () => void } = {}) {
           variant="ghost"
           className="mb-8 h-10 w-10 shrink-0 text-muted-foreground hover:text-foreground hover:bg-accent rounded-full bg-muted/50"
           onClick={handleNewChat}
-          aria-label="Nuevo chat"
+          data-tour="nuevo-chat"
+              aria-label="Nuevo chat"
         >
           <Plus className="h-5 w-5 shrink-0" />
         </Button>
@@ -128,7 +146,8 @@ export function Sidebar({ onNavigate }: { onNavigate?: () => void } = {}) {
           <div className="relative mb-2 flex flex-col items-center">
             <Button
               variant="ghost"
-              onClick={() => navigate(quizHref(activeChatId))}
+              // Con el chat abierto solo si tiene documento: el quiz es sobre él
+              onClick={() => navigate(quizHref(chats.find((c) => c.id === activeChatId)?.document_id ? activeChatId : null))}
               aria-label="Quiz"
               className="h-10 w-10 shrink-0 mx-auto text-muted-foreground hover:text-foreground hover:bg-accent"
             >
@@ -140,7 +159,26 @@ export function Sidebar({ onNavigate }: { onNavigate?: () => void } = {}) {
           <div className="relative mb-2 flex flex-col items-center">
             <Button
               variant="ghost"
+              onClick={() => navigate("/clases")}
+              data-tour="clases"
+              aria-label={classesInProgress ? `Mis clases (${classesInProgress} en curso)` : "Mis clases"}
+              className="relative h-10 w-10 shrink-0 mx-auto text-muted-foreground hover:text-foreground hover:bg-accent"
+            >
+              <GraduationCap className="h-5 w-5" />
+              {classesInProgress > 0 && (
+                <span aria-hidden className="absolute -right-0.5 -top-0.5 flex h-4 min-w-4 items-center justify-center rounded-full bg-primary px-1 text-[10px] font-semibold text-primary-foreground">
+                  {classesInProgress}
+                </span>
+              )}
+            </Button>
+            <div aria-hidden className="text-[11px] leading-tight text-muted-foreground text-center mt-1 font-medium">Clases</div>
+          </div>
+
+          <div className="relative mb-2 flex flex-col items-center">
+            <Button
+              variant="ghost"
               onClick={() => navigate("/perfil")}
+              data-tour="perfil"
               aria-label="Perfil"
               className="h-10 w-10 shrink-0 mx-auto text-muted-foreground hover:text-foreground hover:bg-accent"
             >
@@ -154,6 +192,7 @@ export function Sidebar({ onNavigate }: { onNavigate?: () => void } = {}) {
               variant="ghost"
               onClick={() => handlePanelChange("documents")}
               aria-expanded={openPanel === "documents"}
+              data-tour="documentos"
               aria-label="Documentos"
               className={`h-10 w-10 shrink-0 mx-auto transition-colors ${
                 openPanel === "documents"

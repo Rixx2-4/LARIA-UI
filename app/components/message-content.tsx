@@ -1,9 +1,11 @@
 "use client"
 
+import { lazy, Suspense } from "react"
 import ReactMarkdown, { type Components } from "react-markdown"
 import remarkGfm from "remark-gfm"
-import remarkMath from "remark-math"
-import rehypeKatex from "rehype-katex"
+
+// KaTeX y su CSS solo se bajan cuando un texto trae fórmulas
+const MathMarkdown = lazy(() => import("./math-markdown"))
 
 // Dentro de una burbuja de chat, los títulos grandes quedan desproporcionados
 function SectionHeading({ children }: { children?: React.ReactNode }) {
@@ -70,10 +72,30 @@ function normalizeMath(content: string): string {
     .join("")
 }
 
+// ¿Puede llevar fórmulas? $…$, $$…$$, \(…\) o \[…\]
+const HAS_MATH = /\\\(|\\\[|\$/
+
 export function MessageContent({ content }: { content: string }) {
+  const plain = <ReactMarkdown remarkPlugins={[remarkGfm]} components={components}>{content}</ReactMarkdown>
+  if (!HAS_MATH.test(content)) return plain
+  // Mientras llega KaTeX se ve el texto tal cual; las fórmulas se dibujan al cargar
   return (
-    <ReactMarkdown remarkPlugins={[remarkGfm, remarkMath]} rehypePlugins={[rehypeKatex]} components={components}>
-      {normalizeMath(content)}
-    </ReactMarkdown>
+    <Suspense fallback={plain}>
+      <MathMarkdown content={normalizeMath(content)} components={components} />
+    </Suspense>
+  )
+}
+
+// Texto corto que puede llevar fórmulas (enunciados y opciones de los quizzes): sin
+// párrafos, para que quepa en una línea, un botón o un título. Sin fórmulas se deja
+// como texto plano: así un «1.» o un «*» del enunciado no se convierten en markdown
+const inlineComponents: Components = { ...components, p: ({ children }) => <>{children}</> }
+
+export function MathText({ text }: { text: string }) {
+  if (!HAS_MATH.test(text)) return <>{text}</>
+  return (
+    <Suspense fallback={text}>
+      <MathMarkdown content={normalizeMath(text)} components={inlineComponents} gfm={false} />
+    </Suspense>
   )
 }

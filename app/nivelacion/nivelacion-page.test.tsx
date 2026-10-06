@@ -34,7 +34,10 @@ function round(id: string, count: number) {
 }
 
 // Servidor de nivelación: sirve las rondas en orden y responde con el veredicto de cada una
-function stubServer(verdicts: PlacementResult[]) {
+// paths: el backend ya tiene rutas guiadas (ADR-028); sin ellas responde 404 y la
+// clase se da en un chat, como antes
+function stubServer(verdicts: PlacementResult[], { paths = false }: { paths?: boolean } = {}) {
+  const fromTopic: string[] = []
   const diagnostics: string[] = []
   const attempts: Record<string, string>[] = []
   const createdChats: string[] = []
@@ -46,6 +49,11 @@ function stubServer(verdicts: PlacementResult[]) {
     if (url.endsWith("/learning/me/preferences")) {
       if (method === "PUT") styles.push(JSON.parse(String(init?.body)))
       return json(method === "PUT" ? JSON.parse(String(init?.body)) : { explanation_style: "visual" })
+    }
+    if (url.endsWith("/learning/paths/from-topic") && method === "POST") {
+      if (!paths) return json({ detail: "Not Found" }, 404)
+      fromTopic.push(JSON.parse(String(init?.body)).topic)
+      return json({ id: "p1", topic: "ecuaciones lineales", modules: [], teaching: { phase: "teaching" } })
     }
     if (url.endsWith("/chats/") && method === "POST") {
       createdChats.push(JSON.parse(String(init?.body)).title)
@@ -72,7 +80,7 @@ function stubServer(verdicts: PlacementResult[]) {
     }
     throw new Error(`Petición inesperada: ${method} ${url}`)
   })
-  return { diagnostics, attempts, createdChats, styles }
+  return { diagnostics, attempts, createdChats, styles, fromTopic }
 }
 
 // Responde todas las preguntas de la ronda con la misma opción y la envía.
@@ -152,6 +160,21 @@ describe("Nivelación", () => {
     // Respuestas por índice, empezando en 0
     expect(Object.keys(server.attempts[0])).toEqual(["0", "1", "2", "3", "4", "5"])
     expect(Object.keys(server.attempts[1])).toHaveLength(8)
+  })
+
+  it("con rutas en el backend, tras la nivelación crea la ruta del tema y abre su clase guiada", async () => {
+    const server = stubServer([base(false, "basico")], { paths: true })
+    renderPage("tema=ecuaciones")
+
+    fireEvent.click(await screen.findByRole("button", { name: "Empezar" }))
+    await answerRound("A")
+    fireEvent.click(await screen.findByText("Que lo decida LARIA"))
+
+    expect(await screen.findByText("Preparando tu ruta y tu primera clase")).toBeTruthy()
+    await waitFor(() => expect(nav.push).toHaveBeenCalledWith("/clase/p1"))
+    expect(server.fromTopic).toEqual(["ecuaciones lineales"])
+    // La clase ya no es un chat nuevo
+    expect(server.createdChats).toEqual([])
   })
 
   it("si no supera la base, empieza la clase en básico, sin tono de suspenso ni otra ronda", async () => {

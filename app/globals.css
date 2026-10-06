@@ -1,7 +1,5 @@
-@import url("https://fonts.googleapis.com/css2?family=Geist:wght@100..900&family=Geist+Mono:wght@100..900&display=swap");
 @import "tailwindcss";
 @import "tw-animate-css";
-@import "@clerk/ui/themes/shadcn.css";
 
 @custom-variant dark (&:is(.dark *));
 
@@ -83,8 +81,8 @@
 }
 
 @theme inline {
-  --font-sans: "Geist", system-ui, sans-serif;
-  --font-mono: "Geist Mono", ui-monospace, monospace;
+  --font-sans: var(--font-geist), system-ui, sans-serif;
+  --font-mono: var(--font-geist-mono), ui-monospace, monospace;
   --color-background: var(--background);
   --color-foreground: var(--foreground);
   --color-card: var(--card);
@@ -177,4 +175,179 @@
     transform: translateY(0);
     opacity: 1;
   }
+}
+
+/* Fórmulas en pantallas estrechas: una ecuación en bloque no parte la línea, así que
+   si es larga se desplaza de lado dentro de su caja en vez de salirse del mensaje.
+   Las fórmulas en línea ya parten la línea en sus operadores (KaTeX) */
+.katex-display {
+  max-width: 100%;
+  overflow-x: auto;
+  overflow-y: hidden;
+  padding-bottom: 2px;
+}
+/* Y el texto largo sin espacios (URLs, nombres de variables) tampoco desborda */
+.message-text {
+  overflow-wrap: anywhere;
+  min-width: 0;
+}
+
+/* LARIA, la mascota (app/components/laria-mascot.tsx). Solo transform y opacity:
+   las mueve la tarjeta gráfica, sin recalcular la página */
+.laria-mascot * {
+  transform-box: fill-box;
+}
+/* Lo que solo aparece con una emoción o un estado empieza oculto */
+.laria-mascot .mascot-eye-happy,
+.laria-mascot .mascot-brows > *,
+.laria-mascot .mascot-mouth-smile,
+.laria-mascot .mascot-mouth-grin,
+.laria-mascot .mascot-mouth-o,
+.laria-mascot .mascot-mouth-open,
+.laria-mascot .mascot-thought,
+.laria-mascot .mascot-sparkles {
+  opacity: 0;
+}
+.laria-mascot .mascot-mouth-open {
+  transform-origin: center;
+}
+.laria-mascot .mascot-head {
+  transform-origin: 50% 90%;
+  transition: transform 0.5s ease;
+}
+.laria-mascot .mascot-eyes {
+  transform-origin: center;
+  transition: transform 0.4s ease;
+}
+
+/* Emociones */
+.laria-mascot[data-emotion="encouraging"] .mascot-mouth-smile,
+.laria-mascot[data-emotion="patient"] .mascot-mouth-smile,
+.laria-mascot[data-emotion="patient"] .mascot-brows-patient,
+.laria-mascot[data-emotion="celebratory"] .mascot-eye-happy,
+.laria-mascot[data-emotion="celebratory"] .mascot-mouth-grin,
+.laria-mascot[data-emotion="celebratory"] .mascot-sparkles,
+.laria-mascot[data-emotion="surprised"] .mascot-brows-surprised,
+.laria-mascot[data-emotion="surprised"] .mascot-mouth-o {
+  opacity: 1;
+}
+.laria-mascot[data-emotion="celebratory"] .mascot-eye-dot,
+.laria-mascot[data-emotion="encouraging"] .mascot-mouth-closed,
+.laria-mascot[data-emotion="patient"] .mascot-mouth-closed,
+.laria-mascot[data-emotion="celebratory"] .mascot-mouth-closed,
+.laria-mascot[data-emotion="surprised"] .mascot-mouth-closed {
+  opacity: 0;
+}
+.laria-mascot[data-emotion="surprised"] .mascot-eyes {
+  transform: scale(1.15);
+}
+
+/* Pensando: mira arriba, levanta una ceja y aparece la burbuja */
+.laria-mascot[data-state="thinking"] .mascot-head {
+  transform: rotate(-7deg);
+}
+.laria-mascot[data-state="thinking"] .mascot-eyes {
+  transform: translate(-6px, -10px);
+}
+.laria-mascot[data-state="thinking"] .mascot-brows-thinking,
+.laria-mascot[data-state="thinking"] .mascot-thought {
+  opacity: 1;
+}
+
+/* Hablando: la boca abierta manda sobre las demás bocas y se inclina hacia la pizarra */
+.laria-mascot[data-state="speaking"] .mascot-head {
+  transform: rotate(-4deg);
+}
+.laria-mascot[data-state="speaking"] .mascot-mouth > * {
+  opacity: 0;
+}
+.laria-mascot[data-state="speaking"] .mascot-mouth > .mascot-mouth-open {
+  opacity: 1;
+}
+
+/* Señalando: el brazo gira desde el hombro hacia la pizarra */
+.laria-mascot .mascot-arm {
+  transform-origin: 88% 6%;
+  transform: rotate(48deg);
+}
+
+@media (prefers-reduced-motion: no-preference) {
+  .laria-mascot .mascot-float {
+    animation: mascot-float 4s ease-in-out infinite;
+  }
+  .laria-mascot .mascot-eye-dot {
+    transform-origin: center;
+    animation: mascot-blink 5s infinite;
+  }
+  .laria-mascot[data-state="speaking"] .mascot-mouth-open {
+    animation: mascot-talk 0.32s ease-in-out infinite alternate;
+  }
+  .laria-mascot[data-state="speaking"] .mascot-float {
+    animation-duration: 2s;
+  }
+  .laria-mascot[data-emotion="celebratory"] .mascot-float {
+    animation: mascot-hop 0.9s ease-in-out infinite;
+  }
+  .laria-mascot[data-emotion="celebratory"] .mascot-sparkles > * {
+    transform-origin: center;
+    animation: mascot-twinkle 1.2s ease-in-out infinite;
+  }
+  .laria-mascot[data-emotion="celebratory"] .mascot-sparkles > :nth-child(2) {
+    animation-delay: 0.4s;
+  }
+  .laria-mascot[data-emotion="celebratory"] .mascot-sparkles > :nth-child(3) {
+    animation-delay: 0.8s;
+  }
+  .laria-mascot[data-state="thinking"] .mascot-thought > * {
+    transform-origin: center;
+    animation: mascot-twinkle 1.5s ease-in-out infinite;
+  }
+  .laria-mascot[data-state="thinking"] .mascot-thought > :nth-child(2) {
+    animation-delay: 0.25s;
+  }
+  .laria-mascot[data-state="thinking"] .mascot-thought > :nth-child(3) {
+    animation-delay: 0.5s;
+  }
+  .laria-mascot .mascot-arm {
+    animation: mascot-point 0.45s ease-out;
+  }
+  .laria-mascot .mascot-head,
+  .laria-mascot .mascot-brows > *,
+  .laria-mascot .mascot-mouth > *,
+  .laria-mascot .mascot-eye-happy,
+  .laria-mascot .mascot-thought,
+  .laria-mascot .mascot-sparkles {
+    transition: opacity 0.25s ease, transform 0.5s ease;
+  }
+}
+
+/* Boca al ritmo del audio: la clase pone --mouth con el volumen de lo que suena */
+.laria-mascot[data-lipsync][data-state="speaking"] .mascot-mouth-open {
+  animation: none;
+  transform: scale(1, calc(0.3 + var(--mouth, 0.6) * 0.9));
+  transition: transform 0.06s linear;
+}
+@keyframes mascot-float {
+  0%, 100% { transform: translateY(0); }
+  50% { transform: translateY(-5px); }
+}
+@keyframes mascot-blink {
+  0%, 94%, 100% { transform: scaleY(1); }
+  96% { transform: scaleY(0.1); }
+}
+@keyframes mascot-talk {
+  from { transform: scale(1, 0.35); }
+  to { transform: scale(1, 1.1); }
+}
+@keyframes mascot-hop {
+  0%, 100% { transform: translateY(0); }
+  40% { transform: translateY(-14px); }
+}
+@keyframes mascot-twinkle {
+  0%, 100% { transform: scale(0.7); opacity: 0.5; }
+  50% { transform: scale(1.15); opacity: 1; }
+}
+@keyframes mascot-point {
+  from { transform: rotate(0deg); }
+  to { transform: rotate(48deg); }
 }

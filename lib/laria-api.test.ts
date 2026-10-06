@@ -328,3 +328,16 @@ describe("lariaAPI.quizzes.practice", () => {
     expect(seen[0]).toEqual({ url: expect.stringMatching(/\/quizzes\/practice$/), method: "POST", body: '{"topic":"fracciones","num_questions":5}' })
   })
 })
+
+describe("isUnsafeTopic", () => {
+  it("solo un 422 con reason unsafe_topic es un tema que no se trabaja", async () => {
+    const { isUnsafeTopic } = await import("./laria-api")
+    vi.stubGlobal("fetch", async () => new Response(JSON.stringify({ detail: "Ese tema no.", reason: "unsafe_topic", safety: "support" }), { status: 422 }))
+    const refused = await lariaAPI.paths.fromTopic("x").catch((e) => e)
+    expect(isUnsafeTopic(refused)).toBe(true)
+    expect(refused.safety).toBe("support")
+
+    vi.stubGlobal("fetch", async () => new Response(JSON.stringify({ detail: "Indica el tema de la ruta." }), { status: 422 }))
+    expect(isUnsafeTopic(await lariaAPI.paths.fromTopic("x").catch((e) => e))).toBe(false)
+  })
+})

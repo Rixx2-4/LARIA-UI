@@ -22,6 +22,9 @@ interface TutorEnvelope {
     ask_learning_style?: boolean
     // Contestó en el chat ("la 4", "paso a paso") y el backend ya lo guardó; null = que decida LARIA
     explanation_style_chosen?: ExplanationStyle | null
+    // Filtro de seguridad del backend: "refuse" (tema que no trabaja) o "support"
+    // (señal de autolesión: un mensaje de apoyo fijo)
+    safety?: "refuse" | "support"
     [key: string]: unknown
   }
   [key: string]: unknown
@@ -65,6 +68,8 @@ interface User {
   is_active: boolean
   created_at: string
   auth_provider?: string
+  // Ya vio el tutorial de bienvenida (sin el campo, backend anterior: se da por visto)
+  onboarding_completed?: boolean
 }
 
 interface QuizAttemptSummary {
@@ -197,6 +202,129 @@ interface QuizAttemptQuestion {
   is_correct: boolean
 }
 
+// Ruta de aprendizaje guiada (ADR-028): evaluación → ruta → clase por conceptos,
+// con una comprobación corta tras cada explicación
+type PathModuleStatus = "locked" | "available" | "in_progress" | "completed" | "assumed"
+type TeachingPhase = "assessment" | "teaching" | "check" | "remediation" | "advance" | "completed"
+type CheckOutcome = "understood" | "partial" | "not_understood"
+
+interface PathModule {
+  title: string
+  concept: string
+  // "prerequisite": algo que hace falta saber antes del tema
+  kind: "content" | "prerequisite"
+  status: PathModuleStatus
+  mastery: number
+  position: number
+  // Tramo al que pertenece (las rutas crecen por tramos); null en rutas creadas a mano
+  tier?: PlacementLevel | null
+  // Intermedio y avanzado salen de una investigación web: sus ideas clave y las
+  // fuentes en que se basa (vacíos en el básico o si la búsqueda falló)
+  key_points?: string[]
+  sources?: { title: string; url: string }[]
+}
+
+interface TeachingState {
+  phase: TeachingPhase
+  concept: string | null
+  concept_title: string | null
+  // En un repaso: el concepto al que se vuelve después
+  return_to: string | null
+  return_to_title: string | null
+  variant: string | null
+  pending_check_quiz_id: string | null
+  last_outcome: CheckOutcome | null
+  passed_concepts: string[]
+  reason: string | null
+}
+
+interface LearningPath {
+  id: string
+  // Tema de la clase; vacío en las rutas creadas a mano (no son clases)
+  topic?: string | null
+  title?: string | null
+  modules: PathModule[]
+  // De 0 a 1: módulos completados sobre el total (baja al abrir un tramo nuevo)
+  progress?: number
+  // Tramos abiertos, en orden (["basico", "intermedio"]) y el que abre la próxima
+  // prueba de paso; sin next_tier y completada, la ruta terminó de verdad
+  tiers?: PlacementLevel[]
+  next_tier?: PlacementLevel | null
+  updated_at?: string
+  teaching: TeachingState | null
+}
+
+// Cómo seguir tras completar una ruta: el mismo tema a otro nivel o temas nuevos
+interface NextSuggestion {
+  topic: string
+  label: string
+  // level_up: el mismo tema, un nivel más (siempre con nivelación)
+  kind: "advance" | "level_up" | "related"
+  reason: string
+  needs_placement: boolean
+}
+
+// Cuánto estudiar: duración de cada sesión de clase y objetivo diario (null = sin límite)
+type SessionMinutes = 10 | 20 | 30 | 45
+type DailyGoalMinutes = 10 | 15 | 30 | 45 | 60
+
+interface StudyGoals {
+  session_minutes: SessionMinutes | null
+  daily_goal_minutes: DailyGoalMinutes | null
+}
+
+interface StudyTimeSummary {
+  today_minutes: number
+  daily_goal_minutes: number | null
+  session_minutes: number | null
+  goal_met_today: boolean
+  // Días seguidos cumpliendo el objetivo (o estudiando algo, sin objetivo)
+  streak_days: number
+  last_7_days: { date: string; minutes: number }[]
+}
+
+// Voces del tutor (ADR-030): 3 masculinas y 3 femeninas; la elegida se guarda en el perfil
+interface TutorVoice {
+  id: string
+  label: string
+  gender: "masculina" | "femenina"
+  description: string
+}
+
+interface VoicesResponse {
+  voices: TutorVoice[]
+  default: string
+  // La elegida; null = la de por defecto
+  selected: string | null
+  sample_text: string
+  // Frase de ejemplo por género («tu tutor» / «tu tutora»), si el backend la manda
+  sample_texts?: Partial<Record<TutorVoice["gender"], string>>
+}
+
+interface LessonResponse {
+  path: LearningPath
+  markdown: string | null
+  // La comprobación (sin respuestas); null cuando la ruta está completada
+  check: QuizResponse | null
+}
+
+interface CheckNext {
+  phase: TeachingPhase
+  concept: string | null
+  concept_title: string | null
+  variant: string | null
+  reason: string | null
+}
+
+interface CheckResponse {
+  outcome: CheckOutcome
+  score: number
+  total_points: number
+  questions: QuizAttemptQuestion[]
+  next: CheckNext
+  path: LearningPath
+}
+
 type PlacementLevel = "basico" | "intermedio" | "avanzado"
 
 // Cómo prefiere que le expliquen; vale para todo, con y sin material
@@ -290,9 +418,20 @@ function authHeaders(token: string | null): Record<string, string> {
 }
 
 export class ApiError extends Error {
-  constructor(message: string, readonly status: number) {
+  constructor(
+    message: string,
+    readonly status: number,
+    // Por qué lo rechaza el backend, si lo dice (p. ej. "unsafe_topic")
+    readonly reason: string | null = null,
+    readonly safety: "refuse" | "support" | null = null,
+  ) {
     super(message)
   }
+}
+
+// El filtro de seguridad no trabaja este tema: reintentar no sirve, hay que elegir otro
+export function isUnsafeTopic(error: unknown): error is ApiError {
+  return error instanceof ApiError && error.reason === "unsafe_topic"
 }
 
 // Quien necesite enterarse de que la sesión caducó (el AuthProvider) se suscribe aquí
@@ -351,7 +490,13 @@ async function responseError(response: Response, fallback: string, sentToken: st
   if (response.status === 401 && sentToken) {
     unauthorizedListeners.forEach((listener) => listener())
   }
-  return new ApiError(describeErrorDetail(body.detail, `Error ${response.status}`), response.status)
+  const safety = body.safety === "refuse" || body.safety === "support" ? body.safety : null
+  return new ApiError(
+    describeErrorDetail(body.detail, `Error ${response.status}`),
+    response.status,
+    typeof body.reason === "string" ? body.reason : null,
+    safety,
+  )
 }
 
 // Un id va siempre como un solo tramo de la ruta: uno manipulado en la URL
@@ -392,6 +537,15 @@ export const lariaAPI = {
   auth: {
     // Entrar, registrarse y salir lo hace Clerk; el backend solo dice quién eres
     me: () => fetchAPI<User>("/users/me"),
+
+    // Borra la cuenta aquí y en Clerk. Puede pedir verificar la identidad (403 con
+    // reason "reverification_required"): quien llama lo reintenta tras verificarla
+    deleteAccount: async (): Promise<void> => {
+      await request("/users/me", { method: "DELETE", body: "{}" }, "No se pudo borrar la cuenta")
+    },
+
+    // Marca el tutorial de bienvenida como visto (al terminarlo o al saltarlo)
+    completeOnboarding: () => fetchAPI<User>("/users/me/onboarding", { method: "POST" }),
   },
 
   chats: {
@@ -559,6 +713,12 @@ export const lariaAPI = {
   // Voz del tutor (ADR-026): el backend limpia el texto (markdown, fórmulas, código)
   // y devuelve MP3. Se manda el trozo tal cual se ve en pantalla
   speech: {
+    voices: () => fetchAPI<VoicesResponse>("/speech/voices"),
+
+    // null vuelve a la voz por defecto
+    setVoice: (voice: string | null) =>
+      fetchAPI<{ voice: string | null }>("/speech/voice", { method: "PUT", body: JSON.stringify({ voice }) }),
+
     // Sin el endpoint (backend antiguo) o sin conexión, no hay voz: se lee solo texto
     config: async (): Promise<SpeechConfig> => {
       try {
@@ -570,12 +730,54 @@ export const lariaAPI = {
       }
     },
 
-    // null (204) si, limpio, no queda nada que decir
-    synthesize: async (text: string, emotion: SpeechEmotion, signal?: AbortSignal): Promise<Blob | null> => {
-      const response = await request("/speech", { method: "POST", body: JSON.stringify({ text, emotion }), signal }, "No se pudo leer en voz")
+    // null (204) si, limpio, no queda nada que decir. Sin voice, la que eligió el estudiante
+    synthesize: async (text: string, emotion: SpeechEmotion, signal?: AbortSignal, voice?: string): Promise<Blob | null> => {
+      const body = voice ? { text, emotion, voice } : { text, emotion }
+      const response = await request("/speech", { method: "POST", body: JSON.stringify(body), signal }, "No se pudo leer en voz")
       if (response.status === 204) return null
       return response.blob()
     },
+  },
+
+  paths: {
+    // Idempotente: si la ruta del tema ya existe, devuelve la misma con su estado
+    fromTopic: (topic: string) =>
+      fetchAPI<LearningPath>("/learning/paths/from-topic", { method: "POST", body: JSON.stringify({ topic }) }),
+
+    // Hasta 3 formas de seguir tras completarla (la primera vez tarda ~2 s)
+    next: async (pathId: string): Promise<NextSuggestion[]> =>
+      (await fetchAPI<{ suggestions: NextSuggestion[] }>(`/learning/paths/${segment(pathId)}/next`)).suggestions ?? [],
+
+    list: async (): Promise<LearningPath[]> => (await fetchAPI<{ paths: LearningPath[] }>("/learning/paths")).paths ?? [],
+
+    get: (pathId: string) => fetchAPI<LearningPath>(`/learning/paths/${segment(pathId)}`),
+
+    // Con una comprobación pendiente devuelve la MISMA: recargar la clase es seguro
+    lesson: (pathId: string) => fetchAPI<LessonResponse>(`/learning/paths/${segment(pathId)}/lesson`, { method: "POST" }),
+
+    check: (pathId: string, quizId: string, answers: Record<number, string>) =>
+      fetchAPI<CheckResponse>(`/learning/paths/${segment(pathId)}/check`, {
+        method: "POST",
+        body: JSON.stringify({
+          quiz_id: quizId,
+          answers: Object.fromEntries(Object.entries(answers).map(([index, letter]) => [String(index), letter])),
+        }),
+      }),
+  },
+
+  study: {
+    goals: () => fetchAPI<StudyGoals>("/learning/me/study-goals"),
+
+    setGoals: (goals: StudyGoals) =>
+      fetchAPI<StudyGoals>("/learning/me/study-goals", { method: "PUT", body: JSON.stringify(goals) }),
+
+    // Un aviso por minuto estudiado; el servidor acota lo que cuenta (varias
+    // pestañas no suman doble) y devuelve el resumen del día
+    ping: (seconds: number, timezone: string) =>
+      fetchAPI<StudyTimeSummary>("/learning/me/study-time", { method: "POST", body: JSON.stringify({ seconds, timezone }) }),
+
+    summary: (timezone: string) =>
+      fetchAPI<StudyTimeSummary>(`/learning/me/study-time?tz=${encodeURIComponent(timezone)}`),
   },
 
   learning: {
@@ -592,6 +794,8 @@ export const lariaAPI = {
 
   documents: {
     list: () => fetchAPI<Document[]>("/documents/"),
+
+    get: (documentId: string) => fetchAPI<Document>(`/documents/${segment(documentId)}`),
 
     upload: async (file: File, subject?: string): Promise<Document> => {
       const formData = new FormData()
@@ -633,4 +837,6 @@ export type {
   PedagogicalMemory, DocumentMastery, ConceptMastery,
   QuizResponse, QuizQuestion, QuizAttemptResponse, QuizAttemptQuestion,
   StreamCallbacks, TutorEnvelope, PlacementResult, PlacementLevel, ExplanationStyle,
+  TutorVoice, VoicesResponse, NextSuggestion, StudyGoals, StudyTimeSummary, SessionMinutes, DailyGoalMinutes,
+  LearningPath, PathModule, PathModuleStatus, TeachingState, TeachingPhase, LessonResponse, CheckResponse, CheckOutcome,
 }

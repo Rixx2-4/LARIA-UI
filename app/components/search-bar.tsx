@@ -288,11 +288,21 @@ export function SearchBar({ isOpeningChat = false }: { isOpeningChat?: boolean }
   // Lo dictado se añade a lo que ya se hubiera escrito; mientras la frase no termina
   // se muestra detrás, sin fijarla en el mensaje
   const [interimText, setInterimText] = useState("")
+  // Lo escrito antes de pulsar el micrófono: lo dictado va detrás y se REEMPLAZA en
+  // cada evento (el navegador puede repetir frases; sumarlas las duplicaría)
+  const dictationBaseRef = useRef("")
+  const joinText = (base: string, text: string) => (base.trim() && text ? `${base.trimEnd()} ${text}` : base.trim() ? base : text)
   const dictation = useDictation({
-    onFinal: (text) => setQuery((current) => (current.trim() ? `${current.trimEnd()} ${text}` : text)),
-    onInterim: setInterimText,
+    onTranscript: (finalText, interim) => {
+      setQuery(joinText(dictationBaseRef.current, finalText))
+      setInterimText(interim)
+    },
     onError: (message) => toast.error(message),
   })
+  const startDictation = () => {
+    dictationBaseRef.current = query
+    dictation.start()
+  }
   const shownQuery = interimText ? (query.trim() ? `${query.trimEnd()} ${interimText}` : interimText) : query
 
   const handleSend = () => sendMessage(shownQuery.trim())
@@ -302,6 +312,7 @@ export function SearchBar({ isOpeningChat = false }: { isOpeningChat?: boolean }
 
     setQuery("")
     dictation.cancel()
+    setInterimText("")
     // Un mensaje nuevo corta la lectura del anterior
     speech.stop()
     if (speakAlong) speech.prime()
@@ -362,7 +373,8 @@ export function SearchBar({ isOpeningChat = false }: { isOpeningChat?: boolean }
   const lastIndex = messages.length - 1
   const lastEnvelope = lastIndex >= 0 && messages[lastIndex].role === "assistant" ? tutorEnvelope(messages[lastIndex]) : null
   const offerFor = (payload: NonNullable<typeof lastEnvelope>["payload"]): ChatQuizRequest | null => {
-    if (!payload || !chatId) return null
+    // Tras un mensaje del filtro de seguridad no se propone nada
+    if (!payload || !chatId || payload.safety) return null
     if (payload.ask_learning_style) return { kind: "style" }
     if (payload.suggest_placement && !wasPlacementOffered(chatId)) return { kind: "placement", topic: payload.topic_hint ?? "" }
     if (payload.offer_quiz && activeDocumentId) return { kind: "practice" }
@@ -395,9 +407,9 @@ export function SearchBar({ isOpeningChat = false }: { isOpeningChat?: boolean }
 
   const renderMessageContent = (msg: typeof messages[0], isLive: boolean) =>
     msg.role === "user" ? (
-      <div className="text-[14px] whitespace-pre-wrap">{msg.content}</div>
+      <div className="message-text text-[14px] whitespace-pre-wrap">{msg.content}</div>
     ) : (
-      <div className="text-[14px] leading-relaxed">
+      <div className="message-text text-[14px] leading-relaxed">
         <MessageContent content={msg.content} />
         {isLive && (
           <span className="inline-block w-2 h-4 ml-0.5 bg-foreground/70 animate-pulse" />
@@ -436,8 +448,11 @@ export function SearchBar({ isOpeningChat = false }: { isOpeningChat?: boolean }
               // La respuesta que se está escribiendo ahora mismo
               const isLive = isStreaming && index === messages.length - 1 && msg.role === "assistant"
               const envelope = tutorEnvelope(msg)
-              const label = envelopeLabel(envelope)
-              const grounded = envelopeGrounded(envelope)
+              // Las respuestas del filtro de seguridad van sin etiquetas de tutoría; la de
+              // apoyo, además, con un estilo sobrio
+              const safety = envelope?.payload?.safety
+              const label = safety ? null : envelopeLabel(envelope)
+              const grounded = safety ? null : envelopeGrounded(envelope)
               // Notas del sistema (archivo subido, avisos): una línea centrada, no una burbuja
               if (msg.role === "system") {
                 return (
@@ -462,10 +477,12 @@ export function SearchBar({ isOpeningChat = false }: { isOpeningChat?: boolean }
                 <Fragment key={`${index}-${msg.role}`}>
                 <div className={`flex ${msg.role === "user" ? "justify-end" : "justify-start"}`}>
                   <div
-                    className={`max-w-[80%] rounded-2xl px-4 py-3 ${
+                    className={`min-w-0 max-w-[80%] rounded-2xl px-4 py-3 ${
                       msg.role === "user"
                         ? "bg-primary text-primary-foreground"
-                        : "bg-muted text-foreground"
+                        : safety === "support"
+                          ? "border border-border bg-background text-foreground"
+                          : "bg-muted text-foreground"
                     }`}
                   >
                     {renderMessageContent(msg, isLive)}
@@ -566,6 +583,7 @@ export function SearchBar({ isOpeningChat = false }: { isOpeningChat?: boolean }
                 size={uf.size}
                 mimeType={uf.mimeType}
                 documentId={uf.document?.id}
+                documentStatus={uf.document?.status}
                 previewDataUrl={uf.dataUrl}
                 onClick={() =>
                   setViewerFile({
@@ -603,6 +621,7 @@ export function SearchBar({ isOpeningChat = false }: { isOpeningChat?: boolean }
                   handleSend()
                 }
               }}
+              data-tour="chat"
               placeholder={isStreaming ? "Generando respuesta…" : "Pregunta lo que quieras…"}
               aria-label="Mensaje"
               disabled={isStreaming}
@@ -623,6 +642,7 @@ export function SearchBar({ isOpeningChat = false }: { isOpeningChat?: boolean }
                 }}
               />
               <Button
+                data-tour="adjuntar"
                 aria-label="Adjuntar archivo"
                 variant="ghost"
                 size="icon"
@@ -660,7 +680,8 @@ export function SearchBar({ isOpeningChat = false }: { isOpeningChat?: boolean }
                   variant="ghost"
                   size="icon"
                   disabled={isStreaming}
-                  onClick={dictation.isListening ? dictation.stop : dictation.start}
+                  onClick={dictation.isListening ? dictation.stop : startDictation}
+                  data-tour="dictar"
                   aria-label={dictation.isListening ? "Parar dictado" : "Dictar"}
                   aria-pressed={dictation.isListening}
                   className={`h-8 w-8 md:h-9 md:w-9 rounded-lg transition-all hover:bg-accent/60 ${

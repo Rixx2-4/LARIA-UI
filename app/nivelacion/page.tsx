@@ -8,17 +8,19 @@ import { Button } from "@/components/ui/button"
 import { AppShell } from "../components/app-shell"
 import { RequireAuth } from "../components/require-auth"
 import { LEVEL_COPY, LEVEL_NAME, QuestionStep, ResultsList, StepRow, toResults, type QuizResult, type StepStatus } from "../quiz/quiz-parts"
-import { lariaAPI, type ExplanationStyle, type PlacementResult, type QuizQuestion } from "@/lib/laria-api"
+import { ApiError, isUnsafeTopic, lariaAPI, type ExplanationStyle, type PlacementResult, type QuizQuestion } from "@/lib/laria-api"
 import { StylePicker } from "../components/style-picker"
-import { NEW_CHAT_HREF, chatHref } from "@/lib/routes"
+import { StudyGoalsPicker } from "../components/study-goals-picker"
+import { useSlow } from "@/lib/use-slow"
+import { NEW_CHAT_HREF, chatHref, classHref } from "@/lib/routes"
 import { markPlacementOffered } from "@/lib/placement"
 import { useChat } from "../contexts/chat-context"
 
 // Nivelación por rondas: una base de 6 preguntas y, si se supera, una avanzada de 8.
 // El cliente no lleva la cuenta de la ronda: pide siempre la siguiente con el mismo
 // tema y el backend sabe cuál toca. El veredicto no es una nota: es el punto de partida.
-// Al terminar se prepara la primera clase: un chat nuevo en el que el tutor empieza
-// a explicar el tema. Cada paso de la animación corresponde a algo que ocurre de verdad.
+// Al terminar se prepara la ruta del tema y se abre su clase guiada (/clase/<ruta>).
+// Cada paso de la animación corresponde a algo que ocurre de verdad.
 
 type Phase = "intro" | "loading" | "questions" | "preparing"
 
@@ -64,6 +66,8 @@ function Placement({ initialTopic, chatId }: { initialTopic: string; chatId: str
   const [results, setResults] = useState<QuizResult[]>([])
   const [placement, setPlacement] = useState<PlacementResult | null>(null)
   const [error, setError] = useState<string | null>(null)
+  // El backend no trabaja este tema (filtro de seguridad): reintentar no sirve
+  const [refused, setRefused] = useState(false)
   const [prep, setPrep] = useState<Preparation>({ review: "pending", offerNext: false, askStyle: false, level: "pending", lesson: "pending" })
   const router = useRouter()
   const { createChat, queueFirstMessage } = useChat()
@@ -115,6 +119,7 @@ function Placement({ initialTopic, chatId }: { initialTopic: string; chatId: str
       setPhase("questions")
     } catch (err) {
       setError(err instanceof Error ? err.message : "No se pudieron preparar las preguntas")
+      setRefused(isUnsafeTopic(err))
       setPhase(from)
     }
   }
@@ -143,12 +148,27 @@ function Placement({ initialTopic, chatId }: { initialTopic: string; chatId: str
     }
   }
 
-  // Ajusta al nivel y crea el chat de la clase; el primer mensaje lo envía el chat al abrirse
+  // Ajusta al nivel y abre la clase guiada de la ruta del tema (/clase/<ruta>). Un
+  // backend sin rutas (404/405) da la clase como antes: un chat que la empieza solo
   const prepareLesson = async (verdict: PlacementResult | null, lessonTopic: string) => {
     setError(null)
     setPrep((p) => ({ ...p, offerNext: false, askStyle: false, level: "active", lesson: "pending" }))
     await pause(STEP_PAUSE_MS)
     setPrep((p) => ({ ...p, level: "done", lesson: "active" }))
+    try {
+      const path = await lariaAPI.paths.fromTopic(lessonTopic)
+      setPrep((p) => ({ ...p, lesson: "done" }))
+      await pause(STEP_PAUSE_MS / 2)
+      router.push(classHref(path.id))
+    } catch (err) {
+      if (err instanceof ApiError && (err.status === 404 || err.status === 405)) return lessonInChat(verdict, lessonTopic)
+      setError(err instanceof Error ? err.message : "No se pudo preparar la clase. Prueba de nuevo.")
+      setRefused(isUnsafeTopic(err))
+      setPrep((p) => ({ ...p, lesson: "pending" }))
+    }
+  }
+
+  const lessonInChat = async (verdict: PlacementResult | null, lessonTopic: string) => {
     try {
       const chat = await createChat(`Clase: ${lessonTopic}`)
       // Este chat ya viene de una nivelación: no se vuelve a ofrecer
@@ -175,7 +195,17 @@ function Placement({ initialTopic, chatId }: { initialTopic: string; chatId: str
       <div className="h-full overflow-auto">
         <div className="mx-auto max-w-3xl px-6 py-8">
           {phase === "intro" && (
-            <Intro topic={topic} onTopicChange={setTopic} onStart={() => startRound("intro")} error={error} backHref={backHref} />
+            <Intro
+              topic={topic}
+              onTopicChange={(next) => {
+                setTopic(next)
+                setRefused(false)
+              }}
+              onStart={() => startRound("intro")}
+              error={error}
+              refused={refused}
+              backHref={backHref}
+            />
           )}
 
           {phase === "loading" && (
@@ -219,6 +249,15 @@ function Placement({ initialTopic, chatId }: { initialTopic: string; chatId: str
               savingStyle={savingStyle}
               onChooseStyle={chooseStyle}
               onRetry={() => prepareLesson(placement, topic)}
+              refused={refused}
+              onChooseAnother={() => {
+                // De vuelta al principio, con el campo del tema vacío
+                setError(null)
+                setRefused(false)
+                setTopic("")
+                setPhase("intro")
+                router.replace("/nivelacion")
+              }}
               backHref={backHref}
             />
           )}
@@ -233,12 +272,15 @@ function Intro({
   onTopicChange,
   onStart,
   error,
+  refused,
   backHref,
 }: {
   topic: string
   onTopicChange: (topic: string) => void
   onStart: () => void
   error: string | null
+  // El tema no se trabaja: se explica sin rojo (y se puede escribir otro)
+  refused: boolean
   backHref: string
 }) {
   const ready = topic.trim().length >= 2
@@ -274,7 +316,7 @@ function Intro({
         />
       </div>
 
-      {error && <ErrorBox message={error} />}
+      {error && <ErrorBox message={error} neutral={refused} />}
 
       <div className="flex flex-wrap gap-3">
         <Button type="submit" disabled={!ready}>
@@ -300,6 +342,8 @@ function PreparingLesson({
   onContinue,
   onStop,
   onRetry,
+  refused,
+  onChooseAnother,
   backHref,
   styleValue,
   savingStyle,
@@ -315,11 +359,15 @@ function PreparingLesson({
   onContinue: () => void
   onStop: () => void
   onRetry: () => void
+  refused: boolean
+  onChooseAnother: () => void
   backHref: string
   styleValue: ExplanationStyle | null | undefined
   savingStyle: boolean
   onChooseStyle: (style: ExplanationStyle | null) => void
 }) {
+  // Abrir un tramo nuevo investiga en internet: si tarda, se explica
+  const slowLesson = useSlow(prep.lesson === "active")
   const working = [prep.review, prep.level, prep.lesson].includes("active")
   const level = placement ? LEVEL_COPY[placement.level] : null
 
@@ -369,6 +417,8 @@ function PreparingLesson({
                 Tu punto de partida: <span className="font-medium text-foreground">{LEVEL_NAME[placement.level]}</span>.
               </p>
             )}
+            {/* Antes de empezar la clase: cuánto estudiar */}
+            <StudyGoalsPicker />
             <p className="font-medium">¿Cómo prefieres que te explique?</p>
             <StylePicker value={styleValue} onChoose={onChooseStyle} disabled={savingStyle} />
             <p className="text-xs text-muted-foreground">Vale para todos los temas. Puedes cambiarlo en tu perfil.</p>
@@ -382,8 +432,8 @@ function PreparingLesson({
         />
         <StepRow
           status={prep.lesson}
-          label="Preparando tu primera clase"
-          detail={prep.lesson === "done" ? "Abriendo el chat…" : null}
+          label="Preparando tu ruta y tu primera clase"
+          detail={prep.lesson === "done" ? "Abriendo tu clase…" : slowLesson ? "Buscando fuentes en internet para tus clases: la primera vez puede tardar hasta medio minuto." : null}
         />
       </ol>
 
@@ -391,9 +441,13 @@ function PreparingLesson({
       {error && prep.offerNext && <ErrorBox message={error} />}
       {error && !prep.offerNext && (
         <div className="space-y-3">
-          <ErrorBox message={error} />
+          <ErrorBox message={error} neutral={refused} />
           <div className="flex flex-wrap gap-3">
-            <Button onClick={onRetry}>Reintentar</Button>
+            {refused ? (
+              <Button onClick={onChooseAnother}>Elegir otro tema</Button>
+            ) : (
+              <Button onClick={onRetry}>Reintentar</Button>
+            )}
             <Button asChild variant="outline">
               <Link href={backHref}>Volver al chat</Link>
             </Button>
@@ -406,9 +460,13 @@ function PreparingLesson({
   )
 }
 
-function ErrorBox({ message }: { message: string }) {
+// neutral: no es un fallo (un tema que no se trabaja): se explica, sin rojo
+function ErrorBox({ message, neutral = false }: { message: string; neutral?: boolean }) {
   return (
-    <div role="alert" className="rounded-lg border border-destructive/20 bg-destructive/10 p-4 text-sm text-destructive">
+    <div
+      role={neutral ? "status" : "alert"}
+      className={`rounded-lg border p-4 text-sm ${neutral ? "border-border bg-card text-foreground" : "border-destructive/20 bg-destructive/10 text-destructive"}`}
+    >
       {message}
     </div>
   )

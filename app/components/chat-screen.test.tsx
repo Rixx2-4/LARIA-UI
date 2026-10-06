@@ -157,8 +157,8 @@ describe("ChatScreen", () => {
     type Payload = Record<string, unknown>
     // Servidor como Render: el tutor responde a "quiero aprender…" o "ponme un quiz" con
     // el envelope que se le pase; los quizzes se generan y se califican en el servidor
-    function quizServer({ type = "answer", payload, documentId = null, preferences = true, practiceFailures = 0 }: { type?: string; payload: Payload; documentId?: string | null; preferences?: boolean; practiceFailures?: number }) {
-      const calls = { diagnostics: [] as string[], practice: [] as string[], topicPractice: [] as unknown[], attempts: 0, streamed: [] as string[], styles: [] as unknown[] }
+    function quizServer({ type = "answer", payload, documentId = null, preferences = true, practiceFailures = 0, paths = false }: { type?: string; payload: Payload; documentId?: string | null; preferences?: boolean; practiceFailures?: number; paths?: boolean }) {
+      const calls = { fromTopic: [] as string[], diagnostics: [] as string[], practice: [] as string[], topicPractice: [] as unknown[], attempts: 0, streamed: [] as string[], styles: [] as unknown[] }
       const quiz = (id: string, count: number, extra: Payload = {}) => ({
         id, document_id: documentId, total_points: count * 10, created_at: "", ...extra,
         questions: Array.from({ length: count }, (_, i) => ({
@@ -178,6 +178,12 @@ describe("ChatScreen", () => {
               { role: "assistant", content: "La astronomía estudia los cuerpos celestes.", metadata: { type, emotion: "encouraging", payload: { content: "…", grounded: !!documentId, ...payload } } },
             ],
           })
+        // Sin rutas guiadas (backend anterior) responde 404 y la clase sigue en el chat
+        if (url.endsWith("/learning/paths/from-topic") && method === "POST") {
+          if (!paths) return json({ detail: "Not Found" }, 404)
+          calls.fromTopic.push(JSON.parse(String(init?.body)).topic)
+          return json({ id: "p1", topic: "astronomia", modules: [], teaching: { phase: "teaching" } })
+        }
         if (url.endsWith("/quizzes/diagnostic") && method === "POST") {
           calls.diagnostics.push(JSON.parse(String(init?.body)).topic)
           return json(quiz("diag", 6, { topic: "astronomia", topic_label: "Astronomía" }), 201)
@@ -309,6 +315,20 @@ describe("ChatScreen", () => {
       expect(screen.queryByLabelText("Tema de la nivelación")).toBeNull()
     })
 
+    it("con rutas en el backend, «Empezar mi clase» tras la nivelación crea la ruta y abre la clase guiada", async () => {
+      const calls = quizServer({ payload: { intent: "learn", suggest_placement: true, topic_hint: "astronomía" }, paths: true })
+      renderAt("c1")
+
+      fireEvent.click(await screen.findByRole("button", { name: "Empezar" }))
+      await answerAll("tres")
+      fireEvent.click(await screen.findByText("Que lo decida LARIA"))
+
+      await waitFor(() => expect(nav.push).toHaveBeenCalledWith("/clase/p1"))
+      expect(calls.fromTopic).toEqual(["Astronomía"])
+      // La clase no se pide en el chat
+      expect(calls.streamed).toEqual([])
+    })
+
     it("«Ahora no» la cierra y ese chat no la vuelve a ofrecer", async () => {
       quizServer({ payload: { intent: "learn", suggest_placement: true, topic_hint: "astronomía" } })
       const { unmount } = renderAt("c1")
@@ -360,6 +380,16 @@ describe("ChatScreen", () => {
       fireEvent.click(screen.getByRole("button", { name: "Reintentar" }))
       expect(await screen.findByText("Práctica · Fracciones")).toBeTruthy()
       expect(calls.topicPractice).toEqual([{ topic: "fracciones", num_questions: 5 }])
+    })
+
+    it("una respuesta del filtro de seguridad no lleva etiquetas ni propone nada; la de apoyo, con estilo sobrio", async () => {
+      quizServer({ payload: { intent: "learn", suggest_placement: true, topic_hint: "x", safety: "support" } })
+      renderAt("c1")
+
+      const text = await screen.findByText("La astronomía estudia los cuerpos celestes.")
+      expect(screen.queryByText("Chat libre")).toBeNull()
+      expect(screen.queryByText(/Nivelación|Cuestionario sobre/)).toBeNull()
+      expect(text.closest(".rounded-2xl")?.className).toContain("border")
     })
 
     it("sin offer_quiz no se abre nada, aunque la intención sea quiz", async () => {
@@ -613,6 +643,41 @@ describe("ChatScreen", () => {
       expect(recognition.listening).toBe(false)
       act(() => recognition.end())
       expect(screen.getByRole("button", { name: "Dictar" })).toBeTruthy()
+    })
+
+    it("en un navegador sin servicio de dictado (Brave, Chromium) explica qué hacer y quita el micrófono", async () => {
+      ;(window as { SpeechRecognition?: unknown }).SpeechRecognition = FakeSpeechRecognition
+      serverWithEmptyChat()
+      const toastError = vi.spyOn(toast, "error")
+      renderAt()
+
+      fireEvent.click(await screen.findByRole("button", { name: "Dictar" }))
+      act(() => FakeSpeechRecognition.instances[0].fail("network"))
+
+      expect(toastError).toHaveBeenCalledWith("Este navegador no tiene servicio de dictado. Prueba en Chrome, Edge o Safari, o escribe tu mensaje.")
+      expect(screen.queryByRole("button", { name: "Dictar" })).toBeNull()
+      toastError.mockRestore()
+    })
+
+    it("en Android, aunque el navegador repita la frase en cada evento, el campo la tiene una sola vez", async () => {
+      ;(window as { SpeechRecognition?: unknown }).SpeechRecognition = FakeSpeechRecognition
+      serverWithEmptyChat()
+      renderAt()
+
+      const input = (await screen.findByRole("textbox")) as HTMLInputElement
+      fireEvent.change(input, { target: { value: "Pregunta:" } })
+      fireEvent.click(screen.getByRole("button", { name: "Dictar" }))
+      const recognition = FakeSpeechRecognition.instances[0]
+
+      // El mismo final repetido 12 veces…
+      for (let i = 0; i < 12; i++) act(() => recognition.raw(Array.from({ length: i + 1 }, () => ({ transcript: "hola", isFinal: true }))))
+      expect(input.value).toBe("Pregunta: hola")
+      // …y luego entregado acumulado
+      act(() => recognition.raw([{ transcript: "hola", isFinal: true }, { transcript: "hola qué", isFinal: true }, { transcript: "hola qué tal", isFinal: true }]))
+      expect(input.value).toBe("Pregunta: hola qué tal")
+
+      act(() => recognition.end())
+      expect(input.value).toBe("Pregunta: hola qué tal")
     })
 
     it("el texto va apareciendo mientras se dicta y se fija al terminar la frase", async () => {

@@ -1,0 +1,380 @@
+"use client"
+
+import { useCallback, useEffect, useState } from "react"
+import Link from "next/link"
+import { useParams } from "next/navigation"
+import { Check, Circle, CircleDot, Lock, Loader2, RefreshCw } from "lucide-react"
+import { Button } from "@/components/ui/button"
+import { AppShell } from "@/app/components/app-shell"
+import { RequireAuth } from "@/app/components/require-auth"
+import { LariaMascot, type MascotEmotion } from "@/app/components/laria-mascot"
+import { ClassBoard } from "../class-board"
+import { ModuleSources } from "../module-sources"
+import { useSlow } from "@/lib/use-slow"
+import { LEVEL_NAME, QuestionStep, ResultsList, toResults } from "@/app/quiz/quiz-parts"
+import { useSpeech } from "@/hooks/use-speech"
+import { useStudyTime } from "@/hooks/use-study-time"
+import { ClassStudyBar } from "@/app/components/study-progress"
+import { NextSuggestions } from "@/app/components/next-suggestions"
+import { ApiError, isUnsafeTopic, lariaAPI, type CheckResponse, type LearningPath, type PathModule, type QuizResponse } from "@/lib/laria-api"
+import { NEW_CHAT_HREF, placementHref } from "@/lib/routes"
+
+// La clase guiada de una ruta: explicación de un concepto, una comprobación corta y,
+// según cómo salga, el siguiente concepto, otra explicación o un repaso previo.
+// El backend decide el paso; recargar es seguro (devuelve la misma comprobación pendiente)
+
+type View =
+  | { kind: "loading" }
+  // refused: el backend no trabaja este tema (filtro de seguridad): reintentar no sirve
+  | { kind: "error"; message: string; needsPlacement: boolean; refused?: boolean }
+  | { kind: "lesson"; markdown: string; check: QuizResponse }
+  | { kind: "result"; result: CheckResponse; check: QuizResponse }
+  | { kind: "completed" }
+
+export default function ClasePage() {
+  return (
+    <RequireAuth>
+      <Clase />
+    </RequireAuth>
+  )
+}
+
+// Cómo reacciona LARIA al resultado: lo celebra, anima o tiene paciencia
+const OUTCOME_EMOTION: Record<CheckResponse["outcome"], MascotEmotion> = {
+  understood: "celebratory",
+  partial: "encouraging",
+  not_understood: "patient",
+}
+
+// Al explicar: paciente si vuelve a explicarlo o repasa algo previo, animada en un repaso
+function lessonEmotion(teaching: LearningPath["teaching"] | undefined): MascotEmotion {
+  if (teaching?.phase === "remediation" || teaching?.last_outcome === "not_understood") return "patient"
+  if (teaching?.variant === "review") return "encouraging"
+  return "calm"
+}
+
+const OUTCOME: Record<CheckResponse["outcome"], string> = {
+  understood: "¡Entendido!",
+  partial: "Casi lo tienes",
+  not_understood: "Todavía no",
+}
+
+function Clase() {
+  const { pathId } = useParams<{ pathId: string }>()
+  const [path, setPath] = useState<LearningPath | null>(null)
+  const [view, setView] = useState<View>({ kind: "loading" })
+  const [current, setCurrent] = useState(0)
+  const [answers, setAnswers] = useState<Record<number, string>>({})
+  const [submitting, setSubmitting] = useState(false)
+  const [checkError, setCheckError] = useState<string | null>(null)
+  const speech = useSpeech()
+  // El tiempo de estudio (cuenta también mientras LARIA explica, aunque no se toque nada)
+  const { summary: studySummary, sessionSeconds } = useStudyTime({ busy: !!speech.speaking })
+
+  const loadLesson = useCallback(async () => {
+    setView({ kind: "loading" })
+    setCurrent(0)
+    setAnswers({})
+    setCheckError(null)
+    try {
+      const lesson = await lariaAPI.paths.lesson(pathId)
+      setPath(lesson.path)
+      if (lesson.check) setView({ kind: "lesson", markdown: lesson.markdown ?? "", check: lesson.check })
+      else if (lesson.path.teaching?.phase === "completed") setView({ kind: "completed" })
+      else setView({ kind: "error", message: "No hay ninguna lección preparada ahora mismo.", needsPlacement: false })
+    } catch (error) {
+      // 409: el tema aún no tiene nivelación. La ruta se pide aparte para saber qué tema es
+      const needsPlacement = error instanceof ApiError && error.status === 409
+      if (needsPlacement) lariaAPI.paths.get(pathId).then(setPath).catch(() => {})
+      const refused = isUnsafeTopic(error)
+      setView({ kind: "error", message: error instanceof Error ? error.message : "No se pudo preparar la lección", needsPlacement, refused })
+    }
+  }, [pathId])
+
+  useEffect(() => {
+    // Al abrir (o recargar) se retoma donde se quedó
+    // eslint-disable-next-line react-hooks/set-state-in-effect
+    loadLesson()
+  }, [loadLesson])
+
+  // La lectura de la pizarra se corta al salir de la clase
+  const { stop: stopSpeech } = speech
+  useEffect(() => stopSpeech, [stopSpeech])
+
+  const submit = async () => {
+    if (view.kind !== "lesson") return
+    const { check } = view
+    setSubmitting(true)
+    setCheckError(null)
+    try {
+      const result = await lariaAPI.paths.check(pathId, check.id, answers)
+      speech.stop()
+      setPath(result.path)
+      setView({ kind: "result", result, check })
+    } catch (error) {
+      // 409: esa comprobación ya no está pendiente (p. ej. se respondió en otra pestaña)
+      if (error instanceof ApiError && error.status === 409) return loadLesson()
+      setCheckError(error instanceof Error ? error.message : "No se pudieron enviar tus respuestas")
+    } finally {
+      setSubmitting(false)
+    }
+  }
+
+  // Abrir un tramo nuevo investiga en internet y tarda: si la espera se alarga, se explica
+  const slowLoading = useSlow(view.kind === "loading")
+  const upcomingTier = path?.next_tier ?? null
+
+  const title = path?.title || path?.topic || "Tu clase"
+  const teaching = path?.teaching
+
+  return (
+    <AppShell>
+      <div className="h-full overflow-auto">
+        <div className="mx-auto grid max-w-5xl gap-6 px-4 py-6 sm:px-6 lg:grid-cols-[260px_1fr]">
+          {path && <PathOutline path={path} />}
+
+          <main className="min-w-0 space-y-6 lg:col-start-2">
+            <ClassStudyBar summary={studySummary} sessionSeconds={sessionSeconds} />
+            <header className="space-y-1">
+              <p className="text-sm text-muted-foreground">Clase · {title}</p>
+              {teaching?.concept_title && view.kind !== "completed" && (
+                <h1 className="text-2xl font-semibold tracking-tight">{teaching.concept_title}</h1>
+              )}
+            </header>
+
+            {view.kind === "loading" && (
+              <div role="status" className="flex flex-col items-center gap-3 py-16 text-center text-muted-foreground">
+                <LariaMascot state="thinking" className="w-24" />
+                <p className="flex items-center gap-2">
+                  <Loader2 className="h-4 w-4 animate-spin motion-reduce:animate-none" aria-hidden />
+                  Preparando tu lección…
+                </p>
+                <p className="text-sm">
+                  {slowLoading
+                    ? `LARIA está preparando ${upcomingTier ? `el tramo ${LEVEL_NAME[upcomingTier]}` : "las clases"} con fuentes de internet. La primera vez puede tardar hasta medio minuto.`
+                    : "Suele tardar unos segundos."}
+                </p>
+              </div>
+            )}
+
+            {view.kind === "error" && (
+              <div role="alert" className="space-y-4 rounded-xl border border-border bg-card p-5">
+                <p>{view.message}</p>
+                {view.refused ? (
+                  <div className="flex flex-wrap gap-2">
+                    <Button asChild>
+                      <Link href={placementHref()}>Elegir otro tema</Link>
+                    </Button>
+                    <Button asChild variant="outline">
+                      <Link href="/clases">Mis clases</Link>
+                    </Button>
+                  </div>
+                ) : view.needsPlacement ? (
+                  <Button asChild>
+                    <Link href={placementHref(path?.topic ?? path?.title ?? undefined)}>Hacer la nivelación</Link>
+                  </Button>
+                ) : (
+                  <Button variant="outline" onClick={loadLesson} className="gap-2">
+                    <RefreshCw className="h-4 w-4" aria-hidden />
+                    Reintentar
+                  </Button>
+                )}
+              </div>
+            )}
+
+            {view.kind === "lesson" && (
+              <>
+                {/* Por qué toca esto ahora: otra explicación, un repaso previo… */}
+                {teaching?.reason && <p className="rounded-lg bg-muted px-4 py-3 text-sm">{teaching.reason}</p>}
+                {/* La explicación en la pizarra; la comprobación aparece cuando está entera */}
+                <ClassBoard
+                  key={view.check.id}
+                  lessonKey={`clase:${pathId}:${view.check.id}`}
+                  markdown={view.markdown}
+                  speech={speech}
+                  emotion={lessonEmotion(teaching)}
+                >
+                  <section aria-labelledby="comprobacion" className="space-y-4 border-t border-border pt-6">
+                    <h2 id="comprobacion" className="text-lg font-medium">
+                      Comprueba lo que has aprendido
+                    </h2>
+                    {view.check.questions[current] && (
+                      <QuestionStep
+                        questions={view.check.questions}
+                        current={current}
+                        answers={answers}
+                        onAnswer={(question, letter) => setAnswers((prev) => ({ ...prev, [question.index]: letter }))}
+                        onPrev={() => setCurrent((n) => Math.max(0, n - 1))}
+                        onNext={() => (current < view.check.questions.length - 1 ? setCurrent((n) => n + 1) : submit())}
+                        isSubmitting={submitting}
+                        error={checkError}
+                      />
+                    )}
+                  </section>
+                </ClassBoard>
+                {/* En los tramos intermedio y avanzado, en qué se basa la explicación */}
+                <ModuleSources sources={path?.modules.find((m) => m.concept === teaching?.concept)?.sources} />
+              </>
+            )}
+
+            {view.kind === "result" && (
+              <section aria-live="polite" className="space-y-5">
+                <div className="flex items-center gap-4">
+                  <LariaMascot emotion={OUTCOME_EMOTION[view.result.outcome]} className="w-20 shrink-0" />
+                  <div className="space-y-1">
+                    <h2 className="text-xl font-semibold">{OUTCOME[view.result.outcome]}</h2>
+                    <p className="text-sm text-muted-foreground">
+                      Acertaste {view.result.questions.filter((q) => q.is_correct).length} de {view.result.questions.length}.
+                    </p>
+                  </div>
+                </div>
+                <ResultsList results={toResults(view.check.questions, view.result.questions)} />
+                {view.result.next.reason && <p className="rounded-lg bg-muted px-4 py-3 text-sm">{view.result.next.reason}</p>}
+                <Button onClick={loadLesson}>Continuar</Button>
+              </section>
+            )}
+
+            {/* Terminó un tramo, no la ruta: la prueba de paso abre el siguiente, con clases nuevas */}
+            {view.kind === "completed" && path?.next_tier && (
+              <section className="space-y-4 rounded-xl border border-border bg-card p-6">
+                <div className="flex items-center gap-4">
+                  <LariaMascot emotion="celebratory" className="w-24 shrink-0" />
+                  <div className="space-y-1">
+                    <h1 className="text-2xl font-semibold">¡Tramo {LEVEL_NAME[path.tiers?.at(-1) ?? "basico"]} terminado!</h1>
+                    <p className="text-sm text-muted-foreground">La ruta sigue: el tramo {LEVEL_NAME[path.next_tier]} tiene clases nuevas.</p>
+                  </div>
+                </div>
+                <p className="text-muted-foreground">
+                  {teaching?.reason || `Haz la prueba de paso para abrir el tramo ${LEVEL_NAME[path.next_tier]}.`}
+                </p>
+                <div className="flex flex-wrap gap-2">
+                  <Button asChild>
+                    <Link href={placementHref(path.topic ?? undefined)}>Hacer la prueba de paso</Link>
+                  </Button>
+                  <Button asChild variant="outline">
+                    <Link href="/clases">Mis clases</Link>
+                  </Button>
+                </div>
+              </section>
+            )}
+
+            {view.kind === "completed" && !path?.next_tier && (
+              <section className="space-y-4 rounded-xl border border-border bg-card p-6">
+                <div className="flex items-center gap-4">
+                  <LariaMascot emotion="celebratory" className="w-24 shrink-0" />
+                  <h1 className="text-2xl font-semibold">¡Ruta completada!</h1>
+                </div>
+                <p className="text-muted-foreground">
+                  Has terminado la ruta de {title}. Puedes seguir preguntando a LARIA en el chat o ver tu progreso en el perfil.
+                </p>
+                <div className="flex flex-wrap gap-2">
+                  <Button asChild>
+                    <Link href={NEW_CHAT_HREF}>Ir al chat</Link>
+                  </Button>
+                  <Button asChild variant="outline">
+                    <Link href="/perfil">Ver mi progreso</Link>
+                  </Button>
+                </div>
+              </section>
+            )}
+
+            {view.kind === "completed" && !path?.next_tier && <NextSuggestions pathId={pathId} />}
+          </main>
+        </div>
+      </div>
+    </AppShell>
+  )
+}
+
+const MODULE_STATUS: Record<PathModule["status"], string> = {
+  completed: "Hecho",
+  in_progress: "En curso",
+  available: "Disponible",
+  locked: "Bloqueado",
+  assumed: "Se da por sabido",
+}
+
+function ModuleIcon({ status }: { status: PathModule["status"] }) {
+  if (status === "completed" || status === "assumed") return <Check className="h-4 w-4 text-green-600 dark:text-green-400" aria-hidden />
+  if (status === "in_progress") return <CircleDot className="h-4 w-4 text-primary" aria-hidden />
+  if (status === "locked") return <Lock className="h-3.5 w-3.5 text-muted-foreground" aria-hidden />
+  return <Circle className="h-3.5 w-3.5 text-muted-foreground" aria-hidden />
+}
+
+// La ruta entera con el estado de cada módulo; en móvil, plegada
+function ModuleItem({ module, current }: { module: PathModule; current: boolean }) {
+  return (
+    <li
+      aria-current={current ? "step" : undefined}
+      className={`flex items-start gap-2 rounded-md px-2 py-1.5 text-sm ${current ? "bg-primary/10" : ""}`}
+    >
+      <span className="mt-0.5 shrink-0">
+        <ModuleIcon status={module.status} />
+      </span>
+      <span className="min-w-0">
+        <span className={`block ${module.status === "locked" ? "text-muted-foreground" : ""}`}>{module.title}</span>
+        <span className="block text-xs text-muted-foreground">
+          {MODULE_STATUS[module.status]}
+          {module.kind === "prerequisite" && " · Repaso previo"}
+        </span>
+        {/* Tramos intermedio y avanzado: las ideas clave del concepto, al desplegar */}
+        {!!module.key_points?.length && (
+          <details className="mt-1 text-xs">
+            <summary className="cursor-pointer text-muted-foreground hover:text-foreground">Lo que verás</summary>
+            <ul className="mt-1 list-disc space-y-0.5 pl-4 text-muted-foreground">
+              {module.key_points.map((point) => (
+                <li key={point}>{point}</li>
+              ))}
+            </ul>
+          </details>
+        )}
+      </span>
+    </li>
+  )
+}
+
+// La ruta entera con el estado de cada módulo, por tramos (básico, intermedio,
+// avanzado) si los tiene; el tramo que falta abrir, al final. En móvil, plegada
+function PathOutline({ path }: { path: LearningPath }) {
+  const modules = [...path.modules].sort((a, b) => a.position - b.position)
+  const done = modules.filter((m) => m.status === "completed" || m.status === "assumed").length
+  const tiers = path.tiers?.length ? path.tiers : null
+  const isCurrent = (module: PathModule) => module.concept === path.teaching?.concept
+  return (
+    <aside aria-label="Tu ruta" className="lg:row-span-2">
+      <details open className="group rounded-xl border border-border bg-card p-4 lg:sticky lg:top-6">
+        <summary className="cursor-pointer list-none text-sm font-medium">
+          Tu ruta · {done} de {modules.length}
+        </summary>
+        {tiers ? (
+          <div className="mt-3 space-y-4">
+            {tiers.map((tier) => (
+              <section key={tier} aria-label={`Tramo ${LEVEL_NAME[tier]}`}>
+                <h3 className="mb-1 px-2 text-xs font-medium uppercase tracking-wide text-muted-foreground">Tramo {LEVEL_NAME[tier]}</h3>
+                <ol className="space-y-2">
+                  {modules
+                    .filter((m) => m.tier === tier || (!m.tier && tier === tiers[0]))
+                    .map((module) => (
+                      <ModuleItem key={module.concept} module={module} current={isCurrent(module)} />
+                    ))}
+                </ol>
+              </section>
+            ))}
+            {path.next_tier && (
+              <p className="flex items-center gap-2 px-2 text-sm text-muted-foreground">
+                <Lock className="h-3.5 w-3.5" aria-hidden />
+                Tramo {LEVEL_NAME[path.next_tier]}: se abre con la prueba de paso
+              </p>
+            )}
+          </div>
+        ) : (
+          <ol className="mt-3 space-y-2">
+            {modules.map((module) => (
+              <ModuleItem key={module.concept} module={module} current={isCurrent(module)} />
+            ))}
+          </ol>
+        )}
+      </details>
+    </aside>
+  )
+}

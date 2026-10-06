@@ -1,10 +1,15 @@
 "use client"
 
 import { useEffect, useRef, useState } from "react"
+import { useRouter } from "next/navigation"
 import { ArrowRight, Loader2 } from "lucide-react"
 import { Button } from "@/components/ui/button"
-import { lariaAPI, type ExplanationStyle, type PlacementResult, type QuizQuestion, type QuizResponse } from "@/lib/laria-api"
+import { ApiError, isUnsafeTopic, lariaAPI, type ExplanationStyle, type PlacementResult, type QuizQuestion, type QuizResponse } from "@/lib/laria-api"
 import { STYLE_OPTIONS, StylePicker } from "./style-picker"
+import { classHref } from "@/lib/routes"
+import { MathText } from "./message-content"
+import { StudyGoalsPicker } from "./study-goals-picker"
+import { useSlow } from "@/lib/use-slow"
 import {
   LEVEL_COPY,
   LEVEL_NAME,
@@ -45,6 +50,8 @@ interface ChatQuizProps {
 }
 
 export function ChatQuiz({ chatId, request, onDismiss, onStartLesson }: ChatQuizProps) {
+  const router = useRouter()
+  // Abrir un tramo nuevo investiga en internet: si tarda, se explica
   const isPlacement = request.kind === "placement"
   const isStyleOnly = request.kind === "style"
   const [phase, setPhase] = useState<Phase>(isStyleOnly ? "style" : "offer")
@@ -56,7 +63,11 @@ export function ChatQuiz({ chatId, request, onDismiss, onStartLesson }: ChatQuiz
   const [results, setResults] = useState<QuizResult[]>([])
   const [placement, setPlacement] = useState<PlacementResult | null>(null)
   const [steps, setSteps] = useState<{ level: StepStatus; lesson: StepStatus }>({ level: "pending", lesson: "pending" })
+  // Abrir un tramo nuevo investiga en internet: si tarda, se explica
+  const slowLesson = useSlow(steps.lesson === "active")
   const [error, setError] = useState<string | null>(null)
+  // El backend no trabaja este tema (filtro de seguridad): reintentar no sirve
+  const [refused, setRefused] = useState(false)
   // La preferencia actual, para marcarla al preguntar (undefined mientras se carga)
   const [style, setStyle] = useState<ExplanationStyle | null | undefined>(undefined)
   const [savingStyle, setSavingStyle] = useState(false)
@@ -119,6 +130,7 @@ export function ChatQuiz({ chatId, request, onDismiss, onStartLesson }: ChatQuiz
       setPhase("question")
     } catch (err) {
       setError(err instanceof Error ? err.message : "No se pudieron preparar las preguntas")
+      setRefused(isUnsafeTopic(err))
       setPhase(placement ? "next-offer" : "offer")
     }
   }
@@ -143,20 +155,33 @@ export function ChatQuiz({ chatId, request, onDismiss, onStartLesson }: ChatQuiz
     }
   }
 
-  // Ajusta al nivel y pide la primera clase en este mismo chat
+  // Tras la nivelación: la ruta del tema y su clase guiada (/clase/<ruta>). Un backend
+  // sin rutas (404/405) da la clase como antes, en este mismo chat
   const startLesson = async (verdict: PlacementResult | null, lessonTopic: string) => {
     setPhase("lesson")
+    setError(null)
     setSteps({ level: "active", lesson: "pending" })
     await pause(STEP_PAUSE_MS)
     setSteps({ level: "done", lesson: "active" })
-    await pause(STEP_PAUSE_MS / 2)
-    onStartLesson(
-      verdict
-        ? `Empecemos la clase de ${lessonTopic}. En la nivelación quedé en nivel ${LEVEL_NAME[verdict.level]}.`
-        : `Empecemos la clase de ${lessonTopic}.`,
-    )
-    setSteps({ level: "done", lesson: "done" })
-    setPhase("done")
+    try {
+      const path = await lariaAPI.paths.fromTopic(lessonTopic)
+      setSteps({ level: "done", lesson: "done" })
+      router.push(classHref(path.id))
+    } catch (err) {
+      if (err instanceof ApiError && (err.status === 404 || err.status === 405)) {
+        onStartLesson(
+          verdict
+            ? `Empecemos la clase de ${lessonTopic}. En la nivelación quedé en nivel ${LEVEL_NAME[verdict.level]}.`
+            : `Empecemos la clase de ${lessonTopic}.`,
+        )
+        setSteps({ level: "done", lesson: "done" })
+        setPhase("done")
+        return
+      }
+      setError(err instanceof Error ? err.message : "No se pudo preparar tu clase")
+      setRefused(isUnsafeTopic(err))
+      setSteps({ level: "done", lesson: "pending" })
+    }
   }
 
   const title = isPlacement
@@ -177,7 +202,10 @@ export function ChatQuiz({ chatId, request, onDismiss, onStartLesson }: ChatQuiz
                   <input
                     aria-label="Tema de la nivelación"
                     value={topic}
-                    onChange={(e) => setTopic(e.target.value)}
+                    onChange={(e) => {
+                      setTopic(e.target.value)
+                      setRefused(false)
+                    }}
                     placeholder="el tema"
                     maxLength={120}
                     size={Math.max(8, topic.length + 1)}
@@ -196,11 +224,14 @@ export function ChatQuiz({ chatId, request, onDismiss, onStartLesson }: ChatQuiz
                 <p className="text-xs text-muted-foreground">Cuenta para tu perfil de aprendizaje; no cambia tu nivel.</p>
               </>
             )}
-            {error && <ErrorLine message={error} />}
+            {error && <ErrorLine message={error} neutral={refused} />}
             <div className="flex gap-2">
-              <Button size="sm" onClick={load} disabled={isPlacement && topic.trim().length < 2}>
-                {error ? "Reintentar" : "Empezar"}
-              </Button>
+              {/* Un tema rechazado solo se puede cambiar (en la nivelación se escribe otro) */}
+              {(!refused || isPlacement) && (
+                <Button size="sm" onClick={load} disabled={isPlacement && topic.trim().length < 2}>
+                  {error && !refused ? "Reintentar" : "Empezar"}
+                </Button>
+              )}
               <Button size="sm" variant="ghost" onClick={onDismiss}>
                 Ahora no
               </Button>
@@ -233,13 +264,13 @@ export function ChatQuiz({ chatId, request, onDismiss, onStartLesson }: ChatQuiz
           <div className="space-y-3">
             <p className="font-medium">Base de {topic}, superada: acertaste {score} de {results.length}.</p>
             <p>¿Seguimos con 8 preguntas algo más difíciles para afinar tu nivel?</p>
-            {error && <ErrorLine message={error} />}
+            {error && <ErrorLine message={error} neutral={refused} />}
             <div className="flex flex-wrap gap-2">
               <Button size="sm" onClick={load}>
                 {error ? "Reintentar" : "Seguir"}
               </Button>
               <Button size="sm" variant="outline" onClick={() => setPhase("style")}>
-                Empezar la clase
+                Empezar mi clase
               </Button>
             </div>
             <Answers results={results} />
@@ -253,6 +284,8 @@ export function ChatQuiz({ chatId, request, onDismiss, onStartLesson }: ChatQuiz
                 Tu punto de partida en {topic}: <span className="font-medium text-foreground">{LEVEL_NAME[placement.level]}</span>.
               </p>
             )}
+            {/* Tras la nivelación, antes de empezar la clase: cuánto estudiar */}
+            {isPlacement && <StudyGoalsPicker />}
             <p className="font-medium">¿Cómo prefieres que te explique?</p>
             <StylePicker value={style} onChoose={chooseStyle} disabled={savingStyle} compact />
             <p className="text-xs text-muted-foreground">Vale para todos los temas. Puedes cambiarlo en tu perfil.</p>
@@ -269,8 +302,18 @@ export function ChatQuiz({ chatId, request, onDismiss, onStartLesson }: ChatQuiz
                 label={placement ? `Ajustando la clase a tu nivel (${LEVEL_NAME[placement.level]})` : "Ajustando la clase a tu nivel"}
                 detail={placement ? LEVEL_COPY[placement.level].title : null}
               />
-              <StepRow status={steps.lesson} label="Preparando tu primera clase" />
+              <StepRow status={steps.lesson} label="Preparando tu ruta y tu primera clase" detail={slowLesson ? "Buscando fuentes en internet para tus clases: la primera vez puede tardar hasta medio minuto." : null} />
             </ol>
+            {error && (
+              <>
+                <ErrorLine message={error} neutral={refused} />
+                {!refused && (
+                  <Button size="sm" onClick={() => startLesson(placement, topic)}>
+                    Reintentar
+                  </Button>
+                )}
+              </>
+            )}
           </div>
         )}
 
@@ -312,9 +355,10 @@ export function ChatQuiz({ chatId, request, onDismiss, onStartLesson }: ChatQuiz
   )
 }
 
-function ErrorLine({ message }: { message: string }) {
+// neutral: no es un fallo (un tema que no se trabaja): se explica, sin rojo
+function ErrorLine({ message, neutral = false }: { message: string; neutral?: boolean }) {
   return (
-    <p role="alert" className="text-sm text-destructive">
+    <p role={neutral ? "status" : "alert"} className={`text-sm ${neutral ? "text-foreground" : "text-destructive"}`}>
       {message}
     </p>
   )
@@ -368,7 +412,7 @@ function InlineQuestion({
       <div className="h-1 overflow-hidden rounded-full bg-muted">
         <div className="h-full bg-primary transition-all" style={{ width: `${((current + 1) / questions.length) * 100}%` }} />
       </div>
-      <p className="font-medium">{question.text}</p>
+      <p className="message-text font-medium"><MathText text={question.text} /></p>
       <div className="space-y-2">
         {Object.entries(question.options).map(([key, value]) => (
           <button
@@ -376,12 +420,12 @@ function InlineQuestion({
             onClick={() => onAnswer(question, key)}
             aria-pressed={answers[question.index] === key}
             disabled={grading}
-            className={`w-full rounded-lg border px-3 py-2 text-left text-[13.5px] transition-colors ${
+            className={`message-text w-full rounded-lg border px-3 py-2 text-left text-[13.5px] transition-colors ${
               answers[question.index] === key ? "border-primary bg-primary/5" : "border-border hover:border-primary/50"
             }`}
           >
             <span className="mr-2 font-medium">{key}.</span>
-            {value}
+            <MathText text={value} />
           </button>
         ))}
       </div>

@@ -27,7 +27,7 @@ const quiz = {
 }
 
 // Servidor de quizzes: registra las peticiones de generar y enviar
-function stubServer() {
+function stubServer(served = quiz) {
   const requests: { url: string; method: string; body?: unknown }[] = []
   vi.stubGlobal("fetch", async (url: string, init?: RequestInit) => {
     const method = init?.method ?? "GET"
@@ -44,7 +44,7 @@ function stubServer() {
       // Como el backend: generar un quiz es un POST; otro método da 405
       if (method !== "POST") return json({ detail: "Method Not Allowed" }, 405)
       requests.push({ url, method })
-      return json(quiz)
+      return json(served)
     }
     if (url.includes("/attempts")) {
       const body = JSON.parse(String(init?.body))
@@ -105,6 +105,31 @@ describe("QuizPage", () => {
     expect(requests[0]).toMatchObject({ method: "POST", url: expect.stringMatching(/\/chats\/c1\/quiz\?num_questions=5$/) })
     expect(requests[1].url).toMatch(/\/quizzes\/q-77\/attempts$/)
     expect(requests[1].body).toEqual({ answers: { "1": "B", "2": "B" } })
+  })
+
+  it("con un chat sin documento en la URL (p. ej. desde la barra lateral) no deja generar y dice por qué", async () => {
+    const requests = stubServer()
+    renderQuiz("chat=c3")
+
+    expect(await screen.findByText("Este chat no tiene un documento. Sube uno en el chat, o nivélate en un tema aquí abajo.")).toBeTruthy()
+    const generate = screen.getByText("Generar Quiz").closest("button")!
+    expect(generate.disabled).toBe(true)
+    fireEvent.click(generate)
+    expect(requests).toEqual([])
+  })
+
+  it("las fórmulas del enunciado y de las opciones se dibujan con KaTeX", async () => {
+    stubServer({
+      ...quiz,
+      questions: [{ index: 0, text: "¿Cuánto es \\( \\frac{3}{4} + \\frac{1}{4} \\)?", options: { A: "\\( 1 \\)", B: "\\( \\frac{4}{8} \\)" }, difficulty: "easy" }],
+    })
+    const { container } = renderQuiz("chat=c1")
+
+    fireEvent.click(await screen.findByText("Generar Quiz"))
+    await screen.findByText(/¿Cuánto es/)
+    // Una fórmula en el enunciado y una en cada opción (KaTeX llega un instante después)
+    await waitFor(() => expect(container.querySelectorAll(".katex-html")).toHaveLength(3))
+    expect(container.textContent).not.toContain("\\(")
   })
 
   it("Personalizar permite pedir otro número de preguntas", async () => {

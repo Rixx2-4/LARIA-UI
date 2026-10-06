@@ -34,16 +34,24 @@ interface QueueItem {
   emotion: SpeechEmotion
   // De qué mensaje es: para marcar su botón como «Detener» mientras suena
   key: string
+  // Qué trozo es dentro de lo que se mandó a leer (la pizarra lo sigue)
+  index: number
   status: "waiting" | "fetching" | "ready"
   audio?: Blob | null
 }
 
 export function useSpeech() {
   const [enabled, setEnabled] = useState(false)
+  // Ya se sabe si hay voz (la consulta nunca falla: sin voz, enabled = false)
+  const [configLoaded, setConfigLoaded] = useState(false)
   const [maxChars, setMaxChars] = useState(1200)
   // Por defecto solo texto: cada audio cuesta dinero
   const [mode, setModeState] = useState<SpeechMode>("text")
-  const [speakingKey, setSpeakingKey] = useState<string | null>(null)
+  // Qué está sonando ahora: el mensaje y el trozo
+  const [speaking, setSpeaking] = useState<{ key: string; index: number } | null>(null)
+  // De qué mensaje queda algo por leer (pedido, en camino o sonando); null al acabar,
+  // al detenerse o si falla: así quien sigue la lectura sabe que terminó
+  const [pendingKey, setPendingKey] = useState<string | null>(null)
 
   const queueRef = useRef<QueueItem[]>([])
   const playingRef = useRef(false)
@@ -52,6 +60,9 @@ export function useSpeech() {
   const audioRef = useRef<HTMLAudioElement | null>(null)
   const urlRef = useRef<string | null>(null)
   const cacheRef = useRef(new Map<string, Blob | null>())
+  // Para mover la boca de la mascota con el volumen real de lo que suena
+  const analyserRef = useRef<AnalyserNode | null>(null)
+  const levelBufferRef = useRef<Uint8Array<ArrayBuffer> | null>(null)
 
   useEffect(() => {
     // localStorage solo existe en el cliente: se lee al montar
@@ -61,6 +72,7 @@ export function useSpeech() {
       if (cancelled) return
       setEnabled(config.enabled)
       setMaxChars(config.max_chars)
+      setConfigLoaded(true)
     })
     return () => {
       cancelled = true
@@ -85,17 +97,62 @@ export function useSpeech() {
     playingRef.current = false
     audioRef.current?.pause()
     releaseUrl()
-    setSpeakingKey(null)
+    setSpeaking(null)
+    setPendingKey(null)
+  }, [])
+
+  // El audio pasa por un analizador de Web Audio. Ojo: una vez conectado, el sonido
+  // SOLO sale por ese contexto; si estuviera suspendido, LARIA se quedaría muda. Por
+  // eso se conecta únicamente cuando el contexto ya está en marcha; si no, no hay
+  // analizador y la boca usa su animación en bucle
+  const connectAnalyser = useCallback((element: HTMLAudioElement) => {
+    if (element.dataset.analyser) return
+    const Context = typeof window !== "undefined" ? window.AudioContext : undefined
+    if (!Context) return
+    element.dataset.analyser = "pending"
+    try {
+      const context = new Context()
+      Promise.resolve(context.resume())
+        .then(() => {
+          if (context.state !== "running") {
+            // Se reintentará en el próximo gesto
+            delete element.dataset.analyser
+            return context.close()
+          }
+          const analyser = context.createAnalyser()
+          analyser.fftSize = 512
+          context.createMediaElementSource(element).connect(analyser)
+          analyser.connect(context.destination)
+          analyserRef.current = analyser
+          levelBufferRef.current = new Uint8Array(analyser.fftSize)
+          element.dataset.analyser = "on"
+        })
+        .catch(() => {})
+    } catch {
+      // Sin Web Audio: la boca usa su animación en bucle
+    }
+  }, [])
+
+  // Volumen de lo que suena ahora (de 0 a 1), o null si no se puede medir
+  const getLevel = useCallback((): number | null => {
+    const analyser = analyserRef.current
+    const buffer = levelBufferRef.current
+    if (!analyser || !buffer) return null
+    analyser.getByteTimeDomainData(buffer)
+    let sum = 0
+    for (const value of buffer) sum += ((value - 128) / 128) ** 2
+    return Math.sqrt(sum / buffer.length)
   }, [])
 
   // Dentro del clic (enviar, ▶, activar la voz): así el navegador deja sonar lo que llegue
   const prime = useCallback(() => {
     const element = audio()
+    connectAnalyser(element)
     if (playingRef.current || element.dataset.primed) return
     element.dataset.primed = "1"
     element.src = SILENCE
     element.play()?.catch(() => {})
-  }, [audio])
+  }, [audio, connectAnalyser])
 
   const fail = useCallback(
     (error: unknown) => {
@@ -109,13 +166,17 @@ export function useSpeech() {
   const pump = useCallback(function pump(): void {
     const generation = generationRef.current
     const queue = queueRef.current
+    if (!playingRef.current && !queue.length) {
+      setPendingKey(null)
+      return
+    }
 
     // Sonar la primera si ya está
     if (!playingRef.current && queue[0]?.status === "ready") {
       const item = queue.shift()!
       if (!item.audio) return pump()
       playingRef.current = true
-      setSpeakingKey(item.key)
+      setSpeaking({ key: item.key, index: item.index })
       const element = audio()
       releaseUrl()
       urlRef.current = URL.createObjectURL(item.audio)
@@ -123,7 +184,7 @@ export function useSpeech() {
       element.onended = () => {
         if (generation !== generationRef.current) return
         playingRef.current = false
-        if (!queueRef.current.length) setSpeakingKey(null)
+        if (!queueRef.current.length) setSpeaking(null)
         pump()
       }
       Promise.resolve(element.play()).catch((error: unknown) => {
@@ -173,10 +234,13 @@ export function useSpeech() {
   }, [audio, fail, stop])
 
   const enqueue = useCallback(
-    (chunks: string[], emotion: SpeechEmotion, key: string) => {
-      const items = chunks.map((chunk) => chunk.trim()).filter(Boolean).map((text): QueueItem => ({ text, emotion, key, status: "waiting" }))
+    (chunks: string[], emotion: SpeechEmotion, key: string, firstIndex = 0) => {
+      const items = chunks
+        .map((chunk, i): QueueItem => ({ text: chunk.trim(), emotion, key, index: firstIndex + i, status: "waiting" }))
+        .filter((item) => item.text)
       if (!items.length) return
       queueRef.current.push(...items)
+      setPendingKey(key)
       pump()
     },
     [pump],
@@ -208,5 +272,5 @@ export function useSpeech() {
 
   useEffect(() => stop, [stop])
 
-  return { enabled, maxChars, mode, setMode, speakingKey, enqueue, playMessage, prime, stop }
+  return { enabled, configLoaded, maxChars, mode, setMode, speaking, speakingKey: speaking?.key ?? null, pendingKey, getLevel, enqueue, playMessage, prime, stop }
 }

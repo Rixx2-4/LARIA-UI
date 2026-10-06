@@ -11,6 +11,8 @@ import { LEVEL_NAME } from "../quiz/quiz-parts"
 import { StylePicker } from "../components/style-picker"
 import { useAuth } from "@/app/contexts/auth-context"
 import { placementHref } from "@/lib/routes"
+import { VoicePicker } from "../components/voice-picker"
+import { StudyGoalsPicker } from "../components/study-goals-picker"
 import { lariaAPI, StudentProfile, LearningHistory, Document, type ExplanationStyle } from "@/lib/laria-api"
 import { toast } from "sonner"
 
@@ -346,6 +348,11 @@ function Perfil() {
           </div>
         </div>
 
+        <section className="mx-4 md:mx-6 mb-5 rounded-xl border border-border p-4 empty:hidden" aria-label="Cuánto estudiar">
+          <StudyGoalsPicker />
+        </section>
+        <VoicePicker className="mx-4 md:mx-6 mb-5" />
+
         {/* Solo si el backend ya lo expone (explanation_style_choice llega como null o un estilo) */}
         {learningProfile?.explanation_style_choice !== undefined && (
           <section className="mx-4 md:mx-6 mb-5 rounded-xl border border-border p-4" aria-labelledby="como-te-explica">
@@ -618,3 +625,4 @@ function Perfil() {
     </AppShell>
   )
 }
+

@@ -1,5 +1,6 @@
 "use client"
 
+import { MathText } from "@/app/components/message-content"
 import { ArrowRight, Check, CheckCircle, Loader2, XCircle } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import type { PlacementLevel, QuizAttemptQuestion, QuizQuestion } from "@/lib/laria-api"
@@ -10,6 +11,17 @@ import type { PlacementLevel, QuizAttemptQuestion, QuizQuestion } from "@/lib/la
 export function answerLabel(question: QuizQuestion, letter: string): string {
   const text = question.options[letter]
   return text ? `${letter}. ${text}` : letter
+}
+
+// Lo mismo, con las fórmulas de la opción dibujadas
+function AnswerLabel({ question, letter }: { question: QuizQuestion; letter: string }) {
+  const text = question.options[letter]
+  if (!text) return <>{letter}</>
+  return (
+    <>
+      {letter}. <MathText text={text} />
+    </>
+  )
 }
 
 export interface QuizResult {
@@ -74,7 +86,7 @@ export function QuestionStep({ questions, current, answers, onAnswer, onPrev, on
           <DifficultyBadge difficulty={question.difficulty} />
         </div>
 
-        <h2 className="text-lg font-medium mb-4">{question.text}</h2>
+        <h2 className="message-text text-lg font-medium mb-4"><MathText text={question.text} /></h2>
 
         <div className="space-y-3">
           {Object.entries(question.options).map(([key, value]) => (
@@ -87,7 +99,7 @@ export function QuestionStep({ questions, current, answers, onAnswer, onPrev, on
               }`}
             >
               <span className="font-medium mr-2">{key}.</span>
-              {value}
+              <MathText text={value} />
             </button>
           ))}
         </div>
@@ -132,17 +144,17 @@ export function ResultsList({ results }: { results: QuizResult[] }) {
               <XCircle className="h-5 w-5 text-red-600 dark:text-red-400 mt-0.5 shrink-0" />
             )}
             <div className="flex-1">
-              <p className="font-medium mb-2">{result.question.text}</p>
+              <p className="message-text font-medium mb-2"><MathText text={result.question.text} /></p>
               <p className="text-sm text-muted-foreground">
                 Tu respuesta:{" "}
                 <span className="font-medium">
-                  {result.userAnswer ? answerLabel(result.question, result.userAnswer) : "Sin respuesta"}
+                  {result.userAnswer ? <AnswerLabel question={result.question} letter={result.userAnswer} /> : "Sin respuesta"}
                 </span>
               </p>
               {!result.isCorrect && (
                 <p className="text-sm text-green-700 dark:text-green-400">
                   Respuesta correcta:{" "}
-                  <span className="font-medium">{answerLabel(result.question, result.correctAnswer)}</span>
+                  <span className="font-medium"><AnswerLabel question={result.question} letter={result.correctAnswer} /></span>
                 </p>
               )}
             </div>

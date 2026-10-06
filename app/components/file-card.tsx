@@ -1,13 +1,16 @@
 "use client"
 
-import { X } from "lucide-react"
+import { Loader2, X } from "lucide-react"
 import { FileTypeIcon } from "./file-type-icon"
+import { useDocumentStatus } from "@/hooks/use-document-status"
 
 interface FileCardProps {
   filename: string
   size?: number
   mimeType: string
   documentId?: string
+  // Estado del documento al subirlo; la tarjeta sigue su análisis hasta que termina
+  documentStatus?: string
   previewDataUrl?: string
   onClick: () => void
   onRemove?: () => void
@@ -34,8 +37,9 @@ function formatSize(bytes: number): string {
   return `${(bytes / (1024 * 1024)).toFixed(1)} MB`
 }
 
-export function FileCard({ filename, size, mimeType, previewDataUrl, onClick, onRemove }: FileCardProps) {
+export function FileCard({ filename, size, mimeType, documentId, documentStatus, previewDataUrl, onClick, onRemove }: FileCardProps) {
   const isImage = mimeType.startsWith("image/")
+  const { status, errorMessage } = useDocumentStatus(documentId, documentStatus)
 
   return (
     <div className="relative group">
@@ -63,6 +67,17 @@ export function FileCard({ filename, size, mimeType, previewDataUrl, onClick, on
           <p className="text-xs text-muted-foreground">
             {getFileTypeLabel(mimeType)}{size !== undefined && ` · ${formatSize(size)}`}
           </p>
+          {status === "analyzing" && (
+            <p role="status" className="flex items-center gap-1 text-xs text-muted-foreground">
+              <Loader2 className="h-3 w-3 animate-spin motion-reduce:animate-none" aria-hidden />
+              Analizando… puede tardar hasta un minuto
+            </p>
+          )}
+          {status === "error" && (
+            <p role="alert" className="text-xs text-destructive">
+              {errorMessage || "No se pudo analizar el documento"}
+            </p>
+          )}
         </div>
       </button>
       {onRemove && (
