@@ -21,6 +21,7 @@ import { envelopeGrounded, envelopeLabel, tutorEnvelope } from "@/lib/tutor-enve
 import { LEVEL_NAME } from "@/app/quiz/quiz-parts"
 import { useStreamingChat } from "@/hooks/use-streaming-chat"
 import { useDictation } from "@/hooks/use-dictation"
+import { useTypeToFocus } from "@/hooks/use-type-to-focus"
 import { toEmotion, useSpeech } from "@/hooks/use-speech"
 import { takeSpeakable } from "@/lib/speech-chunks"
 
@@ -73,6 +74,7 @@ export function SearchBar({ isOpeningChat = false }: { isOpeningChat?: boolean }
     dataUrl?: string
   } | null>(null)
   const fileInputRef = useRef<HTMLInputElement>(null)
+  const messageInputRef = useRef<HTMLInputElement>(null)
   const messagesContainerRef = useRef<HTMLDivElement>(null)
   const isUserScrolledRef = useRef(false)
 
@@ -90,6 +92,9 @@ export function SearchBar({ isOpeningChat = false }: { isOpeningChat?: boolean }
     loadedChatId,
   } = useChat()
   const chatId = activeChatId
+
+  // Empezar a escribir en cualquier parte de la página escribe en el chat (salvo con el visor abierto)
+  useTypeToFocus(messageInputRef, !viewerFile)
 
   const {
     isStreaming,
@@ -612,6 +617,7 @@ export function SearchBar({ isOpeningChat = false }: { isOpeningChat?: boolean }
         >
           <div className="flex items-center px-4 md:px-5 py-3 md:py-3.5">
             <input
+              ref={messageInputRef}
               value={shownQuery}
               onChange={(e) => {
                 setQuery(e.target.value)
