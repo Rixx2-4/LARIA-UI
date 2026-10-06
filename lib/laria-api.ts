@@ -538,6 +538,12 @@ export const lariaAPI = {
     // Entrar, registrarse y salir lo hace Clerk; el backend solo dice quién eres
     me: () => fetchAPI<User>("/users/me"),
 
+    // Borra la cuenta aquí y en Clerk. Puede pedir verificar la identidad (403 con
+    // reason "reverification_required"): quien llama lo reintenta tras verificarla
+    deleteAccount: async (): Promise<void> => {
+      await request("/users/me", { method: "DELETE", body: "{}" }, "No se pudo borrar la cuenta")
+    },
+
     // Marca el tutorial de bienvenida como visto (al terminarlo o al saltarlo)
     completeOnboarding: () => fetchAPI<User>("/users/me/onboarding", { method: "POST" }),
   },

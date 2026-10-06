@@ -62,4 +62,12 @@ describe("Página de presentación tal como sale del servidor", () => {
     expect(html).not.toMatch(/opacity:\s*0[;"]/)
     expect(html).not.toMatch(/scaleX\(0\)/)
   })
+
+  it("tras borrar la cuenta (?cuenta=borrada) lo confirma una vez y limpia la URL", async () => {
+    window.history.pushState(null, "", "/?cuenta=borrada")
+    render(<LandingPage />)
+
+    expect(await screen.findByText(/Tu cuenta y tus datos se borraron/)).toBeTruthy()
+    expect(window.location.search).toBe("")
+  })
 })
