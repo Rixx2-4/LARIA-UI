@@ -659,6 +659,27 @@ describe("ChatScreen", () => {
       toastError.mockRestore()
     })
 
+    it("en Android, aunque el navegador repita la frase en cada evento, el campo la tiene una sola vez", async () => {
+      ;(window as { SpeechRecognition?: unknown }).SpeechRecognition = FakeSpeechRecognition
+      serverWithEmptyChat()
+      renderAt()
+
+      const input = (await screen.findByRole("textbox")) as HTMLInputElement
+      fireEvent.change(input, { target: { value: "Pregunta:" } })
+      fireEvent.click(screen.getByRole("button", { name: "Dictar" }))
+      const recognition = FakeSpeechRecognition.instances[0]
+
+      // El mismo final repetido 12 veces…
+      for (let i = 0; i < 12; i++) act(() => recognition.raw(Array.from({ length: i + 1 }, () => ({ transcript: "hola", isFinal: true }))))
+      expect(input.value).toBe("Pregunta: hola")
+      // …y luego entregado acumulado
+      act(() => recognition.raw([{ transcript: "hola", isFinal: true }, { transcript: "hola qué", isFinal: true }, { transcript: "hola qué tal", isFinal: true }]))
+      expect(input.value).toBe("Pregunta: hola qué tal")
+
+      act(() => recognition.end())
+      expect(input.value).toBe("Pregunta: hola qué tal")
+    })
+
     it("el texto va apareciendo mientras se dicta y se fija al terminar la frase", async () => {
       ;(window as { SpeechRecognition?: unknown }).SpeechRecognition = FakeSpeechRecognition
       serverWithEmptyChat()

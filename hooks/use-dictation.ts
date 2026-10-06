@@ -49,11 +49,44 @@ export function dictationErrorMessage(error: string): string | null {
 const UNAVAILABLE = new Set(["network", "service-not-allowed", "language-not-supported"])
 
 interface DictationCallbacks {
-  // Una frase ya reconocida y definitiva
-  onFinal: (text: string) => void
-  // Lo que se va entendiendo de la frase en curso ("" cuando no hay nada pendiente)
-  onInterim?: (text: string) => void
+  // Todo lo dictado en esta pulsación del micrófono: lo ya definitivo y lo que se va
+  // entendiendo de la frase en curso. Es el total, no un trozo nuevo: quien lo use
+  // debe REEMPLAZAR lo dictado antes, no añadirlo
+  onTranscript: (finalText: string, interim: string) => void
   onError?: (message: string) => void
+}
+
+type ResultList = ArrayLike<{ 0: { transcript: string }; isFinal: boolean }>
+
+// El texto de la sesión a partir de TODOS los resultados del evento (no solo los
+// nuevos). Chrome en Android repite la misma frase o la entrega acumulada («hola»,
+// «hola qué», «hola qué tal») en cada actualización: una frase igual a la anterior,
+// o contenida en ella, no se vuelve a sumar; una que la amplía, la sustituye
+export function transcriptFrom(results: ResultList): { finalText: string; interim: string } {
+  const finals: string[] = []
+  let interim = ""
+  for (let i = 0; i < results.length; i++) {
+    const text = results[i][0].transcript.trim()
+    if (!text) continue
+    if (!results[i].isFinal) {
+      interim = interim ? `${interim} ${text}` : text
+      continue
+    }
+    const last = finals.at(-1)
+    if (last !== undefined && (last === text || last.startsWith(text))) continue
+    if (last !== undefined && text.startsWith(last)) finals[finals.length - 1] = text
+    else finals.push(text)
+  }
+  // Lo provisional que repite lo ya definitivo tampoco se muestra dos veces
+  const finalText = finals.join(" ")
+  if (interim && finalText.endsWith(interim)) interim = ""
+  return { finalText, interim }
+}
+
+// En el móvil el modo continuo es el que repite: allí, una frase por pulsación
+function isMobile(): boolean {
+  if (typeof window === "undefined") return false
+  return /Android|iPhone|iPad|iPod/i.test(navigator.userAgent) || !!window.matchMedia?.("(pointer: coarse)").matches
 }
 
 // Dictado con el reconocimiento de voz del navegador (Chrome, Edge, Safari; no Firefox)
@@ -81,7 +114,6 @@ export function useDictation(callbacks: DictationCallbacks) {
     recognition.abort()
     recognitionRef.current = null
     setIsListening(false)
-    callbacksRef.current.onInterim?.("")
   }, [])
 
   const start = useCallback(() => {
@@ -89,16 +121,14 @@ export function useDictation(callbacks: DictationCallbacks) {
     if (!Ctor || recognitionRef.current) return
     const recognition = new Ctor()
     recognition.lang = "es-ES"
-    recognition.continuous = true
+    recognition.continuous = !isMobile()
     recognition.interimResults = true
+    // Lo definitivo de la sesión, para entregarlo también al terminar
+    let finalText = ""
     recognition.onresult = (event) => {
-      let interim = ""
-      for (let i = event.resultIndex; i < event.results.length; i++) {
-        const result = event.results[i]
-        if (result.isFinal) callbacksRef.current.onFinal(result[0].transcript.trim())
-        else interim += result[0].transcript
-      }
-      callbacksRef.current.onInterim?.(interim.trim())
+      const transcript = transcriptFrom(event.results)
+      finalText = transcript.finalText
+      callbacksRef.current.onTranscript(transcript.finalText, transcript.interim)
     }
     recognition.onerror = (event) => {
       const message = dictationErrorMessage(event.error)
@@ -110,7 +140,7 @@ export function useDictation(callbacks: DictationCallbacks) {
       recognitionRef.current = null
       setIsListening(false)
       // Lo que no llegó a ser definitivo se descarta
-      callbacksRef.current.onInterim?.("")
+      callbacksRef.current.onTranscript(finalText, "")
     }
     try {
       recognition.start()
