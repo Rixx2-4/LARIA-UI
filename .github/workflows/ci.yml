@@ -1,0 +1,47 @@
+# Las mismas comprobaciones que el pre-push (.husky/pre-push), pero en GitHub:
+# no dependen de que el hook esté instalado ni se pueden saltar con --no-verify.
+# La protección de main exige que este job pase para poder fusionar una PR.
+name: CI
+
+on:
+  pull_request:
+  push:
+    branches: [main]
+
+# Un push nuevo a la misma PR cancela la comprobación anterior, que ya no sirve
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+jobs:
+  comprobaciones:
+    name: Lint, tipos, tests y build
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+
+      # pnpm 9 no entiende el pnpm-workspace.yaml del proyecto (allowBuilds)
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 11
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: pnpm
+
+      - run: pnpm install --frozen-lockfile
+
+      - name: Lint
+        run: pnpm lint
+      - name: Tipos
+        run: pnpm typecheck
+      - name: Tests
+        run: pnpm test
+      # Sin claves de Clerk la app se construye igual, sin sesión (lib/clerk-config.ts)
+      - name: Build de producción
+        run: pnpm build
