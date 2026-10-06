@@ -355,6 +355,8 @@ interface QuizAttemptResponse {
 }
 
 interface StreamCallbacks {
+  // El tutor está preparando la respuesta; label es su texto si el backend lo manda
+  onThinking?: (label: string) => void
   onToken?: (token: string) => void
   onEnvelope?: (envelope: Record<string, unknown>) => void
   onDone?: () => void
@@ -623,6 +625,13 @@ export const lariaAPI = {
             case "token":
               callbacks.onToken?.(typeof parsed?.content === "string" ? parsed.content : "")
               return false
+            case "thinking": {
+              // El texto puede venir suelto o dentro de payload, como en los errores
+              const payload = parsed?.payload as { content?: unknown } | undefined
+              const label = typeof parsed?.content === "string" ? parsed.content : payload?.content
+              callbacks.onThinking?.(typeof label === "string" ? label : "")
+              return false
+            }
             case "envelope":
               callbacks.onEnvelope?.(parsed ?? {})
               return false
