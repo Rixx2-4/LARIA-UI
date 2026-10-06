@@ -17,4 +17,10 @@ describe("CSS global", () => {
   it("el texto de los mensajes parte las palabras largas", () => {
     expect(rule(".message-text")).toMatch(/overflow-wrap:\s*anywhere/)
   })
+
+  it("el indicador «pensando» tiene estilos: sin ellos se queda en blanco", () => {
+    for (const selector of [".thinking-sparkle", ".thinking-text", ".thinking-dots span"]) {
+      expect(rule(selector)).toMatch(/animation:/)
+    }
+  })
 })

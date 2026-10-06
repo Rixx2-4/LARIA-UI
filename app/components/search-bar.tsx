@@ -11,6 +11,7 @@ import { FileCard } from "./file-card"
 import { FileViewer } from "./file-viewer"
 import { MessageContent } from "./message-content"
 import { MessagesSkeleton } from "./skeletons"
+import { ThinkingIndicator } from "./thinking-indicator"
 import { ChatQuiz, type ChatQuizRequest } from "./chat-quiz"
 import { STYLE_OPTIONS } from "./style-picker"
 import { markPlacementOffered, wasPlacementOffered } from "@/lib/placement"
@@ -26,6 +27,12 @@ import { takeSpeakable } from "@/lib/speech-chunks"
 
 // Así empieza el aviso que queda en el chat al subir un archivo (los ya guardados lo llevan)
 const UPLOAD_NOTE_PREFIX = "📎 "
+
+// "apuntes_tema-3.pdf" → "Apuntes tema 3"
+function titleFromFilename(filename: string): string {
+  const base = filename.replace(/\.[^.]+$/, "").replace(/[_-]+/g, " ").replace(/\s+/g, " ").trim()
+  return base ? base.charAt(0).toUpperCase() + base.slice(1) : filename
+}
 
 // Lo mismo que acepta el backend (file_parser.py): texto, datos, código y cuatro binarios
 const ALLOWED_EXTENSIONS = [
@@ -79,7 +86,8 @@ export function SearchBar({ isOpeningChat = false }: { isOpeningChat?: boolean }
     activeChatId,
     activeDocumentId,
     createChat: ctxCreateChat,
-    generateTitle,
+    renameChat,
+    maybeGenerateTitle,
     takeFirstMessage,
     loadedChatId,
   } = useChat()
@@ -91,11 +99,12 @@ export function SearchBar({ isOpeningChat = false }: { isOpeningChat?: boolean }
   const {
     isStreaming,
     isThinking,
+    thinkingLabel,
     displayedContent,
     error: streamError,
     isDone,
     startStreaming,
-    cancelStreaming,
+    stopStreaming,
     resetStreaming,
     fullContent,
     envelope: liveEnvelope,
@@ -244,7 +253,8 @@ export function SearchBar({ isOpeningChat = false }: { isOpeningChat?: boolean }
       await addMessage(currentChatId, "system", `${UPLOAD_NOTE_PREFIX}Subí el archivo: ${file.name}`)
 
       if (isNewChat) {
-        generateTitle(currentChatId, [{ role: "user", content: `Archivo: ${file.name}` }])
+        // Título de apoyo hasta que la primera respuesta permita generar uno de verdad
+        renameChat(currentChatId, titleFromFilename(file.name), { provisional: true }).catch(() => {})
       }
     } catch (error) {
       console.error("Upload error:", error)
@@ -321,14 +331,19 @@ export function SearchBar({ isOpeningChat = false }: { isOpeningChat?: boolean }
     isUserScrolledRef.current = false
 
     try {
-      const { id: currentChatId, isNew: isNewChat } = await ensureChat()
+      const { id: currentChatId } = await ensureChat()
       // La respuesta será el mensaje tras el del usuario: la misma clave que su «Escuchar»
       liveKeyRef.current = `${currentChatId}:${messages.length + 1}`
 
-      await startStreaming(userMessage, currentChatId)
-
-      if (isNewChat) {
-        generateTitle(currentChatId, [{ role: "user", content: userMessage }])
+      const previous = messages
+      const reply = await startStreaming(userMessage, currentChatId)
+      // Con la respuesta ya completa, el título puede resumir de qué va el chat
+      if (reply) {
+        maybeGenerateTitle(currentChatId, [
+          ...previous,
+          { role: "user", content: userMessage },
+          { role: "assistant", content: reply },
+        ])
       }
     } catch (error) {
       console.error("Chat error:", error)
@@ -361,7 +376,7 @@ export function SearchBar({ isOpeningChat = false }: { isOpeningChat?: boolean }
   }
 
   const handleStopGeneration = () => {
-    cancelStreaming()
+    stopStreaming()
     speech.stop()
   }
 
@@ -409,11 +424,9 @@ export function SearchBar({ isOpeningChat = false }: { isOpeningChat?: boolean }
     msg.role === "user" ? (
       <div className="message-text text-[14px] whitespace-pre-wrap">{msg.content}</div>
     ) : (
-      <div className="message-text text-[14px] leading-relaxed">
+      // Mientras se escribe, el cursor se dibuja (CSS) al final del último párrafo
+      <div className={`message-text text-[14px] leading-relaxed ${isLive ? "typing-live" : ""}`}>
         <MessageContent content={msg.content} />
-        {isLive && (
-          <span className="inline-block w-2 h-4 ml-0.5 bg-foreground/70 animate-pulse" />
-        )}
       </div>
     )
 
@@ -553,10 +566,7 @@ export function SearchBar({ isOpeningChat = false }: { isOpeningChat?: boolean }
             {isStreaming && isThinking && !displayedContent && (
               <div className="flex justify-start">
                 <div className="bg-muted text-foreground rounded-2xl px-4 py-3 max-w-[80%]">
-                  <div className="thinking-container">
-                    <span className="thinking-shimmer" />
-                    <span className="thinking-text" />
-                  </div>
+                  <ThinkingIndicator label={thinkingLabel} />
                 </div>
               </div>
             )}

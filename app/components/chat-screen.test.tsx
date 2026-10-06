@@ -5,7 +5,7 @@ import { AuthProvider } from "@/app/contexts/auth-context"
 import { ChatProvider, useChat } from "@/app/contexts/chat-context"
 import { ChatScreen } from "./chat-screen"
 import { setAuthToken } from "@/lib/laria-api"
-import { controllableSSE, doneEvent, tokenEvent } from "@/test/sse"
+import { controllableSSE, doneEvent, thinkingEvent, tokenEvent } from "@/test/sse"
 import { FakeSpeechRecognition } from "@/test/speech"
 import { preferReducedMotion } from "@/test/media"
 import { toast } from "sonner"
@@ -123,6 +123,100 @@ describe("ChatScreen", () => {
     sse.push(tokenEvent("Es un proceso"))
     expect(await screen.findByText("Es un proceso")).toBeTruthy()
     expect(screen.getByText("¿Qué es la fotosíntesis?")).toBeTruthy()
+  })
+
+  describe("pensando y títulos", () => {
+    // Lo que el servidor tiene guardado del chat c2
+    let saved: { role: string; content: string }[] = []
+
+    // Un chat nuevo (c2) con una respuesta por cada SSE; generate-title responde lo que diga titleReplies
+    function stubNewChat(sses: ReturnType<typeof controllableSSE>[], titleReplies: Response[]) {
+      saved = []
+      const titleRequests: unknown[] = []
+      const renames: string[] = []
+      let opened = 0
+      vi.stubGlobal("fetch", async (url: string, init?: RequestInit) => {
+        const method = init?.method ?? "GET"
+        if (url.endsWith("/users/me")) return json({ id: "u1", username: "ana", email: "a@a.a" })
+        if (url.endsWith("/chats/") && method === "GET") return json({ chats: [] })
+        if (url.endsWith("/chats/") && method === "POST") return json({ id: "c2", title: "Nuevo chat" })
+        if (url.endsWith("/chats/c2/stream")) return sses[opened++].fetchMock(url, init)
+        if (url.endsWith("/chats/generate-title")) {
+          titleRequests.push(JSON.parse(String(init?.body)).messages)
+          return titleReplies.shift() ?? json({ title: "Sin respuesta" })
+        }
+        if (url.endsWith("/chats/c2") && method === "PUT") {
+          renames.push(JSON.parse(String(init?.body)).title)
+          return json({ id: "c2" })
+        }
+        if (url.endsWith("/chats/c2")) return json({ id: "c2", title: "Nuevo chat", messages: saved })
+        throw new Error(`Petición inesperada: ${method} ${url}`)
+      })
+      return { titleRequests, renames }
+    }
+
+    async function ask(question: string, sse: ReturnType<typeof controllableSSE>, answer: string) {
+      const input = await screen.findByRole("textbox")
+      await waitFor(() => expect((input as HTMLInputElement).disabled).toBe(false))
+      fireEvent.change(input, { target: { value: question } })
+      fireEvent.keyDown(input, { key: "Enter" })
+      await waitFor(() => expect(sse.signal).toBeTruthy())
+      saved = [...saved, { role: "user", content: question }, { role: "assistant", content: answer }]
+      sse.push(tokenEvent(answer))
+      sse.push(doneEvent())
+      sse.close()
+    }
+
+    it("mientras espera la respuesta se ve que LARIA está pensando, con lo que diga el tutor", async () => {
+      const sse = controllableSSE()
+      stubNewChat([sse], [])
+      renderAt()
+
+      const input = await screen.findByRole("textbox")
+      fireEvent.change(input, { target: { value: "Explícame las derivadas" } })
+      fireEvent.keyDown(input, { key: "Enter" })
+
+      expect(await screen.findByText("Pensando…")).toBeTruthy()
+      sse.push(thinkingEvent("Buscando un buen ejemplo"))
+      expect(await screen.findByText("Buscando un buen ejemplo")).toBeTruthy()
+
+      sse.push(tokenEvent("La derivada mide"))
+      expect(await screen.findByText("La derivada mide")).toBeTruthy()
+      expect(screen.queryByText("Buscando un buen ejemplo")).toBeNull()
+    })
+
+    it("el título se pide al terminar la primera respuesta, con la pregunta y la respuesta", async () => {
+      const sse = controllableSSE()
+      const { titleRequests, renames } = stubNewChat([sse], [json({ title: "Fotosíntesis" })])
+      renderAt()
+
+      await ask("¿Qué es la fotosíntesis?", sse, "Es como las plantas fabrican su alimento.")
+
+      await waitFor(() => expect(renames).toEqual(["Fotosíntesis"]))
+      expect(titleRequests).toEqual([[
+        { role: "user", content: "¿Qué es la fotosíntesis?" },
+        { role: "assistant", content: "Es como las plantas fabrican su alimento." },
+      ]])
+    })
+
+    it("si el backend no da título, no guarda el mensaje recortado: lo reintenta tras la siguiente respuesta", async () => {
+      const first = controllableSSE()
+      const second = controllableSSE()
+      const { titleRequests, renames } = stubNewChat(
+        [first, second],
+        [json({ detail: "Límite" }, 429), json({ title: "Fotosíntesis" })],
+      )
+      renderAt()
+
+      await ask("¿Qué es la fotosíntesis y cómo funciona en las plantas verdes?", first, "Es un proceso.")
+      await waitFor(() => expect(titleRequests).toHaveLength(1))
+      await act(() => new Promise((r) => setTimeout(r, 50)))
+      expect(renames).toEqual([])
+
+      await ask("¿Y la clorofila?", second, "Es el pigmento verde.")
+      await waitFor(() => expect(renames).toEqual(["Fotosíntesis"]))
+      expect(titleRequests[1]).toHaveLength(4)
+    })
   })
 
   it("a los lectores de pantalla les anuncia el principio y el final de la respuesta, no cada fragmento", async () => {

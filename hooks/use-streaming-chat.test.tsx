@@ -3,7 +3,7 @@ import { useState } from "react"
 import { renderHook, act, waitFor } from "@testing-library/react"
 import { useStreamingChat } from "./use-streaming-chat"
 import type { ChatMessage } from "@/lib/laria-api"
-import { controllableSSE, doneEvent, tokenEvent } from "@/test/sse"
+import { controllableSSE, doneEvent, thinkingEvent, tokenEvent } from "@/test/sse"
 import { preferReducedMotion } from "@/test/media"
 
 afterEach(() => {
@@ -75,6 +75,87 @@ describe("useStreamingChat", () => {
 
     await waitFor(() => expect(last(result.current.messages).content).toBe("Una respuesta larga que llega de golpe"))
     expect(frames).not.toHaveBeenCalled()
+  })
+
+  it("una respuesta larga que llega de golpe aparece poco a poco, y no termina hasta verse entera", async () => {
+    const answer = "La fotosíntesis convierte la luz en energía química. ".repeat(12)
+    const sse = network()
+    const { result } = renderChat()
+
+    act(() => {
+      result.current.startStreaming("¿Qué es la fotosíntesis?")
+    })
+    sse.push(tokenEvent(answer))
+    sse.push(doneEvent())
+    sse.close()
+
+    await sleep(250)
+    const shown = last(result.current.messages).content.length
+    expect(shown).toBeGreaterThan(0)
+    expect(shown).toBeLessThan(answer.length / 2)
+    expect(result.current.isDone).toBe(false)
+    expect(result.current.isStreaming).toBe(true)
+
+    await waitFor(() => expect(result.current.isDone).toBe(true))
+    expect(result.current.isStreaming).toBe(false)
+  })
+
+  it("mientras piensa, muestra lo que el tutor dice que está haciendo", async () => {
+    const sse = network()
+    const { result } = renderChat()
+
+    act(() => {
+      result.current.startStreaming("hola")
+    })
+    expect(result.current.isThinking).toBe(true)
+    sse.push(thinkingEvent("Buscando en tus apuntes"))
+    await waitFor(() => expect(result.current.thinkingLabel).toBe("Buscando en tus apuntes"))
+    expect(result.current.isThinking).toBe(true)
+
+    sse.push(tokenEvent("Hola"))
+    await waitFor(() => expect(result.current.isThinking).toBe(false))
+  })
+
+  it("parar cuando ya llegó todo y solo queda escribirla la muestra entera", async () => {
+    const answer = "Una respuesta bastante larga para que tarde en escribirse. ".repeat(10)
+    const sse = network()
+    const { result } = renderChat()
+
+    act(() => {
+      result.current.startStreaming("hola")
+    })
+    sse.push(tokenEvent(answer))
+    sse.push(doneEvent())
+    sse.close()
+    await sleep(100)
+    expect(last(result.current.messages).content.length).toBeLessThan(answer.length)
+
+    act(() => result.current.stopStreaming())
+
+    expect(last(result.current.messages).content).toBe(answer)
+    expect(result.current.isStreaming).toBe(false)
+  })
+
+  it("resuelve con la respuesta completa, o null si se paró a medias", async () => {
+    const [first, second] = stubChatServer([], 2)
+    const { result } = renderChat()
+
+    let reply: Promise<string | null> = Promise.resolve(null)
+    act(() => {
+      reply = result.current.startStreaming("primera")
+    })
+    first.push(tokenEvent("Uno"))
+    first.push(doneEvent())
+    first.close()
+    expect(await act(() => reply)).toBe("Uno")
+
+    act(() => {
+      reply = result.current.startStreaming("segunda")
+    })
+    second.push(tokenEvent("Do"))
+    await waitFor(() => expect(last(result.current.messages).content).toBe("Do"))
+    act(() => result.current.cancelStreaming())
+    expect(await act(() => reply)).toBeNull()
   })
 
   it("parar corta la conexión y deja lo que ya se había escrito", async () => {

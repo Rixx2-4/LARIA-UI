@@ -40,6 +40,8 @@ export function controllableSSE() {
 const sseEvent = (name: string, data: unknown) => `event: ${name}\ndata: ${JSON.stringify(data)}\n\n`
 
 export const tokenEvent = (content: string) => sseEvent("token", { content })
+// Mientras prepara la respuesta, el tutor puede decir qué está haciendo
+export const thinkingEvent = (content: string) => sseEvent("thinking", { content })
 export const doneEvent = () => sseEvent("done", { message_id: "m1" })
 export const errorEvent = (content: string) =>
   sseEvent("error", { type: "error", payload: { content, grounded: false } })
