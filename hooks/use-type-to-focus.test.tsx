@@ -72,6 +72,16 @@ describe("useTypeToFocus", () => {
     expect(document.activeElement).not.toBe(chat(c))
   })
 
+  it("con un diálogo modal abierto (el tutorial) no actúa, aunque el foco no esté en él", () => {
+    const c = render(<Page />)
+    const modal = document.createElement("div")
+    modal.setAttribute("aria-modal", "true")
+    document.body.appendChild(modal)
+    fireEvent.keyDown(document.body, { key: "h" })
+    expect(document.activeElement).not.toBe(chat(c))
+    modal.remove()
+  })
+
   it("no hace nada si está desactivado o el campo está deshabilitado", () => {
     const off = render(<Page enabled={false} />)
     fireEvent.keyDown(document.body, { key: "h" })

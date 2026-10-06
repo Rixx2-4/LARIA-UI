@@ -25,6 +25,8 @@ export function useTypeToFocus(ref: RefObject<HTMLInputElement | HTMLTextAreaEle
       if (target === field || isEditable(target)) return
       // Dentro de un diálogo (menús, visores) las teclas son suyas
       if (target?.closest('[role="dialog"], [aria-modal="true"]')) return
+      // Con un modal abierto (el tutorial) el chat queda detrás, aunque el foco no esté en él
+      if (document.querySelector('[aria-modal="true"]')) return
       // El espacio sobre un botón o enlace lo pulsa: no es escribir
       if (e.key === " " && target && target !== document.body) return
 
