@@ -5,6 +5,7 @@ import { Instrument_Serif } from "next/font/google"
 import "katex/dist/katex.min.css"
 import { ArrowRight } from "lucide-react"
 import { SIGN_IN_HREF, SIGN_UP_HREF } from "@/lib/routes"
+import { AccountDeletedNotice } from "./components/landing/account-deleted-notice"
 import { LandingHeader } from "./components/landing/landing-header"
 import { LandingMotion, Marker, Reveal } from "./components/landing/motion"
 import { ChatDemo } from "./components/landing/chat-demo"
@@ -125,6 +126,7 @@ export default function LandingPage() {
     <LandingMotion>
       <div className={`${display.variable} min-h-dvh bg-background text-foreground`}>
         <LandingHeader />
+        <AccountDeletedNotice />
 
         <main>
           {/* Hero */}
