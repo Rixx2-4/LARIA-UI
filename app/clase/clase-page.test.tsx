@@ -221,6 +221,31 @@ describe("Clase guiada: tramos", () => {
   })
 })
 
+describe("Clase guiada: fuentes e ideas clave", () => {
+  it("muestra las fuentes del concepto actual y las ideas clave de los módulos al desplegar", async () => {
+    const withSources = {
+      ...path("check", "ecuacion"),
+      modules: modules({}).map((m) =>
+        m.concept === "ecuacion"
+          ? { ...m, tier: "intermedio", key_points: ["Una igualdad con incógnita", "Se resuelve despejando"], sources: [{ title: "Khan Academy", url: "https://es.khanacademy.org/x" }] }
+          : m,
+      ),
+    }
+    vi.stubGlobal("fetch", async (url: string) => {
+      if (url.endsWith("/users/me")) return json({ id: "u1", username: "ana", email: "a@a.a" })
+      if (url.endsWith("/chats/")) return json({ chats: [] })
+      if (url.endsWith("/learning/paths/p1/lesson")) return json({ path: withSources, markdown: "Una **ecuación** es una igualdad.", check: check("q1") })
+      return json({ detail: "Not Found" }, 404)
+    })
+    renderPage()
+
+    const sources = await screen.findByRole("region", { name: "Fuentes" })
+    expect(sources.querySelector("a")?.getAttribute("href")).toBe("https://es.khanacademy.org/x")
+    expect(screen.getByText("Lo que verás")).toBeTruthy()
+    expect(screen.getByText("Se resuelve despejando")).toBeTruthy()
+  })
+})
+
 describe("Clase guiada: pizarra con la voz de LARIA", () => {
   const FIRST = "Una ecuación es una igualdad entre dos expresiones con una incógnita."
   const SECOND = "Resolverla es encontrar el valor de la x que hace cierta la igualdad."

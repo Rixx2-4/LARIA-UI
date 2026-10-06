@@ -9,6 +9,7 @@ import { STYLE_OPTIONS, StylePicker } from "./style-picker"
 import { classHref } from "@/lib/routes"
 import { MathText } from "./message-content"
 import { StudyGoalsPicker } from "./study-goals-picker"
+import { useSlow } from "@/lib/use-slow"
 import {
   LEVEL_COPY,
   LEVEL_NAME,
@@ -50,6 +51,7 @@ interface ChatQuizProps {
 
 export function ChatQuiz({ chatId, request, onDismiss, onStartLesson }: ChatQuizProps) {
   const router = useRouter()
+  // Abrir un tramo nuevo investiga en internet: si tarda, se explica
   const isPlacement = request.kind === "placement"
   const isStyleOnly = request.kind === "style"
   const [phase, setPhase] = useState<Phase>(isStyleOnly ? "style" : "offer")
@@ -61,6 +63,8 @@ export function ChatQuiz({ chatId, request, onDismiss, onStartLesson }: ChatQuiz
   const [results, setResults] = useState<QuizResult[]>([])
   const [placement, setPlacement] = useState<PlacementResult | null>(null)
   const [steps, setSteps] = useState<{ level: StepStatus; lesson: StepStatus }>({ level: "pending", lesson: "pending" })
+  // Abrir un tramo nuevo investiga en internet: si tarda, se explica
+  const slowLesson = useSlow(steps.lesson === "active")
   const [error, setError] = useState<string | null>(null)
   // El backend no trabaja este tema (filtro de seguridad): reintentar no sirve
   const [refused, setRefused] = useState(false)
@@ -298,7 +302,7 @@ export function ChatQuiz({ chatId, request, onDismiss, onStartLesson }: ChatQuiz
                 label={placement ? `Ajustando la clase a tu nivel (${LEVEL_NAME[placement.level]})` : "Ajustando la clase a tu nivel"}
                 detail={placement ? LEVEL_COPY[placement.level].title : null}
               />
-              <StepRow status={steps.lesson} label="Preparando tu ruta y tu primera clase" />
+              <StepRow status={steps.lesson} label="Preparando tu ruta y tu primera clase" detail={slowLesson ? "Buscando fuentes en internet para tus clases: la primera vez puede tardar hasta medio minuto." : null} />
             </ol>
             {error && (
               <>

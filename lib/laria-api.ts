@@ -218,6 +218,10 @@ interface PathModule {
   position: number
   // Tramo al que pertenece (las rutas crecen por tramos); null en rutas creadas a mano
   tier?: PlacementLevel | null
+  // Intermedio y avanzado salen de una investigación web: sus ideas clave y las
+  // fuentes en que se basa (vacíos en el básico o si la búsqueda falló)
+  key_points?: string[]
+  sources?: { title: string; url: string }[]
 }
 
 interface TeachingState {
