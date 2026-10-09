@@ -215,7 +215,7 @@ describe("Clase guiada: tramos", () => {
     expect(await screen.findByRole("heading", { name: "¡Tramo básico terminado!" })).toBeTruthy()
     expect(screen.queryByText("¡Ruta completada!")).toBeNull()
     expect(screen.getByText(/Haz la prueba de paso de «ecuaciones»/)).toBeTruthy()
-    expect(screen.getByRole("link", { name: "Hacer la prueba de paso" }).getAttribute("href")).toBe("/nivelacion?tema=ecuaciones+lineales")
+    expect(screen.getByRole("link", { name: "Hacer la prueba de paso" }).getAttribute("href")).toBe("/clase/p1/prueba-de-paso")
     expect(screen.getByRole("region", { name: "Tramo básico" })).toBeTruthy()
     expect(screen.getByText("Tramo intermedio: se abre con la prueba de paso")).toBeTruthy()
   })

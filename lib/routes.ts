@@ -28,3 +28,8 @@ export function placementHref(topic?: string, chatId?: string | null): string {
 export function classHref(pathId: string): string {
   return `/clase/${encodeURIComponent(pathId)}`
 }
+
+// La prueba de paso al siguiente tramo de una ruta (no la nivelación general)
+export function passageTestHref(pathId: string): string {
+  return `${classHref(pathId)}/prueba-de-paso`
+}

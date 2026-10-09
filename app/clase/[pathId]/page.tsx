@@ -17,7 +17,7 @@ import { useStudyTime } from "@/hooks/use-study-time"
 import { ClassStudyBar } from "@/app/components/study-progress"
 import { NextSuggestions } from "@/app/components/next-suggestions"
 import { ApiError, isUnsafeTopic, lariaAPI, type CheckResponse, type LearningPath, type PathModule, type QuizResponse } from "@/lib/laria-api"
-import { NEW_CHAT_HREF, placementHref } from "@/lib/routes"
+import { NEW_CHAT_HREF, passageTestHref, placementHref } from "@/lib/routes"
 
 // La clase guiada de una ruta: explicación de un concepto, una comprobación corta y,
 // según cómo salga, el siguiente concepto, otra explicación o un repaso previo.
@@ -249,7 +249,7 @@ function Clase() {
                 </p>
                 <div className="flex flex-wrap gap-2">
                   <Button asChild>
-                    <Link href={placementHref(path.topic ?? undefined)}>Hacer la prueba de paso</Link>
+                    <Link href={passageTestHref(pathId)}>Hacer la prueba de paso</Link>
                   </Button>
                   <Button asChild variant="outline">
                     <Link href="/clases">Mis clases</Link>
