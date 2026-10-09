@@ -753,6 +753,11 @@ export const lariaAPI = {
     fromTopic: (topic: string) =>
       fetchAPI<LearningPath>("/learning/paths/from-topic", { method: "POST", body: JSON.stringify({ topic }) }),
 
+    // La prueba de paso al siguiente tramo: preguntas sobre los módulos del tramo
+    // terminado de ESTA ruta. Se responde con quizzes.submitAttempt (trae placement)
+    passageTest: (pathId: string) =>
+      fetchAPI<QuizResponse>(`/learning/paths/${segment(pathId)}/passage-test`, { method: "POST" }),
+
     // Hasta 3 formas de seguir tras completarla (la primera vez tarda ~2 s)
     next: async (pathId: string): Promise<NextSuggestion[]> =>
       (await fetchAPI<{ suggestions: NextSuggestion[] }>(`/learning/paths/${segment(pathId)}/next`)).suggestions ?? [],

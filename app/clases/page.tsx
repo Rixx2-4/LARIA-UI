@@ -7,7 +7,7 @@ import { Button } from "@/components/ui/button"
 import { AppShell } from "../components/app-shell"
 import { RequireAuth } from "../components/require-auth"
 import { lariaAPI, type LearningPath } from "@/lib/laria-api"
-import { classHref, placementHref } from "@/lib/routes"
+import { classHref, passageTestHref, placementHref } from "@/lib/routes"
 import { classGroups, currentTier, tierDone, tierProgress } from "@/lib/classes"
 import { LEVEL_NAME } from "../quiz/quiz-parts"
 import { DailyProgress } from "../components/study-progress"
@@ -123,7 +123,11 @@ function Clases() {
                       : "Antes de empezar, unas preguntas para saber tu nivel"
                   }
                   action={
-                    <Link href={placementHref(path.topic ?? undefined)}>{tierDone(path) ? "Hacer la prueba de paso" : "Hacer la nivelación"}</Link>
+                    tierDone(path) ? (
+                      <Link href={passageTestHref(path.id)}>Hacer la prueba de paso</Link>
+                    ) : (
+                      <Link href={placementHref(path.topic ?? undefined)}>Hacer la nivelación</Link>
+                    )
                   }
                 />
               ))}

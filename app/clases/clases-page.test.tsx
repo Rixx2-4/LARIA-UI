@@ -71,7 +71,7 @@ describe("Mis clases", () => {
     expect(within(inProgress).getAllByRole("link", { name: "Continuar" }).map((a) => a.getAttribute("href"))).toEqual(["/clase/p4", "/clase/p1"])
 
     const placement = screen.getByRole("region", { name: "Pendientes de nivelación" })
-    expect(within(placement).getByRole("link", { name: "Hacer la prueba de paso" }).getAttribute("href")).toBe("/nivelacion?tema=geometr%C3%ADa")
+    expect(within(placement).getByRole("link", { name: "Hacer la prueba de paso" }).getAttribute("href")).toBe("/clase/p6/prueba-de-paso")
     expect(within(placement).getByText(/haz la prueba de paso para abrir el intermedio/)).toBeTruthy()
     expect(within(placement).getByRole("link", { name: "Hacer la nivelación" }).getAttribute("href")).toBe("/nivelacion?tema=astronom%C3%ADa")
 
