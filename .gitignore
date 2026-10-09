@@ -23,3 +23,9 @@ yarn-error.log*
 *.tsbuildinfo
 next-env.d.ts
 .vercel
+
+# Recibos de archify: llevan rutas locales de quien los genera
+docs/diagramas/*.delivery.json
+docs/diagramas/*.finalize.json
+docs/diagramas/*.finalize-summary.json
+docs/diagramas/*.browser-check.json
