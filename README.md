@@ -105,6 +105,65 @@ Algunas decisiones que conviene conocer:
 - **Compatibilidad con el backend.** Si el backend aún no tiene un endpoint nuevo (404),
   esa parte no se muestra. Así se puede desplegar el frontend antes que el backend.
 
+## Diagramas
+
+Generados con [archify](https://github.com/tt-a1i/archify) a partir del código. Cada nodo
+enlaza a las líneas que lo respaldan. Las imágenes son capturas; la versión interactiva
+(zoom, modo oscuro, índice de nodos y enlaces al código) es el HTML de cada diagrama, en
+[`docs/diagramas/`](docs/diagramas/): ábrelo en el navegador.
+
+### Arquitectura del cliente
+
+Quién habla con quién: la portada sin Clerk, las pantallas de Clerk, las páginas de la app,
+el cliente de la API con el token de Clerk y el backend en Render.
+
+![Arquitectura del cliente web de Plenum](docs/diagramas/arquitectura-cliente.png)
+
+[Versión interactiva](docs/diagramas/arquitectura-cliente.html) ·
+[fuente](docs/diagramas/arquitectura-cliente.json)
+
+### Una clase guiada por tramos
+
+De «Mis clases» a la pizarra y la comprobación. Según el resultado, otra explicación o el
+siguiente concepto; al terminar un tramo, la prueba de paso abre el siguiente en la misma
+ruta.
+
+![Flujo de una clase guiada por tramos](docs/diagramas/clase-por-tramos.png)
+
+[Versión interactiva](docs/diagramas/clase-por-tramos.html) ·
+[fuente](docs/diagramas/clase-por-tramos.json)
+
+### Un turno del chat
+
+El mensaje viaja por SSE: el texto aparece mientras llega, la voz lee cada frase cerrada y,
+al terminar, el envelope decide qué ofrecer (nivelación, quiz o estilo).
+
+![Secuencia de un turno del chat con LARIA](docs/diagramas/turno-del-chat.png)
+
+[Versión interactiva](docs/diagramas/turno-del-chat.html) ·
+[fuente](docs/diagramas/turno-del-chat.json)
+
+### Regenerar los diagramas
+
+La fuente de cada diagrama es su `.json`. Lleva el commit al que apuntan sus referencias
+al código (`meta.repository.revision`): si cambia el código que describe, actualiza el
+JSON (y ese commit) y vuelve a generar:
+
+```bash
+A=~/.claude/skills/archify/bin/archify.mjs   # donde esté instalado archify
+node $A finalize architecture docs/diagramas/arquitectura-cliente.json docs/diagramas/arquitectura-cliente.html --repo-root . --quality showcase --json
+node $A finalize workflow     docs/diagramas/clase-por-tramos.json     docs/diagramas/clase-por-tramos.html     --repo-root . --quality showcase --json
+node $A finalize sequence     docs/diagramas/turno-del-chat.json       docs/diagramas/turno-del-chat.html       --repo-root . --quality showcase --json
+```
+
+- **Comprobación en el navegador:** `finalize` la hace con Chrome. Si Chromium no arranca con
+  sandbox (pasa en Ubuntu con AppArmor), apunta `ARCHIFY_CHROME` a un envoltorio que añada
+  `--no-sandbox`.
+- **Capturas para el README:** con `visual-check --out-dir <carpeta>`; después se recorta el
+  panel del diagrama a PNG.
+- **Recibos:** los `*.delivery.json`, `*.finalize*.json` y `*.browser-check.json` llevan rutas
+  locales y están en `.gitignore`.
+
 ## Desarrollo
 
 Requiere **Node 20+** (Vercel y la CI usan 24) y **pnpm 10+**. pnpm 9 no entiende
