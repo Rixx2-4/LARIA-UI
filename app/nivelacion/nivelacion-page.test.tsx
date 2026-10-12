@@ -36,7 +36,7 @@ function round(id: string, count: number) {
 // Servidor de nivelación: sirve las rondas en orden y responde con el veredicto de cada una
 // paths: el backend ya tiene rutas guiadas (ADR-028); sin ellas responde 404 y la
 // clase se da en un chat, como antes
-function stubServer(verdicts: PlacementResult[], { paths = false }: { paths?: boolean } = {}) {
+function stubServer(verdicts: PlacementResult[], { paths = false, alreadyAnswered = false }: { paths?: boolean; alreadyAnswered?: boolean } = {}) {
   const fromTopic: string[] = []
   const diagnostics: string[] = []
   const attempts: Record<string, string>[] = []
@@ -67,6 +67,11 @@ function stubServer(verdicts: PlacementResult[], { paths = false }: { paths?: bo
     }
     const attempt = url.match(/\/quizzes\/(\w+)\/attempts$/)
     if (attempt && method === "POST") {
+      // El reintento de una ronda que el servidor ya había guardado
+      if (alreadyAnswered && attempts.length === 0) {
+        attempts.push({})
+        return json({ detail: "Esta nivelación ya está respondida." }, 409)
+      }
       const { answers } = JSON.parse(String(init?.body))
       attempts.push(answers)
       const total = Object.keys(answers).length
@@ -127,6 +132,20 @@ afterEach(() => {
 })
 
 describe("Nivelación", () => {
+  it("si la ronda ya estaba respondida (409 al reenviar), no lo trata como error y deja seguir con otra", async () => {
+    const server = stubServer([base(false, "basico")], { alreadyAnswered: true })
+    renderPage("tema=ecuaciones")
+
+    fireEvent.click(await screen.findByRole("button", { name: "Empezar" }))
+    await answerRound("A")
+
+    expect(await screen.findByText(/Tus respuestas de esa ronda ya estaban guardadas/)).toBeTruthy()
+    expect(screen.queryByRole("alert")).toBeNull()
+    fireEvent.click(screen.getByRole("button", { name: "Empezar" }))
+    await screen.findByText(/^Pregunta 1 de/)
+    expect(server.diagnostics).toHaveLength(2)
+  })
+
   it("si supera la base, ofrece la avanzada con el mismo tema y termina con el nivel", async () => {
     const server = stubServer([
       base(true, "intermedio"),
