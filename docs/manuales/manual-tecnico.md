@@ -321,7 +321,7 @@ el envelope trae `safety`, no ofrece nada.
 
 | Límite | Dónde | Qué pasa |
 |---|---|---|
-| 8000 caracteres por mensaje | `search-bar.tsx` (`MAX_MESSAGE_CHARS`) | `maxLength` en la caja, con contador a partir de 500. El dictado también se corta ahí |
+| 20000 caracteres por mensaje | `search-bar.tsx` (`MAX_MESSAGE_CHARS`) | `maxLength` en la caja, con contador a partir de 500. El dictado también se corta ahí |
 | 25 MB por archivo | Backend | Error en español al subir |
 | **409** al enviar respuestas ya guardadas | Nivelación y prueba de paso | Aviso neutro y opción de una ronda nueva o de volver a la clase |
 | **429** demasiadas peticiones | Cliente de la API | «Espera un momento antes de volver a intentarlo.» |
@@ -408,3 +408,11 @@ repetirlas:
    - Pulsa los botones con `getByRole` para llegar a cada estado.
 4. **Portada y pantalla de entrar:** se capturan directamente de producción.
 5. **Antes de commitear, deshaz el cambio de `NoAuthBridge`.**
+
+**Los PDF** se generan a partir de estos `.md`:
+
+1. Convierte cada `.md` a HTML con `marked`.
+2. Aplica una hoja de estilo compacta: A4, capturas a la derecha del texto.
+3. Imprímelo con `page.pdf()` de Playwright.
+
+Al hacerlo, cambia los enlaces entre manuales de `.md` a `.pdf`.

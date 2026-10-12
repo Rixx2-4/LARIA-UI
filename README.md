@@ -59,11 +59,16 @@ importantes y reacciona a los resultados (celebra, anima, tiene paciencia).
 
 ## Manuales
 
-- [Manual de usuario](docs/manuales/manual-de-usuario.md): cómo se usa Plenum, paso a
-  paso y con capturas.
-- [Manual técnico](docs/manuales/manual-tecnico.md): arquitectura, sesión y Clerk
-  (incluida la configuración del panel), API, flujos, límites, despliegue y problemas
+En PDF, para leer o imprimir:
+
+- [Manual de usuario](docs/manuales/manual-de-usuario.pdf) (8 páginas): cómo se usa
+  Plenum, paso a paso y con capturas.
+- [Manual técnico](docs/manuales/manual-tecnico.pdf) (8 páginas): arquitectura, sesión y
+  Clerk (incluida la configuración del panel), API, flujos, límites, despliegue y problemas
   conocidos.
+
+Su fuente son los `.md` de la misma carpeta: si cambias uno, vuelve a generar su PDF
+(ver el apartado 12 del manual técnico).
 
 ## Tecnología
 
