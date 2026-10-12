@@ -48,6 +48,11 @@ const ALLOWED_EXTENSIONS = [
 // antes que esperar a subir el archivo entero para recibir un 413
 const MAX_UPLOAD_BYTES = 25 * 1024 * 1024
 
+// Un mensaje del chat tiene como mucho 8000 caracteres (el backend responde 422 si se
+// pasa); el contador aparece cuando quedan 500
+const MAX_MESSAGE_CHARS = 8000
+const MESSAGE_WARNING_CHARS = 500
+
 const LEGACY_OFFICE: Record<string, string> = { ".doc": ".docx", ".ppt": ".pptx", ".xls": ".xlsx" }
 
 // Un adjunto del chat: recién subido (con tamaño y vista previa local) o
@@ -301,7 +306,9 @@ export function SearchBar({ isOpeningChat = false }: { isOpeningChat?: boolean }
   // Lo escrito antes de pulsar el micrófono: lo dictado va detrás y se REEMPLAZA en
   // cada evento (el navegador puede repetir frases; sumarlas las duplicaría)
   const dictationBaseRef = useRef("")
-  const joinText = (base: string, text: string) => (base.trim() && text ? `${base.trimEnd()} ${text}` : base.trim() ? base : text)
+  // El dictado se corta al límite del mensaje (el backend rechaza los más largos)
+  const joinText = (base: string, text: string) =>
+    (base.trim() && text ? `${base.trimEnd()} ${text}` : base.trim() ? base : text).slice(0, MAX_MESSAGE_CHARS)
   const dictation = useDictation({
     onTranscript: (finalText, interim) => {
       setQuery(joinText(dictationBaseRef.current, finalText))
@@ -313,7 +320,9 @@ export function SearchBar({ isOpeningChat = false }: { isOpeningChat?: boolean }
     dictationBaseRef.current = query
     dictation.start()
   }
-  const shownQuery = interimText ? (query.trim() ? `${query.trimEnd()} ${interimText}` : interimText) : query
+  const shownQuery = (interimText ? (query.trim() ? `${query.trimEnd()} ${interimText}` : interimText) : query).slice(0, MAX_MESSAGE_CHARS)
+  // Cerca del límite se ve cuánto queda
+  const remaining = MAX_MESSAGE_CHARS - shownQuery.length
 
   const handleSend = () => sendMessage(shownQuery.trim())
 
@@ -634,9 +643,20 @@ export function SearchBar({ isOpeningChat = false }: { isOpeningChat?: boolean }
               data-tour="chat"
               placeholder={isStreaming ? "Generando respuesta…" : "Pregunta lo que quieras…"}
               aria-label="Mensaje"
+              maxLength={MAX_MESSAGE_CHARS}
+              aria-describedby={remaining <= MESSAGE_WARNING_CHARS ? "message-limit" : undefined}
               disabled={isStreaming}
               className="w-full border-0 bg-transparent text-[14px] md:text-[15px] text-foreground placeholder:text-muted-foreground focus:outline-none disabled:opacity-50"
             />
+            {remaining <= MESSAGE_WARNING_CHARS && (
+              <span
+                id="message-limit"
+                aria-live="polite"
+                className={`ml-2 shrink-0 text-xs tabular-nums ${remaining === 0 ? "text-destructive" : "text-muted-foreground"}`}
+              >
+                {shownQuery.length}/{MAX_MESSAGE_CHARS}
+              </span>
+            )}
           </div>
 
           <div className="flex items-center justify-between px-2 md:px-2.5 py-2 gap-2">

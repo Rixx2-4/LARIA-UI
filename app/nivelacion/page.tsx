@@ -68,6 +68,8 @@ function Placement({ initialTopic, chatId }: { initialTopic: string; chatId: str
   const [error, setError] = useState<string | null>(null)
   // El backend no trabaja este tema (filtro de seguridad): reintentar no sirve
   const [refused, setRefused] = useState(false)
+  // Las respuestas de la ronda ya estaban guardadas (409 al reenviar)
+  const [answeredNotice, setAnsweredNotice] = useState(false)
   const [prep, setPrep] = useState<Preparation>({ review: "pending", offerNext: false, askStyle: false, level: "pending", lesson: "pending" })
   const router = useRouter()
   const { createChat, queueFirstMessage } = useChat()
@@ -141,6 +143,13 @@ function Placement({ initialTopic, chatId }: { initialTopic: string; chatId: str
       setPrep((p) => ({ ...p, review: "done", offerNext: !!verdict?.has_next_round }))
       if (!verdict?.has_next_round) setPrep((p) => ({ ...p, askStyle: true }))
     } catch (err) {
+      // 409: esta ronda ya se había enviado (p. ej. un reintento tras perder la red) y
+      // el backend no admite un segundo intento: no es un error, se sigue con otra
+      if (err instanceof ApiError && err.status === 409) {
+        setAnsweredNotice(true)
+        setPhase("intro")
+        return
+      }
       setError(err instanceof Error ? err.message : "No se pudieron enviar tus respuestas")
       setPhase("questions")
     } finally {
@@ -201,9 +210,12 @@ function Placement({ initialTopic, chatId }: { initialTopic: string; chatId: str
                 setTopic(next)
                 setRefused(false)
               }}
-              onStart={() => startRound("intro")}
-              error={error}
-              refused={refused}
+              onStart={() => {
+                setAnsweredNotice(false)
+                startRound("intro")
+              }}
+              error={answeredNotice ? "Tus respuestas de esa ronda ya estaban guardadas. Sigue con la nivelación para terminarla." : error}
+              refused={refused || answeredNotice}
               backHref={backHref}
             />
           )}

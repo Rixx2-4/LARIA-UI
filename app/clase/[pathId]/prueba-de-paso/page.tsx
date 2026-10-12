@@ -23,6 +23,8 @@ type View =
   | { kind: "questions"; quiz: QuizResponse }
   | { kind: "grading"; quiz: QuizResponse }
   | { kind: "result"; passed: boolean; results: QuizResult[]; placement: PlacementResult | null }
+  // El intento ya estaba guardado (409 al reenviar): la clase sabe cómo sigue
+  | { kind: "answered" }
 
 export default function PruebaDePasoPage() {
   return (
@@ -58,7 +60,12 @@ function PruebaDePaso() {
       const final = isUnsafeTopic(err) || (err instanceof ApiError && (err.status === 409 || err.status === 404))
       setView({
         kind: "error",
-        message: err instanceof ApiError && err.status === 409 ? "Esta ruta no tiene ninguna prueba de paso pendiente." : message,
+        message:
+          err instanceof ApiError && err.status === 409
+            ? "Esta ruta no tiene ninguna prueba de paso pendiente."
+            : err instanceof ApiError && err.status === 429
+              ? "Espera un momento antes de volver a intentarlo."
+              : message,
         retry: !final,
       })
     }
@@ -85,6 +92,9 @@ function PruebaDePaso() {
       const passed = !!placement && (target ? order.indexOf(placement.level) >= order.indexOf(target) : placement.passed)
       setView({ kind: "result", passed, results: toResults(quiz.questions, attempt.questions), placement })
     } catch (err) {
+      // 409: el intento ya se guardó (p. ej. un reintento tras perder la red) y no se
+      // admite otro. No es un error: la clase abre el tramo o propone el repaso
+      if (err instanceof ApiError && err.status === 409) return setView({ kind: "answered" })
       setError(err instanceof Error ? err.message : "No se pudieron enviar tus respuestas")
       setView({ kind: "questions", quiz })
     }
@@ -142,6 +152,15 @@ function PruebaDePaso() {
               isSubmitting={view.kind === "grading"}
               error={error}
             />
+          )}
+
+          {view.kind === "answered" && (
+            <section role="status" className="space-y-4 rounded-xl border border-border bg-card p-5">
+              <p>Tus respuestas ya estaban guardadas. Vuelve a la clase para ver cómo sigue tu ruta.</p>
+              <Button asChild>
+                <Link href={classHref(pathId)}>Volver a la clase</Link>
+              </Button>
+            </section>
           )}
 
           {view.kind === "result" && (

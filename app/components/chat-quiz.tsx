@@ -115,6 +115,7 @@ export function ChatQuiz({ chatId, request, onDismiss, onStartLesson }: ChatQuiz
   const load = async () => {
     setPhase("loading")
     setError(null)
+    setRefused(false)
     try {
       const next = isPlacement
         ? await lariaAPI.quizzes.diagnostic(topic.trim())
@@ -150,6 +151,14 @@ export function ChatQuiz({ chatId, request, onDismiss, onStartLesson }: ChatQuiz
       if (verdict?.has_next_round) return setPhase("next-offer")
       setPhase("style")
     } catch (err) {
+      // 409 en una nivelación: esa ronda ya estaba enviada (un reintento tras perder la
+      // red) y no admite otro intento. No es un error: se ofrece seguir con otra ronda
+      if (isPlacement && err instanceof ApiError && err.status === 409) {
+        setError("Tus respuestas de esa ronda ya estaban guardadas. Sigue para terminar la nivelación.")
+        setRefused(true)
+        setPhase(placement ? "next-offer" : "offer")
+        return
+      }
       setError(err instanceof Error ? err.message : "No se pudieron enviar tus respuestas")
       setPhase("question")
     }
@@ -267,7 +276,7 @@ export function ChatQuiz({ chatId, request, onDismiss, onStartLesson }: ChatQuiz
             {error && <ErrorLine message={error} neutral={refused} />}
             <div className="flex flex-wrap gap-2">
               <Button size="sm" onClick={load}>
-                {error ? "Reintentar" : "Seguir"}
+                {error && !refused ? "Reintentar" : "Seguir"}
               </Button>
               <Button size="sm" variant="outline" onClick={() => setPhase("style")}>
                 Empezar mi clase
