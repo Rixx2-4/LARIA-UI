@@ -57,6 +57,14 @@ importantes y reacciona a los resultados (celebra, anima, tiene paciencia).
   error.
 - Ante señales de autolesión, LARIA responde con un mensaje de apoyo sobrio.
 
+## Manuales
+
+- [Manual de usuario](docs/manuales/manual-de-usuario.md): cómo se usa Plenum, paso a
+  paso y con capturas.
+- [Manual técnico](docs/manuales/manual-tecnico.md): arquitectura, sesión y Clerk
+  (incluida la configuración del panel), API, flujos, límites, despliegue y problemas
+  conocidos.
+
 ## Tecnología
 
 | Qué | Con qué |
