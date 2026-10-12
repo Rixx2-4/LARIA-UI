@@ -48,9 +48,9 @@ const ALLOWED_EXTENSIONS = [
 // antes que esperar a subir el archivo entero para recibir un 413
 const MAX_UPLOAD_BYTES = 25 * 1024 * 1024
 
-// Un mensaje del chat tiene como mucho 8000 caracteres (el backend responde 422 si se
+// Un mensaje del chat tiene como mucho 20000 caracteres (el backend responde 422 si se
 // pasa); el contador aparece cuando quedan 500
-const MAX_MESSAGE_CHARS = 8000
+const MAX_MESSAGE_CHARS = 20000
 const MESSAGE_WARNING_CHARS = 500
 
 const LEGACY_OFFICE: Record<string, string> = { ".doc": ".docx", ".ppt": ".pptx", ".xls": ".xlsx" }

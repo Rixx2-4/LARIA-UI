@@ -321,7 +321,7 @@ el envelope trae `safety`, no ofrece nada.
 
 | Límite | Dónde | Qué pasa |
 |---|---|---|
-| 8000 caracteres por mensaje | `search-bar.tsx` (`MAX_MESSAGE_CHARS`) | `maxLength` en la caja, con contador a partir de 500. El dictado también se corta ahí |
+| 20000 caracteres por mensaje | `search-bar.tsx` (`MAX_MESSAGE_CHARS`) | `maxLength` en la caja, con contador a partir de 500. El dictado también se corta ahí |
 | 25 MB por archivo | Backend | Error en español al subir |
 | **409** al enviar respuestas ya guardadas | Nivelación y prueba de paso | Aviso neutro y opción de una ronda nueva o de volver a la clase |
 | **429** demasiadas peticiones | Cliente de la API | «Espera un momento antes de volver a intentarlo.» |
