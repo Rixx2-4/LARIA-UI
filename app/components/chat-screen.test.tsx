@@ -251,7 +251,7 @@ describe("ChatScreen", () => {
     type Payload = Record<string, unknown>
     // Servidor como Render: el tutor responde a "quiero aprender…" o "ponme un quiz" con
     // el envelope que se le pase; los quizzes se generan y se califican en el servidor
-    function quizServer({ type = "answer", payload, documentId = null, preferences = true, practiceFailures = 0, paths = false }: { type?: string; payload: Payload; documentId?: string | null; preferences?: boolean; practiceFailures?: number; paths?: boolean }) {
+    function quizServer({ type = "answer", payload, documentId = null, preferences = true, practiceFailures = 0, paths = false, alreadyAnswered = false }: { type?: string; payload: Payload; documentId?: string | null; preferences?: boolean; practiceFailures?: number; paths?: boolean; alreadyAnswered?: boolean }) {
       const calls = { fromTopic: [] as string[], diagnostics: [] as string[], practice: [] as string[], topicPractice: [] as unknown[], attempts: 0, streamed: [] as string[], styles: [] as unknown[] }
       const quiz = (id: string, count: number, extra: Payload = {}) => ({
         id, document_id: documentId, total_points: count * 10, created_at: "", ...extra,
@@ -303,6 +303,7 @@ describe("ChatScreen", () => {
         const attempt = url.match(/\/quizzes\/(\w+)\/attempts$/)
         if (attempt && method === "POST") {
           calls.attempts++
+          if (alreadyAnswered && calls.attempts === 1) return json({ detail: "Esta nivelación ya está respondida." }, 409)
           const { answers } = JSON.parse(String(init?.body))
           return json({
             attempt_id: "a1", quiz_id: attempt[1], score: 0, total_points: 0, completed_at: "",
@@ -421,6 +422,19 @@ describe("ChatScreen", () => {
       expect(calls.fromTopic).toEqual(["Astronomía"])
       // La clase no se pide en el chat
       expect(calls.streamed).toEqual([])
+    })
+
+    it("si la ronda de nivelación ya estaba respondida (409), no es un error: deja seguir con otra", async () => {
+      const calls = quizServer({ payload: { intent: "learn", suggest_placement: true, topic_hint: "astronomía" }, alreadyAnswered: true })
+      renderAt("c1")
+
+      fireEvent.click(await screen.findByRole("button", { name: "Empezar" }))
+      await answerAll("tres")
+
+      expect(await screen.findByText(/Tus respuestas de esa ronda ya estaban guardadas/)).toBeTruthy()
+      expect(screen.queryByRole("alert")).toBeNull()
+      fireEvent.click(screen.getByRole("button", { name: "Empezar" }))
+      await waitFor(() => expect(calls.diagnostics).toHaveLength(2))
     })
 
     it("«Ahora no» la cierra y ese chat no la vuelve a ofrecer", async () => {
@@ -772,6 +786,23 @@ describe("ChatScreen", () => {
 
       act(() => recognition.end())
       expect(input.value).toBe("Pregunta: hola qué tal")
+    })
+
+    it("el mensaje tiene un máximo de 8000 caracteres: el dictado se corta ahí y se ve un contador", async () => {
+      ;(window as { SpeechRecognition?: unknown }).SpeechRecognition = FakeSpeechRecognition
+      serverWithEmptyChat()
+      renderAt()
+
+      const input = (await screen.findByRole("textbox")) as HTMLInputElement
+      expect(input.maxLength).toBe(8000)
+      fireEvent.change(input, { target: { value: "a".repeat(7400) } })
+      expect(screen.queryByText(/\/8000$/)).toBeNull()
+
+      fireEvent.click(screen.getByRole("button", { name: "Dictar" }))
+      act(() => FakeSpeechRecognition.instances[0].say("b".repeat(900)))
+
+      expect(input.value).toHaveLength(8000)
+      expect(screen.getByText("8000/8000")).toBeTruthy()
     })
 
     it("el texto va apareciendo mientras se dicta y se fija al terminar la frase", async () => {

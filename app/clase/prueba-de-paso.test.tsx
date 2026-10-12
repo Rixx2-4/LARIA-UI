@@ -28,7 +28,7 @@ const quiz = {
   ],
 }
 
-function stubServer({ level, passageStatus = 201 }: { level?: string; passageStatus?: number } = {}) {
+function stubServer({ level, passageStatus = 201, attemptStatus = 200 }: { level?: string; passageStatus?: number; attemptStatus?: number } = {}) {
   const calls: string[] = []
   vi.stubGlobal("fetch", async (url: string, init?: RequestInit) => {
     const method = init?.method ?? "GET"
@@ -40,6 +40,7 @@ function stubServer({ level, passageStatus = 201 }: { level?: string; passageSta
       return passageStatus === 201 ? json(quiz, 201) : json({ detail: "Sin prueba pendiente" }, passageStatus)
     }
     if (url.endsWith("/quizzes/pp1/attempts") && method === "POST") {
+      if (attemptStatus === 409) return json({ detail: "Esta nivelación ya está respondida." }, 409)
       return json({
         attempt_id: "a1", quiz_id: "pp1", score: 20, total_points: 20, completed_at: "",
         questions: [
@@ -110,5 +111,26 @@ describe("Prueba de paso", () => {
     renderPage()
 
     expect(await screen.findByRole("button", { name: "Reintentar" })).toBeTruthy()
+  })
+
+  it("si el intento ya estaba guardado (409 al reenviar), no es un error: vuelve a la clase", async () => {
+    stubServer({ level: "intermedio", attemptStatus: 409 })
+    renderPage()
+
+    await answerAll()
+
+    expect(await screen.findByText(/Tus respuestas ya estaban guardadas/)).toBeTruthy()
+    expect(screen.queryByRole("alert")).toBeNull()
+    expect(screen.getByRole("link", { name: "Volver a la clase" }).getAttribute("href")).toBe("/clase/p1")
+  })
+
+  it("con demasiadas pruebas seguidas (429) pide esperar, sin reintentar solo", async () => {
+    const calls = stubServer({ passageStatus: 429 })
+    renderPage()
+
+    expect(await screen.findByText("Espera un momento antes de volver a intentarlo.")).toBeTruthy()
+    await new Promise((r) => setTimeout(r, 50))
+    expect(calls.filter((c) => c.includes("passage-test"))).toHaveLength(1)
+    expect(screen.getByRole("button", { name: "Reintentar" })).toBeTruthy()
   })
 })
