@@ -91,7 +91,7 @@ describe("QuizPage", () => {
 
     // Por texto y no por rol: getByRole recorre el árbol de accesibilidad de toda
     // la página en cada búsqueda y hacía este test lento (se pasaba de tiempo)
-    fireEvent.click(await screen.findByText("Generar Quiz"))
+    fireEvent.click(await screen.findByText("Empezar quiz"))
     fireEvent.click(await screen.findByText(/Cloroplasto/))
     expect(screen.getByText(/Cloroplasto/).closest("button")?.getAttribute("aria-pressed")).toBe("true")
     fireEvent.click(screen.getByText(/Siguiente/))
@@ -112,7 +112,7 @@ describe("QuizPage", () => {
     renderQuiz("chat=c3")
 
     expect(await screen.findByText("Este chat no tiene un documento. Sube uno en el chat, o nivélate en un tema aquí abajo.")).toBeTruthy()
-    const generate = screen.getByText("Generar Quiz").closest("button")!
+    const generate = screen.getByText("Empezar quiz").closest("button")!
     expect(generate.disabled).toBe(true)
     fireEvent.click(generate)
     expect(requests).toEqual([])
@@ -125,7 +125,7 @@ describe("QuizPage", () => {
     })
     const { container } = renderQuiz("chat=c1")
 
-    fireEvent.click(await screen.findByText("Generar Quiz"))
+    fireEvent.click(await screen.findByText("Empezar quiz"))
     await screen.findByText(/¿Cuánto es/)
     // Una fórmula en el enunciado y una en cada opción (KaTeX llega un instante después)
     await waitFor(() => expect(container.querySelectorAll(".katex-html")).toHaveLength(3))
@@ -138,7 +138,7 @@ describe("QuizPage", () => {
 
     fireEvent.click(await screen.findByRole("button", { name: "Personalizar" }))
     fireEvent.change(screen.getByLabelText("Cantidad personalizada"), { target: { value: "7" } })
-    fireEvent.click(screen.getByRole("button", { name: "Generar Quiz" }))
+    fireEvent.click(screen.getByRole("button", { name: "Empezar quiz" }))
 
     await waitFor(() => expect(requests[0]?.url).toMatch(/num_questions=7$/))
   })
@@ -147,10 +147,8 @@ describe("QuizPage", () => {
     stubServer()
     renderQuiz("")
 
-    expect(((await screen.findByRole("button", { name: "Generar Quiz" })) as HTMLButtonElement).disabled).toBe(true)
-    const select = await screen.findByLabelText("Chat")
-    await screen.findByRole("option", { name: "Células" })
-    fireEvent.change(select, { target: { value: "c2" } })
+    expect(((await screen.findByRole("button", { name: "Empezar quiz" })) as HTMLButtonElement).disabled).toBe(true)
+    fireEvent.click(await screen.findByRole("radio", { name: /Células/ }))
 
     expect(nav.replace).toHaveBeenCalledWith("/quiz?chat=c2")
   })
@@ -161,7 +159,7 @@ describe("QuizPage", () => {
 
     fireEvent.click(await screen.findByRole("button", { name: "Personalizar" }))
     fireEvent.change(screen.getByLabelText("Cantidad personalizada"), { target: { value: "21" } })
-    fireEvent.click(screen.getByRole("button", { name: "Generar Quiz" }))
+    fireEvent.click(screen.getByRole("button", { name: "Empezar quiz" }))
 
     expect(await screen.findByText("Elige entre 1 y 20 preguntas.")).toBeTruthy()
     expect(requests).toEqual([])
@@ -176,7 +174,7 @@ describe("QuizPage", () => {
     fireEvent.change(input, { target: { value: "" } })
     expect(input.value).toBe("")
     fireEvent.change(input, { target: { value: "8" } })
-    fireEvent.click(screen.getByRole("button", { name: "Generar Quiz" }))
+    fireEvent.click(screen.getByRole("button", { name: "Empezar quiz" }))
 
     await waitFor(() => expect(requests[0]?.url).toMatch(/num_questions=8$/))
   })
@@ -185,14 +183,15 @@ describe("QuizPage", () => {
     stubServer()
     renderQuiz("")
 
-    const option = (await screen.findByRole("option", { name: /Charla sin documento/ })) as HTMLOptionElement
+    const option = (await screen.findByRole("radio", { name: /Charla sin documento/ })) as HTMLInputElement
     expect(option.disabled).toBe(true)
+    expect(((await screen.findByRole("radio", { name: /Fotosíntesis/ })) as HTMLInputElement).disabled).toBe(false)
   })
 
   it("cambiar de chat en la URL empieza de cero, sin el quiz del chat anterior", async () => {
     stubServer()
     const view = renderQuiz("chat=c1")
-    fireEvent.click(await screen.findByRole("button", { name: "Generar Quiz" }))
+    fireEvent.click(await screen.findByRole("button", { name: "Empezar quiz" }))
     await screen.findByText("¿Dónde ocurre la fotosíntesis?")
 
     nav.search = "chat=c2"
@@ -204,7 +203,60 @@ describe("QuizPage", () => {
       </AuthProvider>,
     )
 
-    expect(await screen.findByRole("button", { name: "Generar Quiz" })).toBeTruthy()
+    expect(await screen.findByRole("button", { name: "Empezar quiz" })).toBeTruthy()
     expect(screen.queryByText("¿Dónde ocurre la fotosíntesis?")).toBeNull()
+  })
+
+  it("con el teclado: un número elige la opción y Enter pasa a la siguiente", async () => {
+    const requests = stubServer()
+    renderQuiz("chat=c1")
+
+    fireEvent.click(await screen.findByText("Empezar quiz"))
+    await screen.findByText("¿Dónde ocurre la fotosíntesis?")
+    fireEvent.keyDown(window, { key: "2" })
+    expect(screen.getByText(/Cloroplasto/).closest("button")?.getAttribute("aria-pressed")).toBe("true")
+    fireEvent.keyDown(window, { key: "Enter" })
+    await screen.findByText("¿Qué gas se libera?")
+    // También con la letra
+    fireEvent.keyDown(window, { key: "b" })
+    fireEvent.keyDown(window, { key: "Enter" })
+
+    await screen.findByText("1 de 2 respuestas correctas")
+    expect(requests[1].body).toEqual({ answers: { "1": "B", "2": "B" } })
+  })
+
+  it("escribiendo en un campo, las teclas no eligen opciones", async () => {
+    stubServer()
+    renderQuiz("chat=c1")
+
+    fireEvent.click(await screen.findByText("Empezar quiz"))
+    await screen.findByText("¿Dónde ocurre la fotosíntesis?")
+    const input = document.createElement("input")
+    document.body.appendChild(input)
+    fireEvent.keyDown(input, { key: "2" })
+    expect(screen.getByText(/Cloroplasto/).closest("button")?.getAttribute("aria-pressed")).toBe("false")
+    input.remove()
+  })
+
+  it("en los resultados se pueden ver solo las falladas y pedir otro quiz igual", async () => {
+    const requests = stubServer()
+    renderQuiz("chat=c1")
+
+    fireEvent.click(await screen.findByText("Empezar quiz"))
+    fireEvent.click(await screen.findByText(/Cloroplasto/))
+    fireEvent.click(screen.getByText(/Siguiente/))
+    fireEvent.click(await screen.findByText(/Nitrógeno/))
+    fireEvent.click(screen.getByText(/Finalizar/))
+    await screen.findByText("1 de 2 respuestas correctas")
+    expect(screen.getByText("Vas bien")).toBeTruthy()
+
+    fireEvent.click(screen.getByText("Para repasar (1)"))
+    expect(screen.queryByText("¿Dónde ocurre la fotosíntesis?")).toBeNull()
+    expect(screen.getByText("¿Qué gas se libera?")).toBeTruthy()
+
+    fireEvent.click(screen.getByText("Otro quiz igual"))
+    // Con el mismo chat y el mismo número de preguntas
+    await screen.findByText("Pregunta 1 de 2")
+    expect(requests[2]).toMatchObject({ method: "POST", url: expect.stringMatching(/\/chats\/c1\/quiz\?num_questions=5$/) })
   })
 })
