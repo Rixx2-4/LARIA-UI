@@ -788,21 +788,21 @@ describe("ChatScreen", () => {
       expect(input.value).toBe("Pregunta: hola qué tal")
     })
 
-    it("el mensaje tiene un máximo de 8000 caracteres: el dictado se corta ahí y se ve un contador", async () => {
+    it("el mensaje tiene un máximo de 20000 caracteres: el dictado se corta ahí y se ve un contador", async () => {
       ;(window as { SpeechRecognition?: unknown }).SpeechRecognition = FakeSpeechRecognition
       serverWithEmptyChat()
       renderAt()
 
       const input = (await screen.findByRole("textbox")) as HTMLInputElement
-      expect(input.maxLength).toBe(8000)
-      fireEvent.change(input, { target: { value: "a".repeat(7400) } })
-      expect(screen.queryByText(/\/8000$/)).toBeNull()
+      expect(input.maxLength).toBe(20000)
+      fireEvent.change(input, { target: { value: "a".repeat(19400) } })
+      expect(screen.queryByText(/\/20000$/)).toBeNull()
 
       fireEvent.click(screen.getByRole("button", { name: "Dictar" }))
       act(() => FakeSpeechRecognition.instances[0].say("b".repeat(900)))
 
-      expect(input.value).toHaveLength(8000)
-      expect(screen.getByText("8000/8000")).toBeTruthy()
+      expect(input.value).toHaveLength(20000)
+      expect(screen.getByText("20000/20000")).toBeTruthy()
     })
 
     it("el texto va apareciendo mientras se dicta y se fija al terminar la frase", async () => {
