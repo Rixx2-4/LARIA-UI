@@ -98,7 +98,7 @@ Según lo que pidas, LARIA te ofrece el siguiente paso en una tarjeta:
 - Te puede preguntar **cómo prefieres que te explique** (sencillo, paso a paso, con
   analogías…).
 
-Un mensaje admite hasta **8000 caracteres**. Cuando escribes mucho aparece un contador.
+Un mensaje admite hasta **20000 caracteres**. Cuando escribes mucho aparece un contador.
 
 **Temas que LARIA no trata.** Hay temas que no se trabajan en Plenum, como armas, drogas
 o el odio. Si preguntas por uno, LARIA te lo explica con calma y te propone elegir otro.
