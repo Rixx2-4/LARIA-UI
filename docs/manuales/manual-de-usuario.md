@@ -248,16 +248,30 @@ También verás tu progreso:
 
 ## 11. Quizzes
 
-En **Quiz** puedes hacer un cuestionario sobre el material de un chat:
+En **Quiz** te pones a prueba con un cuestionario sobre el material de un chat:
 
-1. Elige el **chat** y el **número de preguntas**.
-2. Pulsa **Generar Quiz**.
-3. Responde a las preguntas. Al final verás tu puntuación y la respuesta correcta de cada
-   pregunta.
+1. **Elige el material.** Solo sirven los chats con un documento; los demás aparecen
+   apagados.
+2. **Elige cuántas preguntas:**
+   - 5 (rápido, unos 3 minutos);
+   - 10 (normal);
+   - 20 (a fondo);
+   - **Personalizar**, de 1 a 20.
+3. Pulsa **Empezar quiz**. LARIA tarda unos segundos en preparar las preguntas.
+4. **Responde.** La barra de arriba marca las preguntas que ya has contestado.
+   - Con teclado, las teclas **1–4** (o **A–D**) eligen la opción y **Enter** pasa a la
+     siguiente.
+   - **Salir** vuelve a los ajustes.
+5. **Resultados.** Verás tu porcentaje de aciertos y cada respuesta, con la correcta
+   cuando fallaste. Con **Para repasar** ves solo las falladas.
+   - **Otro quiz igual** te pregunta de nuevo sobre el mismo material.
+   - **Cambiar ajustes** vuelve al principio.
 
 Si no tienes material, escribe abajo qué quieres aprender y pulsa **Nivelarme**.
 
-![Quiz](capturas/16-quiz.png)
+![Quiz: elegir material y preguntas](capturas/16-quiz.png)
+
+![Quiz: resultados](capturas/16b-quiz-resultados.png)
 
 ## 12. Voz y dictado
 
