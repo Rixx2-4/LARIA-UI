@@ -408,3 +408,11 @@ repetirlas:
    - Pulsa los botones con `getByRole` para llegar a cada estado.
 4. **Portada y pantalla de entrar:** se capturan directamente de producción.
 5. **Antes de commitear, deshaz el cambio de `NoAuthBridge`.**
+
+**Los PDF** se generan a partir de estos `.md`:
+
+1. Convierte cada `.md` a HTML con `marked`.
+2. Aplica una hoja de estilo compacta: A4, capturas a la derecha del texto.
+3. Imprímelo con `page.pdf()` de Playwright.
+
+Al hacerlo, cambia los enlaces entre manuales de `.md` a `.pdf`.
