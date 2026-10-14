@@ -1,12 +1,13 @@
 import { describe, it, expect, vi, afterEach, beforeEach } from "vitest"
-import { render, screen, cleanup, fireEvent, waitFor, act } from "@testing-library/react"
+import { render, screen, cleanup, fireEvent, waitFor, act, within } from "@testing-library/react"
 import { AuthProvider } from "@/app/contexts/auth-context"
 import { ChatProvider } from "@/app/contexts/chat-context"
 import ClasePage from "./[pathId]/page"
 import { setAuthToken } from "@/lib/laria-api"
 
+const nav = vi.hoisted(() => ({ push: vi.fn() }))
 vi.mock("next/navigation", () => ({
-  useRouter: () => ({ replace: vi.fn(), push: vi.fn() }),
+  useRouter: () => ({ replace: vi.fn(), push: nav.push }),
   usePathname: () => "/clase/p1",
   useParams: () => ({ pathId: "p1" }),
 }))
@@ -47,7 +48,7 @@ const check = (id: string) => ({
 
 // La ruta del backend: explica «ecuación»; si no se entiende, la explica de otra
 // manera; luego «despejar»; y termina. Una comprobación pendiente se devuelve igual
-function stubServer({ lessonError }: { lessonError?: Response } = {}) {
+function stubServer({ lessonError, deletes }: { lessonError?: Response; deletes?: string[] } = {}) {
   const steps = [
     { path: path("check", "ecuacion"), markdown: "Una **ecuación** es una igualdad con una incógnita.\n\n**Ejemplo.** $x + 1 = 3$", check: check("q1") },
     { path: path("check", "ecuacion", {}, "Lo explico de otra manera, con una balanza."), markdown: "Piensa en una **balanza** en equilibrio.", check: check("q2") },
@@ -65,6 +66,10 @@ function stubServer({ lessonError }: { lessonError?: Response } = {}) {
     if (url.endsWith("/chats/")) return json({ chats: [] })
     if (url.endsWith("/documents/")) return json([])
     if (url.endsWith("/speech/config")) return json({ detail: "Not Found" }, 404)
+    if (url.endsWith("/learning/paths/p1") && method === "DELETE") {
+      deletes?.push(url)
+      return new Response(null, { status: 204 })
+    }
     if (url.endsWith("/learning/paths/p1")) return json(path("assessment", null))
     if (url.endsWith("/learning/paths/p1/lesson") && method === "POST") {
       server.lessons++
@@ -112,6 +117,22 @@ async function answerCheck(letter: "A" | "B", id: string) {
 }
 
 describe("Clase guiada", () => {
+  it("se puede borrar la clase, tras confirmarlo, y vuelve a Mis clases", async () => {
+    const deletes: string[] = []
+    stubServer({ deletes })
+    nav.push.mockReset()
+    renderPage()
+
+    await screen.findByText("Una igualdad con una incógnita.", { exact: false })
+    fireEvent.click(screen.getByRole("button", { name: "Borrar clase" }))
+    const dialog = screen.getByRole("alertdialog", { name: "¿Borrar la clase «Ecuaciones lineales»?" })
+    expect(deletes).toEqual([])
+    fireEvent.click(within(dialog).getByRole("button", { name: "Borrar clase" }))
+
+    await waitFor(() => expect(nav.push).toHaveBeenCalledWith("/clases"))
+    expect(deletes).toHaveLength(1)
+  })
+
   it("lección → comprobación → otra explicación → siguiente concepto → ruta completada", async () => {
     const server = stubServer()
     renderPage()

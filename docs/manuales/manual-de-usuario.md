@@ -216,15 +216,24 @@ Las preguntas son sobre lo que acabas de estudiar.
 
 ## 9. Mis clases
 
-En **Clases** tienes todas tus clases, agrupadas por cómo van:
+En **Clases** tienes todas tus clases en tarjetas, agrupadas por cómo van:
 
-- **En curso**: con su progreso y el concepto en el que estás. Pulsa **Continuar**.
-- **Pendientes de nivelación**: clases que esperan la nivelación o la prueba de paso.
+- **En curso**: la última que estudiaste va destacada arriba («Sigue donde lo dejaste»).
+  Cada tarjeta dice por qué concepto vas (o **Repaso pendiente**, si toca repasar), tu nivel
+  en tres pasos (básico → intermedio → avanzado) y el progreso del tramo. Pulsa **Continuar**.
+- **Pendientes**: clases que esperan la nivelación o la **prueba de paso** al siguiente tramo.
 - **Después de…**: al completar una ruta, LARIA te sugiere cómo seguir. Puede ser subir de
   nivel en el mismo tema o un tema relacionado.
 - **Completadas**: si hace tiempo que no practicas una, LARIA te propone un repaso.
 
-Arriba a la derecha está el anillo con tu **objetivo de hoy** y tu racha.
+**Ver temario** despliega los conceptos de la clase con cómo los llevas («Dominado», «En
+camino», «Bloqueado»…), en palabras y no como nota. Arriba están el anillo con tu
+**objetivo de hoy**, tu racha y **Nueva clase**.
+
+**Borrar una clase**: con la papelera de su tarjeta, o con **Borrar clase** dentro de la
+clase. Antes se pide confirmarlo, porque no se puede deshacer. Se borran la clase y su
+progreso en el temario, pero lo que aprendiste se queda en tu perfil y, si vuelves a crear
+una clase del mismo tema, no tendrás que repetir la nivelación.
 
 ![Mis clases](capturas/14-mis-clases.png)
 

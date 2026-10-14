@@ -389,6 +389,17 @@ export function onSessionChange(listener: () => void): () => void {
   }
 }
 
+// Avisa de que cambiaron las clases (p. ej. se borró una), para que quien las
+// muestre (el contador de la barra lateral) las vuelva a pedir
+const pathsListeners = new Set<() => void>()
+
+export function onPathsChanged(listener: () => void): () => void {
+  pathsListeners.add(listener)
+  return () => {
+    pathsListeners.delete(listener)
+  }
+}
+
 // Salir lo hace Clerk (ClerkBridge registra cómo); sin él, basta olvidar la sesión
 let signOutHandler: (() => Promise<unknown> | void) | null = null
 
@@ -765,6 +776,17 @@ export const lariaAPI = {
     list: async (): Promise<LearningPath[]> => (await fetchAPI<{ paths: LearningPath[] }>("/learning/paths")).paths ?? [],
 
     get: (pathId: string) => fetchAPI<LearningPath>(`/learning/paths/${segment(pathId)}`),
+
+    // Borra la clase y su progreso en el temario; el dominio de los conceptos y el nivel
+    // del tema se quedan en el perfil. Un 404 (ajena o ya borrada) cuenta como borrada
+    delete: async (pathId: string): Promise<void> => {
+      try {
+        await request(`/learning/paths/${segment(pathId)}`, { method: "DELETE" }, "No se pudo borrar la clase")
+      } catch (err) {
+        if (!(err instanceof ApiError && err.status === 404)) throw err
+      }
+      pathsListeners.forEach((listener) => listener())
+    },
 
     // Con una comprobación pendiente devuelve la MISMA: recargar la clase es seguro
     lesson: (pathId: string) => fetchAPI<LessonResponse>(`/learning/paths/${segment(pathId)}/lesson`, { method: "POST" }),

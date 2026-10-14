@@ -2,8 +2,8 @@
 
 import { useCallback, useEffect, useState } from "react"
 import Link from "next/link"
-import { useParams } from "next/navigation"
-import { Check, Circle, CircleDot, Lock, Loader2, RefreshCw } from "lucide-react"
+import { useParams, useRouter } from "next/navigation"
+import { Check, Circle, CircleDot, Lock, Loader2, RefreshCw, Trash2 } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { AppShell } from "@/app/components/app-shell"
 import { RequireAuth } from "@/app/components/require-auth"
@@ -15,9 +15,10 @@ import { LEVEL_NAME, QuestionStep, ResultsList, toResults } from "@/app/quiz/qui
 import { useSpeech } from "@/hooks/use-speech"
 import { useStudyTime } from "@/hooks/use-study-time"
 import { ClassStudyBar } from "@/app/components/study-progress"
+import { DeleteClassDialog } from "@/app/components/delete-class-dialog"
 import { NextSuggestions } from "@/app/components/next-suggestions"
 import { ApiError, isUnsafeTopic, lariaAPI, type CheckResponse, type LearningPath, type PathModule, type QuizResponse } from "@/lib/laria-api"
-import { NEW_CHAT_HREF, passageTestHref, placementHref } from "@/lib/routes"
+import { CLASSES_HREF, NEW_CHAT_HREF, passageTestHref, placementHref } from "@/lib/routes"
 
 // La clase guiada de una ruta: explicación de un concepto, una comprobación corta y,
 // según cómo salga, el siguiente concepto, otra explicación o un repaso previo.
@@ -61,6 +62,9 @@ const OUTCOME: Record<CheckResponse["outcome"], string> = {
 
 function Clase() {
   const { pathId } = useParams<{ pathId: string }>()
+  const router = useRouter()
+  const [confirmingDelete, setConfirmingDelete] = useState(false)
+  const closeDelete = useCallback(() => setConfirmingDelete(false), [])
   const [path, setPath] = useState<LearningPath | null>(null)
   const [view, setView] = useState<View>({ kind: "loading" })
   const [current, setCurrent] = useState(0)
@@ -135,10 +139,23 @@ function Clase() {
 
           <main className="min-w-0 space-y-6 lg:col-start-2">
             <ClassStudyBar summary={studySummary} sessionSeconds={sessionSeconds} />
-            <header className="space-y-1">
-              <p className="text-sm text-muted-foreground">Clase · {title}</p>
-              {teaching?.concept_title && view.kind !== "completed" && (
-                <h1 className="text-2xl font-semibold tracking-tight">{teaching.concept_title}</h1>
+            <header className="flex items-start gap-3">
+              <div className="min-w-0 flex-1 space-y-1">
+                <p className="text-sm text-muted-foreground">Clase · {title}</p>
+                {teaching?.concept_title && view.kind !== "completed" && (
+                  <h1 className="text-2xl font-semibold tracking-tight">{teaching.concept_title}</h1>
+                )}
+              </div>
+              {path && (
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  onClick={() => setConfirmingDelete(true)}
+                  className="shrink-0 gap-1.5 text-muted-foreground hover:text-destructive"
+                >
+                  <Trash2 className="h-4 w-4" aria-hidden />
+                  <span className="sr-only sm:not-sr-only">Borrar clase</span>
+                </Button>
               )}
             </header>
 
@@ -282,6 +299,9 @@ function Clase() {
           </main>
         </div>
       </div>
+      {confirmingDelete && (
+        <DeleteClassDialog pathId={pathId} title={title} onClose={closeDelete} onDeleted={() => router.push(CLASSES_HREF)} />
+      )}
     </AppShell>
   )
 }
