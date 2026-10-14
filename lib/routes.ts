@@ -24,6 +24,9 @@ export function placementHref(topic?: string, chatId?: string | null): string {
   return query ? `/nivelacion?${query}` : "/nivelacion"
 }
 
+// Mis clases
+export const CLASSES_HREF = "/clases"
+
 // La clase guiada de una ruta de aprendizaje
 export function classHref(pathId: string): string {
   return `/clase/${encodeURIComponent(pathId)}`
