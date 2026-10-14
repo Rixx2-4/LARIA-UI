@@ -3,12 +3,14 @@ import Link from "next/link"
 import { X } from "lucide-react"
 import { PlenumLogo } from "./plenum-logo"
 import { clerkConfigured } from "@/lib/clerk-config"
+import { WakeServer } from "./wake-server"
 
 // Marco de las pantallas de Clerk (entrar, crear cuenta): la marca de Plenum y
 // una salida bien visible a la página de inicio
 export function AuthPage({ children }: { children: ReactNode }) {
   return (
     <main className="relative flex min-h-screen w-full flex-col items-center justify-center gap-6 bg-background px-4 py-16">
+      <WakeServer />
       {/* Desde tablet, con texto; en móvil solo la X (44 px) */}
       <Link
         href="/"

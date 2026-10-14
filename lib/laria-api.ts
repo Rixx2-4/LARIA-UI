@@ -516,8 +516,47 @@ async function responseError(response: Response, fallback: string, sentToken: st
 // ("../users/me") no puede apuntar a otro endpoint
 const segment = (id: string) => encodeURIComponent(id)
 
+// El servidor no está (aún): Render lo está despertando o tiene una caída. Su borde
+// responde 502/503/504 sin cabeceras CORS, y el navegador lo ve como «Failed to fetch»
+export function isServerUnavailable(error: unknown): boolean {
+  if (error instanceof ApiError) return error.status === 502 || error.status === 503 || error.status === 504
+  return error instanceof TypeError
+}
+
+// Un GET que falla así se repite una vez, tras una espera corta. Solo los GET: repetir
+// un POST podría hacer dos veces lo mismo (un intento de quiz, un turno del chat)
+export const GET_RETRY_DELAY_MS = 1500
+
+const pause = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms))
+
+// Despierta el servidor sin esperar respuesta (la portada y entrar lo piden al abrir):
+// así, cuando la persona entra, ya no tiene que esperar a que arranque. /health no
+// necesita token y un GET simple no hace la petición previa de CORS
+let woken = false
+export function wakeServer() {
+  if (woken) return
+  woken = true
+  try {
+    fetch(`${new URL(API_BASE_URL).origin}/health`, { mode: "no-cors", cache: "no-store" }).catch(() => {})
+  } catch {
+    // Sin URL válida o sin fetch no hay nada que despertar
+  }
+}
+
 // Petición autenticada a la API; si falla, lanza un ApiError con el motivo en español
 async function request(endpoint: string, init: RequestInit = {}, fallback = "Error desconocido"): Promise<Response> {
+  const isGet = !init.method || init.method.toUpperCase() === "GET"
+  if (!isGet) return requestOnce(endpoint, init, fallback)
+  try {
+    return await requestOnce(endpoint, init, fallback)
+  } catch (error) {
+    if (!isServerUnavailable(error) || init.signal?.aborted) throw error
+    await pause(GET_RETRY_DELAY_MS)
+    return requestOnce(endpoint, init, fallback)
+  }
+}
+
+async function requestOnce(endpoint: string, init: RequestInit, fallback: string): Promise<Response> {
   const send = async (skipCache: boolean) => {
     const token = tokenGetter ? await tokenGetter(skipCache ? { skipCache: true } : undefined) : null
     const headers: Record<string, string> = {
