@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest"
-import { classGroups, currentTier, tierDone, tierProgress } from "./classes"
+import { classGroups, currentTier, lastStudied, masterySteps, moduleLabel, tierDone, tierProgress } from "./classes"
 import type { LearningPath } from "./laria-api"
 
 const mod = (concept: string, tier: "basico" | "intermedio", status: string) =>
@@ -29,5 +29,29 @@ describe("clases por tramos", () => {
     expect(currentTier(p)).toBe("intermedio")
     expect(tierProgress(p, "intermedio")).toBe(0)
     expect(tierProgress(p, "basico")).toBe(1)
+  })
+})
+
+describe("cómo se cuenta el avance de una clase", () => {
+  const at = (status: string, mastery: number) => ({ ...mod("x", "basico", status), mastery }) as LearningPath["modules"][number]
+
+  it("el dominio de un concepto va en palabras, no como nota", () => {
+    expect(moduleLabel(at("completed", 0.9))).toBe("Dominado")
+    expect(moduleLabel(at("completed", 0.5))).toBe("Hecho")
+    expect(moduleLabel(at("in_progress", 0.5))).toBe("En camino")
+    expect(moduleLabel(at("in_progress", 0.1))).toBe("Empezado")
+    expect(moduleLabel(at("assumed", 0))).toBe("Ya lo sabías")
+    expect(moduleLabel(at("locked", 0))).toBe("Bloqueado")
+    expect(moduleLabel(at("available", 0))).toBe("Por empezar")
+    expect([masterySteps(at("locked", 0)), masterySteps(at("in_progress", 0.5)), masterySteps(at("completed", 0.95))]).toEqual([0, 2, 3])
+  })
+
+  it("cuándo se estudió por última vez, en relativo", () => {
+    const now = new Date(2026, 9, 14, 18, 0)
+    expect(lastStudied(new Date(2026, 9, 14, 9, 0).toISOString(), now)).toBe("hoy")
+    expect(lastStudied(new Date(2026, 9, 13, 23, 0).toISOString(), now)).toBe("ayer")
+    expect(lastStudied(new Date(2026, 9, 10, 12, 0).toISOString(), now)).toBe("hace 4 días")
+    expect(lastStudied(new Date(2026, 6, 1, 12, 0).toISOString(), now)).toBe("hace 3 meses")
+    expect(lastStudied(undefined, now)).toBe("")
   })
 })

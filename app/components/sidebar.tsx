@@ -23,7 +23,7 @@ import { useChat } from "@/app/contexts/chat-context"
 import { useAuth } from "@/app/contexts/auth-context"
 import { NEW_CHAT_HREF, chatHref, quizHref } from "@/lib/routes"
 import { useDocuments, documentState, type DocumentState } from "@/hooks/use-documents"
-import { lariaAPI } from "@/lib/laria-api"
+import { lariaAPI, onPathsChanged } from "@/lib/laria-api"
 import { inProgressCount } from "@/lib/classes"
 
 const DOCUMENT_STATE_LABEL: Record<DocumentState, string> = {
@@ -43,12 +43,17 @@ export function Sidebar({ onNavigate }: { onNavigate?: () => void } = {}) {
   useEffect(() => {
     if (!isAuthenticated) return
     let cancelled = false
-    lariaAPI.paths
-      .list()
-      .then((paths) => !cancelled && setClassesInProgress(inProgressCount(paths)))
-      .catch(() => {})
+    const load = () =>
+      lariaAPI.paths
+        .list()
+        .then((paths) => !cancelled && setClassesInProgress(inProgressCount(paths)))
+        .catch(() => {})
+    load()
+    // Al borrar una clase, el contador se actualiza
+    const unsubscribe = onPathsChanged(load)
     return () => {
       cancelled = true
+      unsubscribe()
     }
   }, [isAuthenticated])
   const [openPanel, setOpenPanel] = useState<string | null>(null)
