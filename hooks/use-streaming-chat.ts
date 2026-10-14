@@ -180,6 +180,20 @@ export function useStreamingChat({
       },
       onEnvelope: (envelope: Record<string, unknown>) => {
         if (!isCurrent()) return
+        // Los tokens llegan crudos; el texto definitivo (con el esquema validado o sin
+        // él, ADR-048) es el del envelope, y es el que se guarda en el chat
+        const final = (envelope.payload as { content?: unknown } | undefined)?.content
+        if (typeof final === "string" && final && final !== receivedRef.current) {
+          receivedRef.current = final
+          reply = final
+          // Si lo que ya se ve no es el principio del texto final, se enseña entero
+          if (!final.startsWith(displayedRef.current)) {
+            stopAnimation()
+            showUpTo(final.length)
+          } else {
+            queueDisplay("")
+          }
+        }
         setState((prev) => ({
           ...prev,
           envelope,

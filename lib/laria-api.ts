@@ -25,9 +25,18 @@ interface TutorEnvelope {
     // Filtro de seguridad del backend: "refuse" (tema que no trabaja) o "support"
     // (señal de autolesión: un mensaje de apoyo fijo)
     safety?: "refuse" | "support"
+    // El esquema que trae la respuesta (ADR-048): un aviso, porque ya va en content
+    visuals?: Visual[]
     [key: string]: unknown
   }
   [key: string]: unknown
+}
+
+// Un esquema Mermaid validado por el servidor; el bloque ya va dentro del markdown
+interface Visual {
+  kind: "mermaid"
+  diagram: string
+  source: string
 }
 
 interface ChatMessage {
@@ -304,6 +313,8 @@ interface VoicesResponse {
 interface LessonResponse {
   path: LearningPath
   markdown: string | null
+  // Los esquemas de la explicación (solo con estilo visual), ya dentro de markdown
+  visuals?: Visual[]
   // La comprobación (sin respuestas); null cuando la ruta está completada
   check: QuizResponse | null
 }
@@ -906,7 +917,7 @@ export const lariaAPI = {
 }
 
 export type {
-  Chat, ChatMessage, ChatListResponse, User,
+  Chat, ChatMessage, ChatListResponse, User, Visual,
   LearningHistory, StudentProfile, Document, AnalysisResponse, QuestionResponse,
   QuizAttemptSummary, TutorInteraction, LearningRecommendation,
   PedagogicalMemory, DocumentMastery, ConceptMastery,

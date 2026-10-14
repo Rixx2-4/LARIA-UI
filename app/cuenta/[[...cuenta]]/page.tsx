@@ -1,9 +1,8 @@
 "use client"
 
-import { UserProfile } from "@clerk/nextjs"
+import { DeleteAccount, UserProfile } from "@/app/components/clerk-ui"
 import { RequireAuth } from "@/app/components/require-auth"
 import { AppShell } from "@/app/components/app-shell"
-import { DeleteAccount } from "../delete-account"
 
 // La cuenta (correo, contraseña, Google, sesiones abiertas) la gestiona Clerk
 export default function CuentaPage() {

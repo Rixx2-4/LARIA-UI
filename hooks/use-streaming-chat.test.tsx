@@ -3,7 +3,7 @@ import { useState } from "react"
 import { renderHook, act, waitFor } from "@testing-library/react"
 import { useStreamingChat } from "./use-streaming-chat"
 import type { ChatMessage } from "@/lib/laria-api"
-import { controllableSSE, doneEvent, thinkingEvent, tokenEvent } from "@/test/sse"
+import { controllableSSE, doneEvent, envelopeEvent, thinkingEvent, tokenEvent } from "@/test/sse"
 import { preferReducedMotion } from "@/test/media"
 
 afterEach(() => {
@@ -253,5 +253,34 @@ describe("useStreamingChat", () => {
 
     expect(result.current.isStreaming).toBe(true)
     expect(last(result.current.messages)).toMatchObject({ role: "assistant", content: "Dos" })
+  })
+
+  it("al llegar el envelope, el mensaje pasa a ser su texto validado (p. ej. sin un esquema que no se puede dibujar)", async () => {
+    preferReducedMotion()
+    const sse = network()
+    const { result } = renderChat()
+
+    act(() => {
+      result.current.startStreaming("hazme un esquema")
+    })
+    sse.push(tokenEvent("Aquí va:\n\n```mermaid\npie\n  \"a\": 1\n```\n\nListo."))
+    await waitFor(() => expect(last(result.current.messages).content).toContain("```mermaid"))
+
+    sse.push(envelopeEvent({ type: "explanation", payload: { content: "Aquí va:\n\nListo." } }))
+    await waitFor(() => expect(last(result.current.messages).content).toBe("Aquí va:\n\nListo."))
+  })
+
+  it("si el texto validado continúa lo ya mostrado, se sigue escribiendo hasta el final", async () => {
+    preferReducedMotion()
+    const sse = network()
+    const { result } = renderChat()
+
+    act(() => {
+      result.current.startStreaming("hola")
+    })
+    sse.push(tokenEvent("Primera parte."))
+    await waitFor(() => expect(last(result.current.messages).content).toBe("Primera parte."))
+    sse.push(envelopeEvent({ type: "explanation", payload: { content: "Primera parte. Y el final." } }))
+    await waitFor(() => expect(last(result.current.messages).content).toBe("Primera parte. Y el final."))
   })
 })

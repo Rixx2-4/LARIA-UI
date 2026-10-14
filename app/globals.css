@@ -449,3 +449,15 @@
 .typing-live > :is(ul, ol, pre, table, div):last-child::after {
   content: none;
 }
+
+/* Esquemas del tutor (Mermaid): caben en su caja; ampliados, a un tamaño legible con desplazamiento */
+.mermaid-diagram svg {
+  display: block;
+  margin: 0 auto;
+  height: auto;
+  max-width: 100%;
+}
+.mermaid-diagram-expanded svg {
+  max-width: none !important;
+  width: max(100%, 640px);
+}
