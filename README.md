@@ -39,13 +39,15 @@ importantes y reacciona a los resultados (celebra, anima, tiene paciencia).
   Safari). En el móvil, una frase por pulsación.
 
 **Estudio y progreso.**
-- **Mis clases** (`/clases`): en curso, pendientes de nivelación o prueba de paso, y
-  completadas.
+- **Mis clases** (`/clases`): tarjetas en curso, pendientes (nivelación o prueba de paso)
+  y completadas, con el nivel, el progreso del tramo y el temario. Cada clase se puede
+  **borrar** tras confirmarlo; lo aprendido se queda en el perfil.
 - **Metas:** duración de cada clase y objetivo diario, con cronómetro, racha y anillo de
   progreso.
 - **Perfil** (`/perfil`): dominio por concepto, nivel por tema, estilo de explicación,
   voz y metas.
-- **Quizzes** (`/quiz`) sobre los documentos de un chat.
+- **Quizzes** (`/quiz`) sobre los documentos de un chat: 5, 10 o 20 preguntas, atajos de
+  teclado y un filtro para repasar las falladas.
 
 **Cuenta.**
 - Entrar y registrarse con **Clerk** (correo con código, Google o Microsoft).
@@ -63,7 +65,7 @@ En PDF, para leer o imprimir:
 
 - [Manual de usuario](docs/manuales/manual-de-usuario.pdf) (8 páginas): cómo se usa
   Plenum, paso a paso y con capturas.
-- [Manual técnico](docs/manuales/manual-tecnico.pdf) (8 páginas): arquitectura, sesión y
+- [Manual técnico](docs/manuales/manual-tecnico.pdf) (9 páginas): arquitectura, sesión y
   Clerk (incluida la configuración del panel), API, flujos, límites, despliegue y problemas
   conocidos.
 
@@ -127,24 +129,26 @@ enlaza a las líneas que lo respaldan. Las imágenes son capturas; la versión i
 
 ### Arquitectura del cliente
 
-Quién habla con quién: la portada sin Clerk, las pantallas de Clerk, las páginas de la app,
-el cliente de la API con el token de Clerk y el backend en Render.
+Quién habla con quién: la portada sin Clerk, las pantallas de Clerk y `proxy.ts`, las
+páginas de la app y sus contextos (`AuthProvider`, `ChatProvider`), el cliente de la API
+con el token de Clerk y el backend en Render.
 
 ![Arquitectura del cliente web de Plenum](docs/diagramas/arquitectura-cliente.png)
 
 [Versión interactiva](docs/diagramas/arquitectura-cliente.html) ·
 [fuente](docs/diagramas/arquitectura-cliente.json)
 
-### Una clase guiada por tramos
+### El recorrido del estudiante
 
-De «Mis clases» a la pizarra y la comprobación. Según el resultado, otra explicación o el
-siguiente concepto; al terminar un tramo, la prueba de paso abre el siguiente en la misma
-ruta.
+Del tutorial de bienvenida a la nivelación por rondas (una ronda reenviada da 409 y no es
+un error), la clase en la pizarra y su comprobación. Según el resultado, otra explicación o
+el siguiente concepto; al terminar un tramo, la prueba de paso abre el siguiente en la
+misma ruta.
 
-![Flujo de una clase guiada por tramos](docs/diagramas/clase-por-tramos.png)
+![Recorrido del estudiante: tutorial, nivelación, clase y prueba de paso](docs/diagramas/recorrido-del-estudiante.png)
 
-[Versión interactiva](docs/diagramas/clase-por-tramos.html) ·
-[fuente](docs/diagramas/clase-por-tramos.json)
+[Versión interactiva](docs/diagramas/recorrido-del-estudiante.html) ·
+[fuente](docs/diagramas/recorrido-del-estudiante.json)
 
 ### Un turno del chat
 
@@ -165,15 +169,15 @@ JSON (y ese commit) y vuelve a generar:
 ```bash
 A=~/.claude/skills/archify/bin/archify.mjs   # donde esté instalado archify
 node $A finalize architecture docs/diagramas/arquitectura-cliente.json docs/diagramas/arquitectura-cliente.html --repo-root . --quality showcase --json
-node $A finalize workflow     docs/diagramas/clase-por-tramos.json     docs/diagramas/clase-por-tramos.html     --repo-root . --quality showcase --json
+node $A finalize workflow     docs/diagramas/recorrido-del-estudiante.json docs/diagramas/recorrido-del-estudiante.html --repo-root . --quality showcase --json
 node $A finalize sequence     docs/diagramas/turno-del-chat.json       docs/diagramas/turno-del-chat.html       --repo-root . --quality showcase --json
 ```
 
 - **Comprobación en el navegador:** `finalize` la hace con Chrome. Si Chromium no arranca con
   sandbox (pasa en Ubuntu con AppArmor), apunta `ARCHIFY_CHROME` a un envoltorio que añada
   `--no-sandbox`.
-- **Capturas para el README:** con `visual-check --out-dir <carpeta>`; después se recorta el
-  panel del diagrama a PNG.
+- **Imágenes para el README:** se captura el `.diagram-container` del HTML con Playwright
+  (tema claro, escala 1,5) y se guarda como el `.png` del diagrama.
 - **Recibos:** los `*.delivery.json`, `*.finalize*.json` y `*.browser-check.json` llevan rutas
   locales y están en `.gitignore`.
 
@@ -188,6 +192,8 @@ pnpm dev -p 4321      # http://localhost:4321
 ```
 
 Usa el puerto **4321**: es el origen que el backend permite por CORS en desarrollo.
+`http://localhost:3000` funciona contra producción solo si la variable `CORS_ORIGINS` de
+Render lo incluye.
 
 ### Variables de entorno (`.env.local`, no se sube al repositorio)
 
@@ -229,7 +235,8 @@ Web Audio) y el dictado (`test/speech.ts`). Cada funcionalidad nueva lleva sus t
 - El código y los comentarios siguen el estilo que ya hay: nombres claros y comentarios
   que explican decisiones, no lo obvio.
 - Los cambios de contrato con el backend se acuerdan antes, y su documentación está en
-  el repositorio del backend (`backend/docs/`).
+  el repositorio del backend: `backend/docs/api-contracts.md` y
+  `backend/docs/endpoints.md`.
 
 ## Despliegue
 
