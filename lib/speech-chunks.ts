@@ -71,7 +71,11 @@ function hardSplit(segment: string, maxChars: number): string[] {
  * de `text` que todavía no está listo: quien llama sabe así por dónde va. Con `final`
  * (terminó la respuesta) no queda resto.
  */
-export function takeSpeakable(text: string, final: boolean, maxChars: number): { chunks: string[]; rest: string } {
+export function takeSpeakable(
+  text: string,
+  final: boolean,
+  maxChars: number,
+): { chunks: string[]; rest: string; display: string[] } {
   const { cuts, codeBlocks } = boundaries(text)
   const ends = final && text.length > 0 && cuts.at(-1) !== text.length ? [...cuts, text.length] : cuts
 
@@ -84,10 +88,17 @@ export function takeSpeakable(text: string, final: boolean, maxChars: number): {
   }
 
   const chunks: string[] = []
+  // Lo que se enseña de cada trozo: igual que lo que se dice, salvo los bloques de
+  // código, que se dicen como aviso pero se enseñan enteros (la pizarra)
+  const display: string[] = []
   let pending = ""
   let consumed = 0
+  const push = (chunk: string, shown = chunk) => {
+    chunks.push(chunk)
+    display.push(shown)
+  }
   const flush = () => {
-    if (pending) chunks.push(pending)
+    if (pending) push(pending)
     consumed += pending.length
     pending = ""
   }
@@ -95,7 +106,7 @@ export function takeSpeakable(text: string, final: boolean, maxChars: number): {
   for (const segment of segments) {
     if (segment.code) {
       flush()
-      chunks.push(codePlaceholder(segment.text))
+      push(codePlaceholder(segment.text), segment.text)
       consumed += segment.text.length
       continue
     }
@@ -103,7 +114,7 @@ export function takeSpeakable(text: string, final: boolean, maxChars: number): {
     if (segment.text.length > maxChars) {
       const parts = hardSplit(segment.text, maxChars)
       for (const part of parts.slice(0, -1)) {
-        chunks.push(part)
+        push(part)
         consumed += part.length
       }
       pending = parts.at(-1) ?? ""
@@ -115,5 +126,6 @@ export function takeSpeakable(text: string, final: boolean, maxChars: number): {
   if (final) flush()
 
   // Solo cuentan los trozos con algo que decir; el espacio sobrante no se pierde en `rest`
-  return { chunks: chunks.filter((chunk) => chunk.trim()), rest: text.slice(consumed) }
+  const keep = chunks.map((chunk) => !!chunk.trim())
+  return { chunks: chunks.filter((_, i) => keep[i]), display: display.filter((_, i) => keep[i]), rest: text.slice(consumed) }
 }

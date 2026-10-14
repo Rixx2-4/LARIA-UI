@@ -45,3 +45,5 @@ export const thinkingEvent = (content: string) => sseEvent("thinking", { content
 export const doneEvent = () => sseEvent("done", { message_id: "m1" })
 export const errorEvent = (content: string) =>
   sseEvent("error", { type: "error", payload: { content, grounded: false } })
+// El cierre del turno: el texto validado (payload.content) y lo que ofrecer
+export const envelopeEvent = (envelope: Record<string, unknown>) => sseEvent("envelope", envelope)
