@@ -21,7 +21,7 @@ describe("takeSpeakable", () => {
   })
 
   it("al terminar la respuesta lo dice todo, aunque sea corto", () => {
-    expect(takeSpeakable(" ¿Seguimos?", true, MAX)).toEqual({ chunks: [" ¿Seguimos?"], rest: "" })
+    expect(takeSpeakable(" ¿Seguimos?", true, MAX)).toEqual({ chunks: [" ¿Seguimos?"], display: [" ¿Seguimos?"], rest: "" })
   })
 
   it("un bloque de código va entero y solo cuando se cierra", () => {
@@ -67,5 +67,15 @@ describe("takeSpeakable", () => {
     }
     spoken = [...spoken, ...takeSpeakable(answer.slice(offset), true, MAX).chunks]
     expect(spoken.join("")).toBe(answer)
+  })
+
+  it("un esquema se dice como aviso (la valla vacía) pero se enseña entero en la pizarra", () => {
+    const text = "Mira el ciclo del agua en este esquema.\n```mermaid\nflowchart TD\n  A --> B\n```\nY así sigue."
+    const { chunks, display } = takeSpeakable(text, true, MAX)
+    const at = chunks.findIndex((chunk) => chunk.startsWith("```mermaid"))
+    expect(chunks[at]).toBe("```mermaid\n```\n")
+    expect(display[at]).toBe("```mermaid\nflowchart TD\n  A --> B\n```\n")
+    expect(display.join("")).toBe(text)
+    expect(display).toHaveLength(chunks.length)
   })
 })

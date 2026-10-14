@@ -3,6 +3,8 @@
 import { lazy, Suspense } from "react"
 import ReactMarkdown, { type Components } from "react-markdown"
 import remarkGfm from "remark-gfm"
+import { DrawingDiagram, MermaidDiagram } from "./mermaid-diagram"
+import { openDiagramAt } from "@/lib/diagrams"
 
 // KaTeX y su CSS solo se bajan cuando un texto trae fórmulas
 const MathMarkdown = lazy(() => import("./math-markdown"))
@@ -10,6 +12,10 @@ const MathMarkdown = lazy(() => import("./math-markdown"))
 // Dentro de una burbuja de chat, los títulos grandes quedan desproporcionados
 function SectionHeading({ children }: { children?: React.ReactNode }) {
   return <h3 className="mt-3 mb-1 text-base font-semibold">{children}</h3>
+}
+
+function CodeBlock({ children }: { children?: React.ReactNode }) {
+  return <pre className="my-2 overflow-x-auto rounded-lg bg-foreground/[0.06] p-3 text-[13px] leading-relaxed">{children}</pre>
 }
 
 // Sin rehype-raw a propósito: el HTML que venga en la respuesta se muestra como texto
@@ -35,9 +41,15 @@ const components: Components = {
   ),
   th: ({ children }) => <th className="border border-border px-2 py-1 text-left font-semibold">{children}</th>,
   td: ({ children }) => <td className="border border-border px-2 py-1">{children}</td>,
-  pre: ({ children }) => (
-    <pre className="my-2 overflow-x-auto rounded-lg bg-foreground/[0.06] p-3 text-[13px] leading-relaxed">{children}</pre>
-  ),
+  pre: ({ children, node }) => {
+    // Un bloque ```mermaid es un esquema (ADR-048 del backend): se dibuja, no se enseña el código
+    const code = node?.children[0]
+    if (code?.type === "element" && code.tagName === "code" && String(code.properties.className ?? "").includes("language-mermaid")) {
+      const source = code.children.map((child) => (child.type === "text" ? child.value : "")).join("")
+      return <MermaidDiagram source={source.trimEnd()} />
+    }
+    return <CodeBlock>{children}</CodeBlock>
+  },
   code: ({ children, className }) => (
     <code className={className ?? "rounded bg-foreground/[0.08] px-1 py-0.5 text-[13px]"}>{children}</code>
   ),
@@ -76,6 +88,17 @@ function normalizeMath(content: string): string {
 const HAS_MATH = /\\\(|\\\[|\$/
 
 export function MessageContent({ content }: { content: string }) {
+  // Mientras llega un esquema, su código a medias no se enseña: se dibuja al cerrarse
+  const drawingAt = openDiagramAt(content)
+  if (drawingAt !== null) {
+    const before = content.slice(0, drawingAt)
+    return (
+      <>
+        {before.trim() && <MessageContent content={before} />}
+        <DrawingDiagram />
+      </>
+    )
+  }
   const plain = <ReactMarkdown remarkPlugins={[remarkGfm]} components={components}>{content}</ReactMarkdown>
   if (!HAS_MATH.test(content)) return plain
   // Mientras llega KaTeX se ve el texto tal cual; las fórmulas se dibujan al cargar

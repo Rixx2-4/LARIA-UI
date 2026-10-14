@@ -4,6 +4,7 @@ import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } fro
 import { ChevronsDown, Square, Volume2, VolumeX } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { MessageContent } from "@/app/components/message-content"
+import { DiagramThemeContext } from "@/app/components/mermaid-diagram"
 import { LariaMascot, type MascotEmotion, type MascotState } from "@/app/components/laria-mascot"
 import { takeSpeakable } from "@/lib/speech-chunks"
 import type { useSpeech } from "@/hooks/use-speech"
@@ -45,7 +46,8 @@ export function ClassBoard({
   emotion?: MascotEmotion
   children: ReactNode
 }) {
-  const chunks = useMemo(() => takeSpeakable(markdown, true, speech.maxChars).chunks, [markdown, speech.maxChars])
+  // Lo que se dice y lo que se enseña de cada frase (un esquema se dice como aviso)
+  const { chunks, display } = useMemo(() => takeSpeakable(markdown, true, speech.maxChars), [markdown, speech.maxChars])
   const voiceOn = speech.enabled && speech.mode === "voice"
   // Hasta saber si hay voz, la pizarra espera vacía (si no, el texto aparecería y se
   // escondería al empezar la lectura)
@@ -116,14 +118,17 @@ export function ClassBoard({
       svg.style.removeProperty("--mouth")
     }
   }, [talking, getLevel])
-  const shown = chunks.slice(0, revealed).join("")
+  const shown = display.slice(0, revealed).join("")
 
   return (
     <div className="space-y-6">
       <div className="relative flex items-end gap-4">
         <div className="min-w-0 flex-1 rounded-2xl border-[6px] border-[#8a6a43] bg-[#1f2d2a] p-5 pb-16 text-white/90 shadow-inner sm:p-7 sm:pb-7 lg:min-h-64">
           <div className="message-text space-y-3 leading-relaxed [&_.katex]:text-white [&_code]:bg-white/10 [&_pre]:bg-white/10" aria-live="polite">
-            {shown ? <MessageContent content={shown} /> : <p className="text-white/50">LARIA está preparando la pizarra…</p>}
+            {/* Los esquemas, en tema oscuro: la pizarra es verde oscuro */}
+            <DiagramThemeContext.Provider value="dark">
+              {shown ? <MessageContent content={shown} /> : <p className="text-white/50">LARIA está preparando la pizarra…</p>}
+            </DiagramThemeContext.Provider>
           </div>
         </div>
         <LariaMascot
