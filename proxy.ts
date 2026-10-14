@@ -1,23 +1,55 @@
 import { NextResponse, type NextFetchEvent, type NextRequest } from "next/server"
 import { clerkMiddleware } from "@clerk/nextjs/server"
+import { SIGN_IN_HREF } from "@/lib/routes"
 
-// Clerk necesita ver cada petición para su sesión (cookies). Las rutas no se
-// protegen aquí: la app es de cliente y es el backend quien exige el token.
-// Sin claves, clerkMiddleware lanza y tumbaría TODAS las páginas: se deja pasar
+// Las pantallas con sesión NO pasan por clerkMiddleware. La app es de cliente: Clerk
+// lleva la sesión en el navegador y es el backend quien exige el token, así que
+// ninguna página usa auth() en el servidor. Con clerkMiddleware, cada visita sin cookie
+// de Clerk (con claves de desarrollo, todas) daba tres redirecciones antes del HTML:
+// /chat → handshake de Clerk → /chat?__clerk_handshake=… → /chat.
+//
+// Lo que sí se hace aquí, sin llamar a nadie: si la cookie de Clerk dice que no hay
+// sesión, a entrar desde el servidor. Así no se descarga la app entera (cientos de KB
+// de JS) para que el navegador descubra que no hay sesión y redirija él.
+// __client_uat la pone Clerk en el dominio de la app: 0 sin sesión, la hora de entrada
+// con ella (con sufijo por instancia, p. ej. __client_uat_fHoTIQtm). Si dice que hay
+// sesión, se deja pasar y Clerk la valida en el navegador como siempre.
+function looksSignedIn(request: NextRequest): boolean {
+  return request.cookies
+    .getAll()
+    .some((cookie) => cookie.name.startsWith("__client_uat") && Number(cookie.value) > 0)
+}
+
+const PROTECTED = /^\/(chat|perfil|quiz|nivelacion|cuenta|clases|clase)(\/|$)/
+
+// Rutas de servidor (API), que sí necesitarían auth(). Sin claves, clerkMiddleware
+// lanza y tumbaría esas rutas: se deja pasar
 const configured = !!process.env.NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY && !!process.env.CLERK_SECRET_KEY
-
 const clerk = configured ? clerkMiddleware() : null
 
-// La portada no usa Clerk (no carga su JS): tampoco pasa por su middleware
 export default function proxy(request: NextRequest, event: NextFetchEvent) {
-  if (!clerk || request.nextUrl.pathname === "/") return NextResponse.next()
-  return clerk(request, event)
+  const { pathname, search } = request.nextUrl
+
+  if (PROTECTED.test(pathname)) {
+    if (looksSignedIn(request)) return NextResponse.next()
+    const signIn = new URL(SIGN_IN_HREF, request.url)
+    signIn.searchParams.set("redirect_url", pathname + search)
+    return NextResponse.redirect(signIn, 307)
+  }
+
+  if (clerk && /^\/(api|trpc)(\/|$)/.test(pathname)) return clerk(request, event)
+  return NextResponse.next()
 }
 
 export const config = {
   matcher: [
-    "/((?!_next|[^?]*\\.(?:html?|css|js(?!on)|jpe?g|webp|png|gif|svg|ttf|woff2?|ico|csv|docx?|xlsx?|zip|webmanifest)).*)",
+    "/chat/:path*",
+    "/perfil",
+    "/quiz",
+    "/nivelacion",
+    "/cuenta/:path*",
+    "/clases",
+    "/clase/:path*",
     "/(api|trpc)(.*)",
-    "/__clerk/:path*",
   ],
 }

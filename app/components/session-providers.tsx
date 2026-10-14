@@ -12,6 +12,10 @@ import { NEW_CHAT_HREF, SIGN_IN_HREF, SIGN_UP_HREF } from "@/lib/routes"
 import { ClerkBridge, NoAuthBridge } from "./clerk-bridge"
 import { OnboardingTour } from "./onboarding-tour"
 
+// Para clerk-ui.tsx: lo que las páginas usan de Clerk, desde este mismo fragmento
+export { SignIn, SignUp, UserProfile } from "@clerk/nextjs"
+export { DeleteAccount } from "@/app/cuenta/delete-account"
+
 // La sesión de la app: Clerk (entrar, registrarse, perfil; tras entrar, al chat),
 // quién eres en Plenum y tus chats. Se carga aparte (AppProviders) para que la
 // portada, que no la necesita, no baje Clerk. Sin su clave, la app sigue en pie,
