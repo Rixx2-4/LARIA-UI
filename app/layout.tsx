@@ -5,6 +5,8 @@ import { Geist, Geist_Mono } from "next/font/google"
 import { ThemeProvider } from "next-themes"
 import { ThemedToaster } from "./components/themed-toaster"
 import { AppProviders } from "./components/app-providers"
+import { preconnect } from "react-dom"
+import { clerkFrontendApi } from "@/lib/clerk-config"
 
 // Las fuentes se sirven desde el propio dominio (next/font), sin pedir nada a
 // Google al cargar y sin bloquear el primer pintado (display: swap)
@@ -46,6 +48,15 @@ export default function RootLayout({
 }: Readonly<{
   children: React.ReactNode
 }>) {
+  // Abrir ya la conexión con Clerk (DNS + TLS): su JS se pide en cuanto hidrata la app
+  // y el formulario de entrar depende de él. Dos: los scripts van sin credenciales y
+  // las llamadas a su API con ellas, y el navegador no comparte esas conexiones.
+  // En la portada no se usa Clerk, pero deja la conexión lista para "Entrar"
+  if (clerkFrontendApi) {
+    preconnect(`https://${clerkFrontendApi}`, { crossOrigin: "anonymous" })
+    preconnect(`https://${clerkFrontendApi}`, { crossOrigin: "use-credentials" })
+  }
+
   return (
     // next-themes pone la clase del tema en <html> antes de hidratar
     <html lang="es" suppressHydrationWarning className={`${geist.variable} ${geistMono.variable}`}>
