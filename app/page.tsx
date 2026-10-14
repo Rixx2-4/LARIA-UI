@@ -1,5 +1,6 @@
 import type { Metadata } from "next"
 import Link from "next/link"
+import { WakeServer } from "./components/wake-server"
 import { Instrument_Serif } from "next/font/google"
 // Las fórmulas de la demo llegan ya en HTML (KaTeX en el servidor): solo falta su CSS
 import "katex/dist/katex.min.css"
@@ -127,6 +128,7 @@ export default function LandingPage() {
       <div className={`${display.variable} min-h-dvh bg-background text-foreground`}>
         <LandingHeader />
         <AccountDeletedNotice />
+        <WakeServer />
 
         <main>
           {/* Hero */}

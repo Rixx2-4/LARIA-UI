@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, afterEach } from "vitest"
-import { lariaAPI, getSessionState, onUnauthorized, setAuthToken, setSession, describeErrorDetail } from "./laria-api"
+import { lariaAPI, getSessionState, onUnauthorized, setAuthToken, setSession, describeErrorDetail, GET_RETRY_DELAY_MS } from "./laria-api"
 import { controllableSSE, doneEvent, errorEvent, tokenEvent } from "@/test/sse"
 
 afterEach(() => {
@@ -339,5 +339,45 @@ describe("isUnsafeTopic", () => {
 
     vi.stubGlobal("fetch", async () => new Response(JSON.stringify({ detail: "Indica el tema de la ruta." }), { status: 422 }))
     expect(isUnsafeTopic(await lariaAPI.paths.fromTopic("x").catch((e) => e))).toBe(false)
+  })
+})
+
+describe("cuando el servidor no está (Render dormido o caído)", () => {
+  afterEach(() => {
+    vi.unstubAllGlobals()
+    vi.useRealTimers()
+  })
+
+  it("un GET que da 503 se repite una vez, tras una espera corta", async () => {
+    vi.useFakeTimers()
+    let calls = 0
+    vi.stubGlobal("fetch", async () => (++calls === 1 ? new Response("", { status: 503 }) : new Response(JSON.stringify({ chats: [] }), { status: 200 })))
+
+    const listed = lariaAPI.chats.list()
+    await vi.advanceTimersByTimeAsync(GET_RETRY_DELAY_MS)
+    expect(await listed).toEqual({ chats: [] })
+    expect(calls).toBe(2)
+  })
+
+  it("un POST no se repite: podría hacer dos veces lo mismo", async () => {
+    let calls = 0
+    vi.stubGlobal("fetch", async () => {
+      calls++
+      throw new TypeError("Failed to fetch")
+    })
+
+    await expect(lariaAPI.quizzes.submitAttempt("q1", { "0": "A" })).rejects.toThrow()
+    expect(calls).toBe(1)
+  })
+
+  it("un error que no es del servidor (404) no se repite", async () => {
+    let calls = 0
+    vi.stubGlobal("fetch", async () => {
+      calls++
+      return new Response(JSON.stringify({ detail: "Not Found" }), { status: 404 })
+    })
+
+    await expect(lariaAPI.chats.get("c9")).rejects.toThrow()
+    expect(calls).toBe(1)
   })
 })
