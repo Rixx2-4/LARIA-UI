@@ -1,5 +1,5 @@
 import type { Metadata } from "next"
-import { SignUp } from "@clerk/nextjs"
+import { SignUp } from "@/app/components/clerk-ui"
 import { AuthPage } from "@/app/components/auth-page"
 
 export const metadata: Metadata = { title: "Crear cuenta" }
