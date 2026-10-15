@@ -456,6 +456,8 @@
   margin: 0 auto;
   height: auto;
   max-width: 100%;
+  /* Los anchos no se encogen por debajo de un tamaño legible: se desplazan (MermaidDiagram) */
+  min-width: var(--diagram-min-width, 0px);
 }
 .mermaid-diagram-expanded svg {
   max-width: none !important;
