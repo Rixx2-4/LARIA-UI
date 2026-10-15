@@ -1,7 +1,8 @@
 import { describe, it, expect, vi, afterEach } from "vitest"
 import { render, screen, cleanup, fireEvent, waitFor } from "@testing-library/react"
 import { MessageContent } from "./message-content"
-import { DiagramThemeContext } from "./mermaid-diagram"
+import { DiagramThemeContext, forgetDiagrams } from "./mermaid-diagram"
+import { MAX_DIAGRAM_LINES } from "@/lib/diagrams"
 import { ClassBoard } from "@/app/clase/class-board"
 import type { useSpeech } from "@/hooks/use-speech"
 
@@ -9,17 +10,32 @@ import type { useSpeech } from "@/hooks/use-speech"
 // simula con lo que importa aquí, qué se le pide y qué devuelve
 const mermaid = vi.hoisted(() => ({
   initialize: vi.fn(),
+  // Como el de verdad: false si la sintaxis no vale (con suppressErrors) y el tipo si vale
+  parse: vi.fn(async (source: string) => {
+    if (source.includes("ROTO")) return false
+    return { diagramType: source.startsWith("architecture") ? "architecture" : source.startsWith("mindmap") ? "mindmap" : "flowchart-v2" }
+  }),
   render: vi.fn(async (_id: string, source: string) => {
-    if (source.includes("ROTO")) throw new Error("Parse error on line 2")
+    if (source.includes("FALLA")) throw new Error("Could not measure text")
+    if (source.includes("MALICIOSO")) {
+      return {
+        svg: '<svg viewBox="0 0 100 50"><style>.n{fill:url(https://x.test/a.png)}</style><image href="https://x.test/espia.png"/>' +
+          '<a href="javascript:alert(1)"><text>clic</text></a><foreignObject><div><img src="https://x.test/b.png" onerror="alert(1)">Nodo</div></foreignObject>' +
+          '<path marker-end="url(#flecha)" onclick="alert(1)"/></svg>',
+      }
+    }
+    const width = source.includes("ANCHO") ? 1600 : 100
     const labels = [...source.matchAll(/\["([^"]+)"\]/g)].map((m) => `<g class="node"><span class="nodeLabel">${m[1]}</span></g>`)
-    return { svg: `<svg viewBox="0 0 100 50">${labels.join("")}</svg>` }
+    return { svg: `<svg viewBox="0 0 ${width} 50">${labels.join("")}</svg>` }
   }),
 }))
 vi.mock("mermaid", () => ({ default: mermaid }))
 
 afterEach(() => {
   cleanup()
+  forgetDiagrams()
   mermaid.initialize.mockClear()
+  mermaid.parse.mockClear()
   mermaid.render.mockClear()
 })
 
@@ -59,7 +75,7 @@ describe("Esquemas en las explicaciones", () => {
     const { container } = render(<MessageContent content={"Antes.\n\n```mermaid\nflowchart TD\n    ROTO\n```\n\nDespués."} />)
 
     expect(await screen.findByText("No se pudo dibujar el esquema.")).toBeTruthy()
-    expect(container.textContent).not.toContain("ROTO")
+    expect(container.textContent).not.toContain("flowchart")
     expect(container.textContent).not.toContain("Parse error")
     expect(screen.getByText("Antes.")).toBeTruthy()
     expect(screen.getByText("Después.")).toBeTruthy()
@@ -106,5 +122,98 @@ describe("Esquemas en las explicaciones", () => {
     expect(await screen.findByRole("img", { name: /Diagrama de flujo: Evaporación/ })).toBeTruthy()
     expect(mermaid.render.mock.calls[0][1]).toBe(CICLO)
     expect(mermaid.initialize).toHaveBeenCalledWith(expect.objectContaining({ theme: "dark" }))
+  })
+
+  it("valida la sintaxis antes de dibujar y, si no vale, ofrece el esquema en texto", async () => {
+    const { container } = render(<MessageContent content={'Antes.\n\n```mermaid\nflowchart TD\n    A["Evaporación"] --> B["ROTO"]\n```\n\nDespués.'} />)
+
+    expect(await screen.findByText("No se pudo dibujar el esquema.")).toBeTruthy()
+    expect(mermaid.parse).toHaveBeenCalledWith(expect.stringContaining("flowchart TD"), { suppressErrors: true })
+    expect(mermaid.render).not.toHaveBeenCalled()
+    fireEvent.click(screen.getByText("Ver el esquema en texto"))
+    expect(screen.getByRole("listitem").textContent).toBe("Evaporación → ROTO")
+    expect(container.textContent).not.toContain("flowchart")
+    expect(screen.getByText("Después.")).toBeTruthy()
+  })
+
+  it("si falla al dibujar (no al validar), el mismo aviso con el texto", async () => {
+    render(<MessageContent content={'```mermaid\nflowchart TD\n    A["Paso FALLA"] --> B["Otro"]\n```'} />)
+
+    expect(await screen.findByText("No se pudo dibujar el esquema.")).toBeTruthy()
+    expect(screen.getByText("Ver el esquema en texto")).toBeTruthy()
+  })
+
+  it("solo dibuja los tipos de esquema pensados para clase", async () => {
+    render(<MessageContent content={"```mermaid\narchitecture-beta\n    service api(server)[API]\n```"} />)
+
+    expect(await screen.findByText("No se pudo dibujar el esquema.")).toBeTruthy()
+    expect(mermaid.render).not.toHaveBeenCalled()
+  })
+
+  it("uno demasiado grande no llega a Mermaid", async () => {
+    const big = "flowchart TD\n" + Array.from({ length: MAX_DIAGRAM_LINES }, (_, i) => `    N${i}["Paso ${i}"] --> N${i + 1}`).join("\n")
+    render(<MessageContent content={"```mermaid\n" + big + "\n```"} />)
+
+    expect(await screen.findByText("El esquema es demasiado grande para dibujarlo.")).toBeTruthy()
+    expect(mermaid.parse).not.toHaveBeenCalled()
+    expect(mermaid.render).not.toHaveBeenCalled()
+  })
+
+  it("las directivas del modelo no cambian el tema ni el CSS: se quitan antes de validar y dibujar", async () => {
+    render(<MessageContent content={'```mermaid\n%%{init: {"theme": "forest", "themeCSS": "x"}}%%\n' + CICLO + "\n```"} />)
+
+    await screen.findByRole("img", { name: /Diagrama de flujo/ })
+    expect(mermaid.render.mock.calls[0][1]).toBe(CICLO)
+  })
+
+  it("del SVG se quitan las imágenes y enlaces externos, los scripts y los eventos", async () => {
+    render(<MessageContent content={'```mermaid\nflowchart TD\n    A["MALICIOSO"]\n```'} />)
+
+    const diagram = await screen.findByRole("img", { name: /Diagrama de flujo/ })
+    const html = diagram.innerHTML
+    expect(html).not.toContain("x.test")
+    expect(html).not.toContain("javascript:")
+    expect(html).not.toMatch(/onerror|onclick/)
+    expect(diagram.querySelector("image, img")).toBeNull()
+    // Lo propio del esquema se queda: las flechas apuntan a sus marcadores internos
+    expect(diagram.querySelector("path")?.getAttribute("marker-end")).toBe("url(#flecha)")
+    expect(diagram.textContent).toContain("Nodo")
+  })
+
+  it("en streaming, mientras llega un segundo esquema, el primero no se vuelve a dibujar; al final, los dos en orden", async () => {
+    const first = 'flowchart TD\n    A["Uno"] --> B["Dos"]'
+    const second = 'flowchart TD\n    C["Tres"] --> D["Cuatro"]'
+    const partial = "Primero:\n\n```mermaid\n" + first + "\n```\n\nLuego:\n\n```mermaid\nflowchart TD\n    C"
+    const { rerender, container } = render(<MessageContent content={partial} />)
+    const firstDiagram = await screen.findByRole("img", { name: /Uno, Dos/ })
+    expect(screen.getByRole("status").textContent).toContain("Dibujando el esquema…")
+
+    rerender(<MessageContent content={partial.replace(/ {4}C$/, "") + second.split("\n")[1] + "\n```\n\nFin."} />)
+    await screen.findByRole("img", { name: /Tres, Cuatro/ })
+    // El mismo nodo del DOM: no se desmontó ni se volvió a montar
+    expect(screen.getByRole("img", { name: /Uno, Dos/ })).toBe(firstDiagram)
+
+    expect(mermaid.render.mock.calls.map((call) => call[1])).toEqual([first, second])
+    const ids = mermaid.render.mock.calls.map((call) => call[0])
+    expect(new Set(ids).size).toBe(2)
+    const text = container.textContent ?? ""
+    expect(text.indexOf("Primero:")).toBeLessThan(text.indexOf("Luego:"))
+    expect(text.indexOf("Luego:")).toBeLessThan(text.indexOf("Fin."))
+    const diagrams = screen.getAllByRole("img")
+    expect(diagrams.map((d) => d.getAttribute("aria-label"))).toEqual(["Diagrama de flujo: Uno, Dos", "Diagrama de flujo: Tres, Cuatro"])
+  })
+
+  it("un bloque de código normal sigue siendo código, y ```Mermaid con mayúscula es un esquema", async () => {
+    const { container } = render(<MessageContent content={"```js\nconst a = 1\n```\n\n```Mermaid\n" + CICLO + "\n```"} />)
+
+    expect(container.querySelector("pre")?.textContent).toContain("const a = 1")
+    expect(await screen.findByRole("img", { name: /Diagrama de flujo/ })).toBeTruthy()
+  })
+
+  it("uno muy ancho no se encoge hasta ser ilegible: se desplaza dentro de su caja", async () => {
+    render(<MessageContent content={'```mermaid\nflowchart LR\n    A["ANCHO"] --> B["Fin"]\n```'} />)
+
+    const diagram = await screen.findByRole("img", { name: /Diagrama de flujo/ })
+    expect(diagram.style.getPropertyValue("--diagram-min-width")).toBe("960px")
   })
 })
