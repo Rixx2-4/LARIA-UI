@@ -44,7 +44,7 @@ const components: Components = {
   pre: ({ children, node }) => {
     // Un bloque ```mermaid es un esquema (ADR-048 del backend): se dibuja, no se enseña el código
     const code = node?.children[0]
-    if (code?.type === "element" && code.tagName === "code" && String(code.properties.className ?? "").includes("language-mermaid")) {
+    if (code?.type === "element" && code.tagName === "code" && /\blanguage-mermaid\b/i.test(String(code.properties.className ?? ""))) {
       const source = code.children.map((child) => (child.type === "text" ? child.value : "")).join("")
       return <MermaidDiagram source={source.trimEnd()} />
     }
@@ -88,17 +88,20 @@ function normalizeMath(content: string): string {
 const HAS_MATH = /\\\(|\\\[|\$/
 
 export function MessageContent({ content }: { content: string }) {
-  // Mientras llega un esquema, su código a medias no se enseña: se dibuja al cerrarse
+  // Mientras llega un esquema, su código a medias no se enseña: se dibuja al cerrarse.
+  // La forma del árbol es siempre la misma (texto y, si hace falta, el aviso): así lo
+  // ya pintado, esquemas incluidos, no se desmonta cada vez que llega otro trozo
   const drawingAt = openDiagramAt(content)
-  if (drawingAt !== null) {
-    const before = content.slice(0, drawingAt)
-    return (
-      <>
-        {before.trim() && <MessageContent content={before} />}
-        <DrawingDiagram />
-      </>
-    )
-  }
+  const shown = drawingAt === null ? content : content.slice(0, drawingAt)
+  return (
+    <>
+      {shown.trim() && <Markdown content={shown} />}
+      {drawingAt !== null && <DrawingDiagram />}
+    </>
+  )
+}
+
+function Markdown({ content }: { content: string }) {
   const plain = <ReactMarkdown remarkPlugins={[remarkGfm]} components={components}>{content}</ReactMarkdown>
   if (!HAS_MATH.test(content)) return plain
   // Mientras llega KaTeX se ve el texto tal cual; las fórmulas se dibujan al cargar
