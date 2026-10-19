@@ -507,9 +507,15 @@ repetirlas:
 **Los PDF** se generan a partir de estos `.md`:
 
 1. Convierte cada `.md` a HTML con `marked`.
-2. Aplica una hoja de estilo compacta: A4, capturas a la derecha del texto (las del
-   móvil, más estrechas) y diagramas centrados a lo ancho.
-3. Imprímelo con `page.pdf()` de Playwright.
+2. Aplica la hoja de estilo del folleto: A5, Roboto (de `@fontsource/roboto`, incrustada
+   en el PDF), capturas a lo ancho (las del móvil, flotando a la derecha), diagramas
+   centrados y el número de página con `@page { @bottom-center }`.
+3. Imprime por separado la portada (logo, título y mascota), el contenido y la
+   contraportada con `page.pdf()` de Playwright, y los une con `pdf-lib`, con páginas en
+   blanco antes de la contraportada hasta llegar a un múltiplo de 4.
+4. Para `-imprimir.pdf`, coloca dos páginas A5 en cada cara de una hoja A4 apaisada en
+   orden de cuadernillo: la hoja *i* lleva por delante las páginas *n − 2i* y *2i + 1*, y
+   por detrás *2i + 2* y *n − 2i − 1* (con *i* desde 0 y las páginas numeradas desde 1).
 
 Al hacerlo, cambia los enlaces entre manuales de `.md` a `.pdf`.
 

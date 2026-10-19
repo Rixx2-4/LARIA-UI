@@ -61,15 +61,21 @@ importantes y reacciona a los resultados (celebra, anima, tiene paciencia).
 
 ## Manuales
 
-En PDF, para leer o imprimir:
+En PDF, como mini folleto A5 con portada y tipografía Roboto:
 
-- [Manual de usuario](docs/manuales/manual-de-usuario.pdf) (8 páginas): cómo se usa
+- [Manual de usuario](docs/manuales/manual-de-usuario.pdf) (20 páginas): cómo se usa
   Plenum, paso a paso y con capturas.
-- [Manual técnico](docs/manuales/manual-tecnico.pdf) (9 páginas): arquitectura, sesión y
+- [Manual técnico](docs/manuales/manual-tecnico.pdf) (12 páginas): arquitectura, sesión y
   Clerk (incluida la configuración del panel), API, flujos, límites, despliegue y problemas
   conocidos.
 
-Su fuente son los `.md` de la misma carpeta: si cambias uno, vuelve a generar su PDF
+Para imprimirlos en papel están las versiones `-imprimir.pdf`
+([usuario](docs/manuales/manual-de-usuario-imprimir.pdf),
+[técnico](docs/manuales/manual-tecnico-imprimir.pdf)): hojas A4 apaisadas con dos páginas
+por cara. Imprímelas a doble cara, **volteando por el borde corto** y al 100 % (sin
+«ajustar a la página»); dobla el montón por la mitad y grapa por el lomo.
+
+Su fuente son los `.md` de la misma carpeta: si cambias uno, vuelve a generar sus PDF
 (ver el apartado 12 del manual técnico).
 
 ## Tecnología
