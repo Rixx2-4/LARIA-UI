@@ -1,4 +1,11 @@
+// En producción, "/backend": el proxy de la propia web (lib/backend-proxy.mjs). También
+// vale la URL completa de la API, como en local ("http://localhost:8000/api/v1")
 const API_BASE_URL = process.env.NEXT_PUBLIC_LARIA_API_URL || "http://localhost:8000/api/v1"
+
+// /health está en la raíz del servidor, fuera de /api/v1; tras el proxy, en /backend/health
+export function healthUrl(base: string = API_BASE_URL): string {
+  return base.startsWith("/") ? `${base}/health` : `${new URL(base).origin}/health`
+}
 
 // Metadatos que el tutor adjunta a cada respuesta. El backend los guarda tal cual
 // en `metadata` del mensaje: { type, emotion, payload: { content, intent, grounded, … } }
@@ -548,7 +555,7 @@ export function wakeServer() {
   if (woken) return
   woken = true
   try {
-    fetch(`${new URL(API_BASE_URL).origin}/health`, { mode: "no-cors", cache: "no-store" }).catch(() => {})
+    fetch(healthUrl(), { mode: "no-cors", cache: "no-store" }).catch(() => {})
   } catch {
     // Sin URL válida o sin fetch no hay nada que despertar
   }

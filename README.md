@@ -205,7 +205,8 @@ Render lo incluye.
 
 | Variable | Para qué |
 |---|---|
-| `NEXT_PUBLIC_LARIA_API_URL` | URL de la API. Por defecto `http://localhost:8000/api/v1`; para usar la de producción: `https://laria-ia.onrender.com/api/v1` |
+| `NEXT_PUBLIC_LARIA_API_URL` | URL de la API. Por defecto `http://localhost:8000/api/v1`. En Vercel, `/backend` (el proxy de la propia web) |
+| `LARIA_API_ORIGIN` | Solo servidor. Origen del backend al que reenvía `/backend` (`https://laria-ia.onrender.com`, sin ruta). Sin ella no hay proxy |
 | `NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY` | Clave pública de Clerk (`pk_…`) |
 | `CLERK_SECRET_KEY` | Clave secreta de Clerk (`sk_…`). **Nunca** en el código ni en el chat |
 | `NEXT_PUBLIC_CLERK_SIGN_IN_URL` / `…_SIGN_UP_URL` | `/sign-in` y `/sign-up` |
