@@ -133,7 +133,7 @@ function Clase() {
 
   return (
     <AppShell>
-      <div className="h-full overflow-auto">
+      <div className="relative h-full overflow-auto">
         <div className="mx-auto grid max-w-5xl gap-6 px-4 py-6 sm:px-6 lg:grid-cols-[260px_1fr]">
           {path && <PathOutline path={path} />}
 
