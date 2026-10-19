@@ -75,7 +75,8 @@ Van en `.env.local`, que no se sube al repositorio.
 
 | Variable | Valor | Notas |
 |---|---|---|
-| `NEXT_PUBLIC_LARIA_API_URL` | `https://laria-ia.onrender.com/api/v1` | Por defecto, `http://localhost:8000/api/v1` |
+| `NEXT_PUBLIC_LARIA_API_URL` | `/backend` en Vercel | Por defecto, `http://localhost:8000/api/v1`. También vale la URL completa de la API |
+| `LARIA_API_ORIGIN` | `https://laria-ia.onrender.com` | **Solo servidor** (sin `NEXT_PUBLIC_`). Origen al que reenvía el proxy `/backend`; sin ella no hay proxy |
 | `NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY` | `pk_test_…` o `pk_live_…` | Pública: va en el JS del navegador |
 | `CLERK_SECRET_KEY` | `sk_test_…` o `sk_live_…` | **Secreta.** Nunca en el código, en un commit ni en un chat |
 | `NEXT_PUBLIC_CLERK_SIGN_IN_URL` | `/sign-in` | |
@@ -398,6 +399,32 @@ antigua. La primera en curso va destacada.
   las sesiones de antes de Clerk.
 - Nunca se pone información personal en la URL.
 
+### El proxy `/backend`
+
+En producción el navegador no llama a Render: llama a `/backend/…` en el dominio de la
+web, y Vercel lo reenvía (rewrites de `next.config.mjs`, definidos en
+`lib/backend-proxy.mjs`).
+
+| Ruta en la web | Destino |
+|---|---|
+| `/backend/health` | `LARIA_API_ORIGIN/health` (el ping que despierta Render) |
+| `/backend/<ruta>` | `LARIA_API_ORIGIN/api/v1/<ruta>`, con la misma consulta y la barra final |
+
+- **Qué gana:** el navegador no ve la URL de Render, no hay peticiones previas de CORS
+  y, mientras Render despierta, el 502/504 llega como tal en vez de «Failed to fetch».
+- **Qué no hace:** no protege la API. Render sigue siendo público; la protección es el
+  token de Clerk, que el backend valida en cada petición, y su autorización por
+  propietario.
+- **El destino es fijo:** sale de `LARIA_API_ORIGIN`, que debe ser solo un origen
+  `https` (la compilación falla si trae ruta, consulta o credenciales). Nada de la
+  petición puede elegir otro host.
+- `skipTrailingSlashRedirect`: sin él, Next quitaría la barra de `/chats/` con un 308 y
+  FastAPI respondería con una redirección a su propia URL.
+- `experimental.proxyClientMaxBodySize: "26mb"`: Next corta a 10 MB los cuerpos que
+  pasan por el proxy; los documentos llegan a 25 MB.
+- Las cookies de la web (las de Clerk) también llegan al backend, que no las usa: los
+  rewrites no pueden quitar cabeceras.
+
 ## 9. Tests y calidad
 
 ```bash
@@ -425,7 +452,11 @@ pnpm verify      # todo lo anterior + build de producción
 - **Variables:**
   - Las de la [sección 2](#variables-de-entorno), en **Production** y **Preview**.
   - Tras cambiarlas, **Redeploy**.
-- **CORS:** el backend acepta `https://laria-frontend.vercel.app`, las vistas previas de
+- **Proxy:** en Production y Preview, `NEXT_PUBLIC_LARIA_API_URL=/backend` y
+  `LARIA_API_ORIGIN=https://laria-ia.onrender.com`. **Para volver atrás**, basta con
+  poner `NEXT_PUBLIC_LARIA_API_URL` otra vez a la URL completa de la API y hacer
+  Redeploy.
+- **CORS:** con el proxy, el navegador ya no hace peticiones entre dominios. Sin él, el backend acepta `https://laria-frontend.vercel.app`, las vistas previas de
   este proyecto y `http://localhost:4321`. `http://localhost:3000`, para desarrollar
   contra producción, depende de que la variable `CORS_ORIGINS` de Render lo incluya.
 - **Flujo de trabajo:**
