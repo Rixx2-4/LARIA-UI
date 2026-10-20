@@ -455,7 +455,7 @@ export function SearchBar({ isOpeningChat = false }: { isOpeningChat?: boolean }
       <p aria-live="polite" className="sr-only">{streamAnnouncement}</p>
 
       {/* Chat Messages: siempre montado para que el scroll tenga a quién escuchar */}
-      <div ref={messagesContainerRef} className="min-h-0 flex-1 overflow-y-auto motion-safe:scroll-smooth">
+      <div ref={messagesContainerRef} className="relative min-h-0 flex-1 overflow-y-auto motion-safe:scroll-smooth">
         {messages.length === 0 && isOpeningChat ? (
           <MessagesSkeleton />
         ) : messages.length === 0 ? (

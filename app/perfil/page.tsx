@@ -320,7 +320,7 @@ function Perfil() {
 
   return (
     <AppShell>
-      <div className="h-full overflow-auto">
+      <div className="relative h-full overflow-auto">
         <div className="max-w-[980px] mx-auto pb-16">
         <div className="flex items-center gap-4 px-6 py-5">
           <div className="w-[52px] h-[52px] rounded-full bg-primary/10 text-primary flex items-center justify-center font-semibold text-lg shrink-0">

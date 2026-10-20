@@ -73,7 +73,7 @@ function Clases() {
 
   return (
     <AppShell>
-      <div className="h-full overflow-auto">
+      <div className="relative h-full overflow-auto">
         <div className="mx-auto max-w-4xl space-y-8 px-4 py-6 sm:px-6 sm:py-8">
           <header className="flex flex-wrap items-end justify-between gap-4">
             <div className="space-y-1">

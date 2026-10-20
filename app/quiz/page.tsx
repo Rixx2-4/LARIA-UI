@@ -164,7 +164,7 @@ function Quiz({ chatId }: { chatId: string | null }) {
 
   return (
     <AppShell>
-      <div className="h-full overflow-auto">
+      <div className="relative h-full overflow-auto">
         <div className="mx-auto max-w-3xl px-4 py-6 sm:px-6 sm:py-8">
           {generating && (
             <div role="status" className="flex flex-col items-center gap-4 py-16 text-center">
@@ -208,7 +208,7 @@ function Quiz({ chatId }: { chatId: string | null }) {
                 ) : chats.length > 0 ? (
                   <>
                     {/* El quiz se genera a partir del documento del chat */}
-                    <div role="radiogroup" aria-label="Chat" className="grid max-h-80 gap-2 overflow-auto p-0.5 sm:grid-cols-2">
+                    <div role="radiogroup" aria-label="Chat" className="relative grid max-h-80 gap-2 overflow-auto p-0.5 sm:grid-cols-2">
                       {chats.map((chat) => {
                         const hasDocument = !!chat.document_id
                         const checked = chat.id === chatId
