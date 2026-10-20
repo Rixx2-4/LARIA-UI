@@ -9,7 +9,7 @@ export default function CuentaPage() {
   return (
     <RequireAuth>
       <AppShell>
-        <div className="flex h-full flex-col items-center gap-6 overflow-auto px-2 py-6 sm:px-6">
+        <div className="relative flex h-full flex-col items-center gap-6 overflow-auto px-2 py-6 sm:px-6">
           <UserProfile path="/cuenta" />
           <DeleteAccount />
         </div>

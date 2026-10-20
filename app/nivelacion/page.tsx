@@ -201,7 +201,7 @@ function Placement({ initialTopic, chatId }: { initialTopic: string; chatId: str
 
   return (
     <AppShell>
-      <div className="h-full overflow-auto">
+      <div className="relative h-full overflow-auto">
         <div className="mx-auto max-w-3xl px-6 py-8">
           {phase === "intro" && (
             <Intro
