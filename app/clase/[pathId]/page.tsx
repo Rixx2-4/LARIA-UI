@@ -11,7 +11,7 @@ import { LariaMascot, type MascotEmotion } from "@/app/components/laria-mascot"
 import { ClassBoard } from "../class-board"
 import { ModuleSources } from "../module-sources"
 import { useSlow } from "@/lib/use-slow"
-import { LEVEL_NAME, QuestionStep, ResultsList, toResults } from "@/app/quiz/quiz-parts"
+import { LEVEL_NAME, QuestionStep, ResultsList, scoreLine, submitErrorMessage, toResults } from "@/app/quiz/quiz-parts"
 import { useSpeech } from "@/hooks/use-speech"
 import { useStudyTime } from "@/hooks/use-study-time"
 import { ClassStudyBar } from "@/app/components/study-progress"
@@ -118,7 +118,7 @@ function Clase() {
     } catch (error) {
       // 409: esa comprobación ya no está pendiente (p. ej. se respondió en otra pestaña)
       if (error instanceof ApiError && error.status === 409) return loadLesson()
-      setCheckError(error instanceof Error ? error.message : "No se pudieron enviar tus respuestas")
+      setCheckError(submitErrorMessage(error, "No se pudieron enviar tus respuestas"))
     } finally {
       setSubmitting(false)
     }
@@ -241,7 +241,7 @@ function Clase() {
                   <div className="space-y-1">
                     <h2 className="text-xl font-semibold">{OUTCOME[view.result.outcome]}</h2>
                     <p className="text-sm text-muted-foreground">
-                      Acertaste {view.result.questions.filter((q) => q.is_correct).length} de {view.result.questions.length}.
+                      {scoreLine(toResults(view.check.questions, view.result.questions))}.
                     </p>
                   </div>
                 </div>

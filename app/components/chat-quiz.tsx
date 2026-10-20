@@ -11,10 +11,15 @@ import { MathText } from "./message-content"
 import { StudyGoalsPicker } from "./study-goals-picker"
 import { useSlow } from "@/lib/use-slow"
 import {
+  GradingNotice,
+  isOpen,
   LEVEL_COPY,
   LEVEL_NAME,
+  OpenAnswerField,
   ResultsList,
+  scoreLine,
   StepRow,
+  submitErrorMessage,
   toResults,
   type QuizResult,
   type StepStatus,
@@ -110,7 +115,7 @@ export function ChatQuiz({ chatId, request, onDismiss, onStartLesson }: ChatQuiz
     const reduceMotion = window.matchMedia?.("(prefers-reduced-motion: reduce)").matches
     cardRef.current?.scrollIntoView?.({ block: "nearest", behavior: reduceMotion ? "auto" : "smooth" })
   }, [phase, current])
-  const score = results.filter((r) => r.isCorrect).length
+  const score = scoreLine(results)
 
   const load = async () => {
     setPhase("loading")
@@ -159,7 +164,7 @@ export function ChatQuiz({ chatId, request, onDismiss, onStartLesson }: ChatQuiz
         setPhase(placement ? "next-offer" : "offer")
         return
       }
-      setError(err instanceof Error ? err.message : "No se pudieron enviar tus respuestas")
+      setError(submitErrorMessage(err, "No se pudieron enviar tus respuestas"))
       setPhase("question")
     }
   }
@@ -222,7 +227,7 @@ export function ChatQuiz({ chatId, request, onDismiss, onStartLesson }: ChatQuiz
                   />
                   ?
                 </p>
-                <p className="text-xs text-muted-foreground">6 preguntas, aquí mismo. No es un examen: sirve para saber por dónde empezar.</p>
+                <p className="text-xs text-muted-foreground">Unas preguntas cortas, aquí mismo. No es un examen: sirve para saber por dónde empezar.</p>
               </>
             ) : (
               <>
@@ -271,8 +276,8 @@ export function ChatQuiz({ chatId, request, onDismiss, onStartLesson }: ChatQuiz
 
         {phase === "next-offer" && (
           <div className="space-y-3">
-            <p className="font-medium">Base de {topic}, superada: acertaste {score} de {results.length}.</p>
-            <p>¿Seguimos con 8 preguntas algo más difíciles para afinar tu nivel?</p>
+            <p className="font-medium">Base de {topic}, superada. {score}.</p>
+            <p>¿Seguimos con unas preguntas algo más difíciles para afinar tu nivel?</p>
             {error && <ErrorLine message={error} neutral={refused} />}
             <div className="flex flex-wrap gap-2">
               <Button size="sm" onClick={load}>
@@ -305,7 +310,7 @@ export function ChatQuiz({ chatId, request, onDismiss, onStartLesson }: ChatQuiz
           <div className="space-y-4">
             <p className="font-medium">Preparando tu clase de {topic}</p>
             <ol className="space-y-3" aria-live="polite">
-              <StepRow status="done" label="Revisando tus respuestas" detail={`Acertaste ${score} de ${results.length}`} />
+              <StepRow status="done" label="Revisando tus respuestas" detail={score} />
               <StepRow
                 status={steps.level}
                 label={placement ? `Ajustando la clase a tu nivel (${LEVEL_NAME[placement.level]})` : "Ajustando la clase a tu nivel"}
@@ -344,11 +349,11 @@ export function ChatQuiz({ chatId, request, onDismiss, onStartLesson }: ChatQuiz
                     : nivel <span className="font-medium">{LEVEL_NAME[placement.level]}</span>
                   </>
                 )}
-                . Acertaste {score} de {results.length}.
+                . {score}.
               </p>
             ) : (
               <p>
-                Acertaste <span className="font-medium">{score} de {results.length}</span>. Queda guardado en tu perfil.
+                <span className="font-medium">{score}</span>. Queda guardado en tu perfil.
               </p>
             )}
             <Answers results={results} open={!isPlacement} />
@@ -409,6 +414,8 @@ function InlineQuestion({
 }) {
   const question = questions[current]
   const isLast = current === questions.length - 1
+  const open = isOpen(question)
+  const answered = open ? !!answers[question.index]?.trim() : !!answers[question.index]
 
   return (
     <div className="space-y-3">
@@ -422,6 +429,17 @@ function InlineQuestion({
         <div className="h-full bg-primary transition-all" style={{ width: `${((current + 1) / questions.length) * 100}%` }} />
       </div>
       <p className="message-text font-medium"><MathText text={question.text} /></p>
+      {open && (
+        <OpenAnswerField
+          key={question.index}
+          question={question}
+          value={answers[question.index] ?? ""}
+          onChange={(text) => onAnswer(question, text)}
+          onSubmit={() => answered && !grading && onNext()}
+          disabled={grading}
+          compact
+        />
+      )}
       <div className="space-y-2">
         {Object.entries(question.options).map(([key, value]) => (
           <button
@@ -439,11 +457,12 @@ function InlineQuestion({
         ))}
       </div>
       {error && <ErrorLine message={error} />}
+      {grading && <GradingNotice questions={questions} />}
       <div className="flex justify-between gap-2">
         <Button size="sm" variant="ghost" onClick={onPrev} disabled={current === 0 || grading}>
           Anterior
         </Button>
-        <Button size="sm" onClick={onNext} disabled={!answers[question.index] || grading}>
+        <Button size="sm" onClick={onNext} disabled={!answered || grading}>
           {grading ? <Loader2 className="h-4 w-4 animate-spin" aria-hidden /> : null}
           {isLast ? "Finalizar" : "Siguiente"}
           {!grading && <ArrowRight className="h-4 w-4" aria-hidden />}

@@ -7,7 +7,7 @@ import { Loader2 } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { AppShell } from "../components/app-shell"
 import { RequireAuth } from "../components/require-auth"
-import { LEVEL_COPY, LEVEL_NAME, QuestionStep, ResultsList, StepRow, toResults, type QuizResult, type StepStatus } from "../quiz/quiz-parts"
+import { LEVEL_COPY, LEVEL_NAME, QuestionStep, ResultsList, StepRow, isOpen, scoreLine, submitErrorMessage, toResults, type QuizResult, type StepStatus } from "../quiz/quiz-parts"
 import { ApiError, isUnsafeTopic, lariaAPI, type ExplanationStyle, type PlacementResult, type QuizQuestion } from "@/lib/laria-api"
 import { StylePicker } from "../components/style-picker"
 import { StudyGoalsPicker } from "../components/study-goals-picker"
@@ -16,7 +16,8 @@ import { NEW_CHAT_HREF, chatHref, classHref } from "@/lib/routes"
 import { markPlacementOffered } from "@/lib/placement"
 import { useChat } from "../contexts/chat-context"
 
-// Nivelación por rondas: una base de 6 preguntas y, si se supera, una avanzada de 8.
+// Nivelación por rondas: una base y, si se supera, una avanzada (cuántas preguntas y de
+// qué tipo lo decide el backend: con las abiertas activas, 4 por ronda y escritas).
 // El cliente no lleva la cuenta de la ronda: pide siempre la siguiente con el mismo
 // tema y el backend sabe cuál toca. El veredicto no es una nota: es el punto de partida.
 // Al terminar se prepara la ruta del tema y se abre su clase guiada (/clase/<ruta>).
@@ -150,7 +151,7 @@ function Placement({ initialTopic, chatId }: { initialTopic: string; chatId: str
         setPhase("intro")
         return
       }
-      setError(err instanceof Error ? err.message : "No se pudieron enviar tus respuestas")
+      setError(submitErrorMessage(err, "No se pudieron enviar tus respuestas"))
       setPhase("questions")
     } finally {
       setIsSubmitting(false)
@@ -197,7 +198,6 @@ function Placement({ initialTopic, chatId }: { initialTopic: string; chatId: str
     }
   }
 
-  const score = results.filter((r) => r.isCorrect).length
 
   return (
     <AppShell>
@@ -250,11 +250,10 @@ function Placement({ initialTopic, chatId }: { initialTopic: string; chatId: str
             <PreparingLesson
               topic={topic}
               prep={prep}
-              score={score}
-              total={results.length}
               placement={placement}
               error={error}
               results={results}
+              hasOpen={questions.some(isOpen)}
               onContinue={() => startRound("preparing")}
               onStop={() => setPrep((p) => ({ ...p, offerNext: false, askStyle: true }))}
               styleValue={style}
@@ -306,7 +305,7 @@ function Intro({
       <div>
         <h1 className="text-2xl font-semibold">Nivelación</h1>
         <p className="mt-2 text-muted-foreground">
-          Primero 6 preguntas, casi todas fáciles. Si te salen bien, te propongo otras 8 más difíciles. Con eso LARIA
+          Primero unas preguntas, casi todas fáciles. Si te salen bien, te propongo otras más difíciles. Con eso LARIA
           sabe desde dónde explicarte.
         </p>
         <p className="mt-2 text-sm text-muted-foreground">
@@ -346,11 +345,10 @@ function Intro({
 function PreparingLesson({
   topic,
   prep,
-  score,
-  total,
   placement,
   error,
   results,
+  hasOpen,
   onContinue,
   onStop,
   onRetry,
@@ -363,11 +361,11 @@ function PreparingLesson({
 }: {
   topic: string
   prep: Preparation
-  score: number
-  total: number
   placement: PlacementResult | null
   error: string | null
   results: QuizResult[]
+  // La ronda tenía preguntas escritas: corregirlas tarda unos segundos más
+  hasOpen: boolean
   onContinue: () => void
   onStop: () => void
   onRetry: () => void
@@ -407,12 +405,12 @@ function PreparingLesson({
         <StepRow
           status={prep.review}
           label="Revisando tus respuestas"
-          detail={prep.review === "done" ? `Acertaste ${score} de ${total}` : null}
+          detail={prep.review === "done" ? scoreLine(results) : prep.review === "active" && hasOpen ? "Las respuestas escritas las corrige LARIA: tarda unos segundos." : null}
         />
 
         {prep.offerNext && (
           <li className="ml-9 space-y-3 rounded-lg border border-border p-4 animate-in fade-in slide-in-from-bottom-2 duration-300">
-            <p>¿Seguimos con 8 preguntas algo más difíciles? Así LARIA afina más tu nivel.</p>
+            <p>¿Seguimos con unas preguntas algo más difíciles? Así LARIA afina más tu nivel.</p>
             <div className="flex flex-wrap gap-3">
               <Button onClick={onContinue}>Seguir</Button>
               <Button variant="outline" onClick={onStop}>

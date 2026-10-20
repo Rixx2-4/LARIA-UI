@@ -11,7 +11,7 @@ import { useChat } from "@/app/contexts/chat-context"
 import { NEW_CHAT_HREF, chatHref, placementHref, quizHref } from "@/lib/routes"
 import { lariaAPI, QuizQuestion } from "@/lib/laria-api"
 import { LariaMascot, type MascotEmotion } from "../components/laria-mascot"
-import { QuestionStep, ResultsList, toResults, type QuizResult } from "./quiz-parts"
+import { QuestionStep, ResultsList, scoreLine, scorePercentage, submitErrorMessage, toResults, type QuizResult } from "./quiz-parts"
 
 // Cuántas preguntas, con lo que se tarda más o menos (unos 40 s por pregunta)
 const PRESETS = [
@@ -135,7 +135,7 @@ function Quiz({ chatId }: { chatId: string | null }) {
       setStep("results")
     } catch (err) {
       console.error("Failed to submit quiz:", err)
-      setError(err instanceof Error ? err.message : "Error al enviar el intento")
+      setError(submitErrorMessage(err, "Error al enviar el intento"))
     } finally {
       setIsLoading(false)
     }
@@ -152,9 +152,9 @@ function Quiz({ chatId }: { chatId: string | null }) {
   }
 
   const current: QuizQuestion | undefined = questions[currentQuestion]
-  const score = results.filter((r) => r.isCorrect).length
+  // Con abiertas, el crédito parcial cuenta (media de 0..1 por pregunta)
+  const percentage = scorePercentage(results)
   const total = results.length
-  const percentage = total > 0 ? Math.round((score / total) * 100) : 0
   const mistakes = results.filter((r) => !r.isCorrect)
   const pendingCount = isCustomCount ? Number(customCountText) || 0 : questionCount
   const docChats = chats.filter((c) => c.document_id)
@@ -403,7 +403,7 @@ function Quiz({ chatId }: { chatId: string | null }) {
                 <div className="flex-1 space-y-1">
                   <h1 className="text-2xl font-semibold tracking-tight">{verdict(percentage).title}</h1>
                   <p className="text-muted-foreground">
-                    {score} de {total} respuestas correctas
+                    {scoreLine(results)}
                   </p>
                   <p className="text-sm text-muted-foreground">{verdict(percentage).detail}</p>
                 </div>

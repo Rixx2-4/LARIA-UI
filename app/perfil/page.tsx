@@ -9,6 +9,7 @@ import { RequireAuth } from "../components/require-auth"
 import { ProfileSkeleton } from "../components/skeletons"
 import { LEVEL_NAME } from "../quiz/quiz-parts"
 import { StylePicker } from "../components/style-picker"
+import { AssessmentPicker } from "../components/assessment-picker"
 import { useAuth } from "@/app/contexts/auth-context"
 import { placementHref } from "@/lib/routes"
 import { VoicePicker } from "../components/voice-picker"
@@ -367,6 +368,10 @@ function Perfil() {
             />
           </section>
         )}
+
+        <div className="mx-4 md:mx-6 mb-5 empty:hidden">
+          <AssessmentPicker />
+        </div>
 
         {levelsByTopic.length > 0 && (
           <section className="mx-4 md:mx-6 mb-5 rounded-xl border border-border p-4" aria-labelledby="niveles-por-tema">
