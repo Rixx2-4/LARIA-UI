@@ -98,7 +98,7 @@ describe("QuizPage", () => {
     fireEvent.click(await screen.findByText(/Nitrógeno/))
     fireEvent.click(screen.getByText(/Finalizar/))
 
-    expect(await screen.findByText("1 de 2 respuestas correctas")).toBeTruthy()
+    expect(await screen.findByText("Acertaste 1 de 2")).toBeTruthy()
     // Con el texto de la opción, no solo la letra
     expect(screen.getByText("B. Nitrógeno")).toBeTruthy()
     expect(screen.getByText("A. Oxígeno")).toBeTruthy()
@@ -221,7 +221,7 @@ describe("QuizPage", () => {
     fireEvent.keyDown(window, { key: "b" })
     fireEvent.keyDown(window, { key: "Enter" })
 
-    await screen.findByText("1 de 2 respuestas correctas")
+    await screen.findByText("Acertaste 1 de 2")
     expect(requests[1].body).toEqual({ answers: { "1": "B", "2": "B" } })
   })
 
@@ -247,7 +247,7 @@ describe("QuizPage", () => {
     fireEvent.click(screen.getByText(/Siguiente/))
     fireEvent.click(await screen.findByText(/Nitrógeno/))
     fireEvent.click(screen.getByText(/Finalizar/))
-    await screen.findByText("1 de 2 respuestas correctas")
+    await screen.findByText("Acertaste 1 de 2")
     expect(screen.getByText("Vas bien")).toBeTruthy()
 
     fireEvent.click(screen.getByText("Para repasar (1)"))

@@ -190,11 +190,19 @@ interface QuestionResponse {
   answer: string
 }
 
+// "open": se responde por escrito y la corrige el servidor con IA (ADR-052), con
+// crédito parcial. Sin kind (backend anterior), es de opción múltiple
+type QuestionKind = "choice" | "open"
+
 interface QuizQuestion {
   index: number
   text: string
+  // Vacío en las abiertas
   options: Record<string, string>
   difficulty: string
+  kind?: QuestionKind
+  // Solo en las abiertas: lo más largo que se puede escribir
+  max_chars?: number
 }
 
 interface QuizResponse {
@@ -210,12 +218,26 @@ interface QuizResponse {
   created_at: string
 }
 
+type OpenVerdict = "correct" | "partial" | "incorrect" | "copied" | "empty"
+
 interface QuizAttemptQuestion {
   index: number
   text: string
+  // La letra elegida o, en una abierta, el texto que escribió
   selected: string | null
+  // "" en las abiertas
   correct_answer: string
+  // En una abierta, solo si verdict es "correct"
   is_correct: boolean
+  kind?: QuestionKind
+  // 0..1: en las de opción, 0 o 1; en las abiertas, crédito parcial
+  score?: number
+  // Solo en las abiertas, después de corregir
+  verdict?: OpenVerdict
+  // Para el estudiante, siempre presente en las abiertas
+  feedback?: string
+  key_points?: { text: string; covered: boolean }[]
+  model_answer?: string
 }
 
 // Ruta de aprendizaje guiada (ADR-028): evaluación → ruta → clase por conceptos,
@@ -355,6 +377,21 @@ interface CheckResponse {
 }
 
 type PlacementLevel = "basico" | "intermedio" | "avanzado"
+
+// Cuántas preguntas escritas y de opción lleva cada comprobación y práctica: cada
+// valor de 0 a 10 y entre las dos de 1 a 12 (lo valida el servidor)
+interface AssessmentMix {
+  open_questions: number
+  choice_questions: number
+}
+
+interface LearningPreferences {
+  explanation_style: ExplanationStyle | null
+  // Backend anterior: no vienen
+  assessment?: AssessmentMix
+  // Con el interruptor apagado, assessment se guarda pero no se usa: no se ofrece
+  open_questions_enabled?: boolean
+}
 
 // Cómo prefiere que le expliquen; vale para todo, con y sin material
 type ExplanationStyle = "simple" | "step_by_step" | "analogy" | "visual" | "mathematical" | "technical"
@@ -548,6 +585,8 @@ const segment = (id: string) => encodeURIComponent(id)
 // El servidor no está (aún): Render lo está despertando o tiene una caída. Su borde
 // responde 502/503/504 sin cabeceras CORS, y el navegador lo ve como «Failed to fetch»
 export function isServerUnavailable(error: unknown): boolean {
+  // El corrector de respuestas abiertas falló: el servidor sí responde (ADR-052)
+  if (error instanceof ApiError && error.reason === "grader_unavailable") return false
   if (error instanceof ApiError) return error.status === 502 || error.status === 503 || error.status === 504
   return error instanceof TypeError
 }
@@ -893,11 +932,17 @@ export const lariaAPI = {
     history: () => fetchAPI<LearningHistory>("/learning/me"),
     profile: () => fetchAPI<StudentProfile>("/learning/me/profile"),
     // null = "que lo decida LARIA"
-    preferences: () => fetchAPI<{ explanation_style: ExplanationStyle | null }>("/learning/me/preferences"),
+    preferences: () => fetchAPI<LearningPreferences>("/learning/me/preferences"),
     setPreferences: (explanationStyle: ExplanationStyle | null) =>
-      fetchAPI<{ explanation_style: ExplanationStyle | null }>("/learning/me/preferences", {
+      fetchAPI<LearningPreferences>("/learning/me/preferences", {
         method: "PUT",
         body: JSON.stringify({ explanation_style: explanationStyle }),
+      }),
+    // El PUT mezcla: mandar solo assessment no toca el estilo (ADR-052)
+    setAssessment: (assessment: AssessmentMix) =>
+      fetchAPI<LearningPreferences>("/learning/me/preferences", {
+        method: "PUT",
+        body: JSON.stringify({ assessment }),
       }),
   },
 
@@ -944,7 +989,7 @@ export type {
   LearningHistory, StudentProfile, Document, AnalysisResponse, QuestionResponse,
   QuizAttemptSummary, TutorInteraction, LearningRecommendation,
   PedagogicalMemory, DocumentMastery, ConceptMastery,
-  QuizResponse, QuizQuestion, QuizAttemptResponse, QuizAttemptQuestion,
+  QuizResponse, QuizQuestion, QuizAttemptResponse, QuizAttemptQuestion, QuestionKind, OpenVerdict, AssessmentMix, LearningPreferences,
   StreamCallbacks, TutorEnvelope, PlacementResult, PlacementLevel, ExplanationStyle,
   TutorVoice, VoicesResponse, NextSuggestion, StudyGoals, StudyTimeSummary, SessionMinutes, DailyGoalMinutes,
   LegalDocument,

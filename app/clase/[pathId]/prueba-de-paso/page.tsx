@@ -8,7 +8,7 @@ import { Button } from "@/components/ui/button"
 import { AppShell } from "@/app/components/app-shell"
 import { RequireAuth } from "@/app/components/require-auth"
 import { LariaMascot } from "@/app/components/laria-mascot"
-import { LEVEL_NAME, QuestionStep, ResultsList, toResults, type QuizResult } from "@/app/quiz/quiz-parts"
+import { LEVEL_NAME, QuestionStep, ResultsList, submitErrorMessage, toResults, type QuizResult } from "@/app/quiz/quiz-parts"
 import { ApiError, isUnsafeTopic, lariaAPI, type LearningPath, type PlacementResult, type QuizResponse } from "@/lib/laria-api"
 import { classHref } from "@/lib/routes"
 
@@ -95,7 +95,7 @@ function PruebaDePaso() {
       // 409: el intento ya se guardó (p. ej. un reintento tras perder la red) y no se
       // admite otro. No es un error: la clase abre el tramo o propone el repaso
       if (err instanceof ApiError && err.status === 409) return setView({ kind: "answered" })
-      setError(err instanceof Error ? err.message : "No se pudieron enviar tus respuestas")
+      setError(submitErrorMessage(err, "No se pudieron enviar tus respuestas"))
       setView({ kind: "questions", quiz })
     }
   }
