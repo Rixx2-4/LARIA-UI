@@ -12,7 +12,7 @@ import { ApiError, isUnsafeTopic, lariaAPI, type ExplanationStyle, type Placemen
 import { StylePicker } from "../components/style-picker"
 import { StudyGoalsPicker } from "../components/study-goals-picker"
 import { useSlow } from "@/lib/use-slow"
-import { NEW_CHAT_HREF, chatHref, classHref } from "@/lib/routes"
+import { NEW_CHAT_HREF, chatHref, classHref, placementHref } from "@/lib/routes"
 import { markPlacementOffered } from "@/lib/placement"
 import { useChat } from "../contexts/chat-context"
 
@@ -268,7 +268,7 @@ function Placement({ initialTopic, chatId }: { initialTopic: string; chatId: str
                 setRefused(false)
                 setTopic("")
                 setPhase("intro")
-                router.replace("/nivelacion")
+                router.replace(placementHref())
               }}
               backHref={backHref}
             />

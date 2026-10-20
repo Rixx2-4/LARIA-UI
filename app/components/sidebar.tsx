@@ -21,7 +21,7 @@ import { PlenumMark } from "./plenum-logo"
 import { ChatListSkeleton, DocumentListSkeleton } from "./skeletons"
 import { useChat } from "@/app/contexts/chat-context"
 import { useAuth } from "@/app/contexts/auth-context"
-import { NEW_CHAT_HREF, chatHref, quizHref } from "@/lib/routes"
+import { NEW_CHAT_HREF, chatHref, quizHref, CLASSES_HREF, PROFILE_HREF } from "@/lib/routes"
 import { useDocuments, documentState, type DocumentState } from "@/hooks/use-documents"
 import { lariaAPI, onPathsChanged } from "@/lib/laria-api"
 import { inProgressCount } from "@/lib/classes"
@@ -164,7 +164,7 @@ export function Sidebar({ onNavigate }: { onNavigate?: () => void } = {}) {
           <div className="relative mb-2 flex flex-col items-center">
             <Button
               variant="ghost"
-              onClick={() => navigate("/clases")}
+              onClick={() => navigate(CLASSES_HREF)}
               data-tour="clases"
               aria-label={classesInProgress ? `Mis clases (${classesInProgress} en curso)` : "Mis clases"}
               className="relative h-10 w-10 shrink-0 mx-auto text-muted-foreground hover:text-foreground hover:bg-accent"
@@ -182,7 +182,7 @@ export function Sidebar({ onNavigate }: { onNavigate?: () => void } = {}) {
           <div className="relative mb-2 flex flex-col items-center">
             <Button
               variant="ghost"
-              onClick={() => navigate("/perfil")}
+              onClick={() => navigate(PROFILE_HREF)}
               data-tour="perfil"
               aria-label="Perfil"
               className="h-10 w-10 shrink-0 mx-auto text-muted-foreground hover:text-foreground hover:bg-accent"
