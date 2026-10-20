@@ -27,6 +27,10 @@ export function placementHref(topic?: string, chatId?: string | null): string {
 // Mis clases
 export const CLASSES_HREF = "/clases"
 
+// Perfil (progreso, metas, voz y estilo) y cuenta (la de Clerk)
+export const PROFILE_HREF = "/perfil"
+export const ACCOUNT_HREF = "/cuenta"
+
 // La clase guiada de una ruta de aprendizaje
 export function classHref(pathId: string): string {
   return `/clase/${encodeURIComponent(pathId)}`
@@ -35,4 +39,15 @@ export function classHref(pathId: string): string {
 // La prueba de paso al siguiente tramo de una ruta (no la nivelación general)
 export function passageTestHref(pathId: string): string {
   return `${classHref(pathId)}/prueba-de-paso`
+}
+
+// Términos, privacidad y cookies: los publica el backend (ADR-019) y son públicos
+export const LEGAL_DOCUMENTS = [
+  { slug: "terminos", label: "Términos" },
+  { slug: "privacidad", label: "Privacidad" },
+  { slug: "cookies", label: "Cookies" },
+] as const
+
+export function legalHref(slug: string): string {
+  return `/legal/${encodeURIComponent(slug)}`
 }

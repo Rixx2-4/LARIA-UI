@@ -11,7 +11,7 @@ import { LEVEL_NAME } from "../quiz/quiz-parts"
 import { StylePicker } from "../components/style-picker"
 import { AssessmentPicker } from "../components/assessment-picker"
 import { useAuth } from "@/app/contexts/auth-context"
-import { placementHref } from "@/lib/routes"
+import { placementHref, quizHref } from "@/lib/routes"
 import { VoicePicker } from "../components/voice-picker"
 import { StudyGoalsPicker } from "../components/study-goals-picker"
 import { lariaAPI, StudentProfile, LearningHistory, Document, type ExplanationStyle } from "@/lib/laria-api"
@@ -321,7 +321,7 @@ function Perfil() {
 
   return (
     <AppShell>
-      <div className="h-full overflow-auto">
+      <div className="relative h-full overflow-auto">
         <div className="max-w-[980px] mx-auto pb-16">
         <div className="flex items-center gap-4 px-6 py-5">
           <div className="w-[52px] h-[52px] rounded-full bg-primary/10 text-primary flex items-center justify-center font-semibold text-lg shrink-0">
@@ -416,7 +416,7 @@ function Perfil() {
                 <Link href={placementHref()}>Nivelarme en un tema</Link>
               </Button>
               <Button asChild>
-                <Link href="/quiz">Hacer un quiz</Link>
+                <Link href={quizHref(null)}>Hacer un quiz</Link>
               </Button>
             </div>
           </div>

@@ -311,6 +311,17 @@ interface StudyGoals {
   daily_goal_minutes: DailyGoalMinutes | null
 }
 
+// Un documento legal del backend (ADR-019). Mientras tenga huecos por rellenar
+// ([[COMPLETAR: …]], listados en pendiente), completo es false: es un borrador
+interface LegalDocument {
+  slug: string
+  title: string
+  version: string
+  markdown: string
+  pendiente: string[]
+  completo: boolean
+}
+
 interface StudyTimeSummary {
   today_minutes: number
   daily_goal_minutes: number | null
@@ -897,6 +908,11 @@ export const lariaAPI = {
       }),
   },
 
+  // Públicos: sin sesión no se manda token y el backend responde igual
+  legal: {
+    get: (slug: string) => fetchAPI<LegalDocument>(`/legal/${segment(slug)}`),
+  },
+
   study: {
     goals: () => fetchAPI<StudyGoals>("/learning/me/study-goals"),
 
@@ -976,5 +992,6 @@ export type {
   QuizResponse, QuizQuestion, QuizAttemptResponse, QuizAttemptQuestion, QuestionKind, OpenVerdict, AssessmentMix, LearningPreferences,
   StreamCallbacks, TutorEnvelope, PlacementResult, PlacementLevel, ExplanationStyle,
   TutorVoice, VoicesResponse, NextSuggestion, StudyGoals, StudyTimeSummary, SessionMinutes, DailyGoalMinutes,
+  LegalDocument,
   LearningPath, PathModule, PathModuleStatus, TeachingState, TeachingPhase, LessonResponse, CheckResponse, CheckOutcome,
 }

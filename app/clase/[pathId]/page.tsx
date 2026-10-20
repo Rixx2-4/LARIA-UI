@@ -18,7 +18,7 @@ import { ClassStudyBar } from "@/app/components/study-progress"
 import { DeleteClassDialog } from "@/app/components/delete-class-dialog"
 import { NextSuggestions } from "@/app/components/next-suggestions"
 import { ApiError, isUnsafeTopic, lariaAPI, type CheckResponse, type LearningPath, type PathModule, type QuizResponse } from "@/lib/laria-api"
-import { CLASSES_HREF, NEW_CHAT_HREF, passageTestHref, placementHref } from "@/lib/routes"
+import { CLASSES_HREF, NEW_CHAT_HREF, passageTestHref, placementHref, PROFILE_HREF } from "@/lib/routes"
 
 // La clase guiada de una ruta: explicación de un concepto, una comprobación corta y,
 // según cómo salga, el siguiente concepto, otra explicación o un repaso previo.
@@ -133,7 +133,7 @@ function Clase() {
 
   return (
     <AppShell>
-      <div className="h-full overflow-auto">
+      <div className="relative h-full overflow-auto">
         <div className="mx-auto grid max-w-5xl gap-6 px-4 py-6 sm:px-6 lg:grid-cols-[260px_1fr]">
           {path && <PathOutline path={path} />}
 
@@ -183,7 +183,7 @@ function Clase() {
                       <Link href={placementHref()}>Elegir otro tema</Link>
                     </Button>
                     <Button asChild variant="outline">
-                      <Link href="/clases">Mis clases</Link>
+                      <Link href={CLASSES_HREF}>Mis clases</Link>
                     </Button>
                   </div>
                 ) : view.needsPlacement ? (
@@ -269,7 +269,7 @@ function Clase() {
                     <Link href={passageTestHref(pathId)}>Hacer la prueba de paso</Link>
                   </Button>
                   <Button asChild variant="outline">
-                    <Link href="/clases">Mis clases</Link>
+                    <Link href={CLASSES_HREF}>Mis clases</Link>
                   </Button>
                 </div>
               </section>
@@ -289,7 +289,7 @@ function Clase() {
                     <Link href={NEW_CHAT_HREF}>Ir al chat</Link>
                   </Button>
                   <Button asChild variant="outline">
-                    <Link href="/perfil">Ver mi progreso</Link>
+                    <Link href={PROFILE_HREF}>Ver mi progreso</Link>
                   </Button>
                 </div>
               </section>
