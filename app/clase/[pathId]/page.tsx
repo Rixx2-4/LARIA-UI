@@ -17,6 +17,7 @@ import { useStudyTime } from "@/hooks/use-study-time"
 import { ClassStudyBar } from "@/app/components/study-progress"
 import { DeleteClassDialog } from "@/app/components/delete-class-dialog"
 import { NextSuggestions } from "@/app/components/next-suggestions"
+import { ClassChatPanel, useClassChatOpen, useClassQuestionsEnabled, useDocked } from "../class-chat-panel"
 import { ApiError, isUnsafeTopic, lariaAPI, type CheckResponse, type LearningPath, type PathModule, type QuizResponse } from "@/lib/laria-api"
 import { CLASSES_HREF, NEW_CHAT_HREF, passageTestHref, placementHref, PROFILE_HREF } from "@/lib/routes"
 
@@ -74,6 +75,13 @@ function Clase() {
   const speech = useSpeech()
   // El tiempo de estudio (cuenta también mientras LARIA explica, aunque no se toque nada)
   const { summary: studySummary, sessionSeconds } = useStudyTime({ busy: !!speech.speaking })
+  // El paso cuya explicación se ve: tras responder, el backend ya puede ir por el
+  // siguiente, pero lo que se pregunta a LARIA es sobre el que sigue en pantalla
+  const [shownStep, setShownStep] = useState<{ concept?: string; title?: string | null }>({})
+  const questionsEnabled = useClassQuestionsEnabled()
+  const docked = useDocked()
+  const chat = useClassChatOpen(docked)
+  const chatDocked = questionsEnabled && docked && chat.open
 
   const loadLesson = useCallback(async () => {
     setView({ kind: "loading" })
@@ -83,6 +91,7 @@ function Clase() {
     try {
       const lesson = await lariaAPI.paths.lesson(pathId)
       setPath(lesson.path)
+      setShownStep({ concept: lesson.path.teaching?.concept ?? undefined, title: lesson.path.teaching?.concept_title })
       if (lesson.check) setView({ kind: "lesson", markdown: lesson.markdown ?? "", check: lesson.check })
       else if (lesson.path.teaching?.phase === "completed") setView({ kind: "completed" })
       else setView({ kind: "error", message: "No hay ninguna lección preparada ahora mismo.", needsPlacement: false })
@@ -133,171 +142,187 @@ function Clase() {
 
   return (
     <AppShell>
-      <div className="relative h-full overflow-auto">
-        <div className="mx-auto grid max-w-5xl gap-6 px-4 py-6 sm:px-6 lg:grid-cols-[260px_1fr]">
-          {path && <PathOutline path={path} />}
+      <div className="flex h-full">
+        <div className="relative h-full min-w-0 flex-1 overflow-auto">
+          {/* Con el panel de preguntas al lado, la ruta pasa arriba hasta que hay sitio para las tres columnas */}
+          <div className={`mx-auto grid max-w-5xl gap-6 px-4 py-6 sm:px-6 ${chatDocked ? "2xl:grid-cols-[240px_1fr]" : "lg:grid-cols-[260px_1fr]"} ${questionsEnabled && !chatDocked ? "pb-24" : ""}`}>
+            {path && <PathOutline path={path} wide={chatDocked ? "2xl" : "lg"} />}
 
-          <main className="min-w-0 space-y-6 lg:col-start-2">
-            <ClassStudyBar summary={studySummary} sessionSeconds={sessionSeconds} />
-            <header className="flex items-start gap-3">
-              <div className="min-w-0 flex-1 space-y-1">
-                <p className="text-sm text-muted-foreground">Clase · {title}</p>
-                {teaching?.concept_title && view.kind !== "completed" && (
-                  <h1 className="text-2xl font-semibold tracking-tight">{teaching.concept_title}</h1>
+            <main className={`min-w-0 space-y-6 ${chatDocked ? "2xl:col-start-2" : "lg:col-start-2"}`}>
+              <ClassStudyBar summary={studySummary} sessionSeconds={sessionSeconds} />
+              <header className="flex items-start gap-3">
+                <div className="min-w-0 flex-1 space-y-1">
+                  <p className="text-sm text-muted-foreground">Clase · {title}</p>
+                  {teaching?.concept_title && view.kind !== "completed" && (
+                    <h1 className="text-2xl font-semibold tracking-tight">{teaching.concept_title}</h1>
+                  )}
+                </div>
+                {path && (
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    onClick={() => setConfirmingDelete(true)}
+                    className="shrink-0 gap-1.5 text-muted-foreground hover:text-destructive"
+                  >
+                    <Trash2 className="h-4 w-4" aria-hidden />
+                    <span className="sr-only sm:not-sr-only">Borrar clase</span>
+                  </Button>
                 )}
-              </div>
-              {path && (
-                <Button
-                  variant="ghost"
-                  size="sm"
-                  onClick={() => setConfirmingDelete(true)}
-                  className="shrink-0 gap-1.5 text-muted-foreground hover:text-destructive"
-                >
-                  <Trash2 className="h-4 w-4" aria-hidden />
-                  <span className="sr-only sm:not-sr-only">Borrar clase</span>
-                </Button>
+              </header>
+
+              {view.kind === "loading" && (
+                <div role="status" className="flex flex-col items-center gap-3 py-16 text-center text-muted-foreground">
+                  <LariaMascot state="thinking" className="w-24" />
+                  <p className="flex items-center gap-2">
+                    <Loader2 className="h-4 w-4 animate-spin motion-reduce:animate-none" aria-hidden />
+                    Preparando tu lección…
+                  </p>
+                  <p className="text-sm">
+                    {slowLoading
+                      ? `LARIA está preparando ${upcomingTier ? `el tramo ${LEVEL_NAME[upcomingTier]}` : "las clases"} con fuentes de internet. La primera vez puede tardar hasta medio minuto.`
+                      : "Suele tardar unos segundos."}
+                  </p>
+                </div>
               )}
-            </header>
 
-            {view.kind === "loading" && (
-              <div role="status" className="flex flex-col items-center gap-3 py-16 text-center text-muted-foreground">
-                <LariaMascot state="thinking" className="w-24" />
-                <p className="flex items-center gap-2">
-                  <Loader2 className="h-4 w-4 animate-spin motion-reduce:animate-none" aria-hidden />
-                  Preparando tu lección…
-                </p>
-                <p className="text-sm">
-                  {slowLoading
-                    ? `LARIA está preparando ${upcomingTier ? `el tramo ${LEVEL_NAME[upcomingTier]}` : "las clases"} con fuentes de internet. La primera vez puede tardar hasta medio minuto.`
-                    : "Suele tardar unos segundos."}
-                </p>
-              </div>
-            )}
+              {view.kind === "error" && (
+                <div role="alert" className="space-y-4 rounded-xl border border-border bg-card p-5">
+                  <p>{view.message}</p>
+                  {view.refused ? (
+                    <div className="flex flex-wrap gap-2">
+                      <Button asChild>
+                        <Link href={placementHref()}>Elegir otro tema</Link>
+                      </Button>
+                      <Button asChild variant="outline">
+                        <Link href={CLASSES_HREF}>Mis clases</Link>
+                      </Button>
+                    </div>
+                  ) : view.needsPlacement ? (
+                    <Button asChild>
+                      <Link href={placementHref(path?.topic ?? path?.title ?? undefined)}>Hacer la nivelación</Link>
+                    </Button>
+                  ) : (
+                    <Button variant="outline" onClick={loadLesson} className="gap-2">
+                      <RefreshCw className="h-4 w-4" aria-hidden />
+                      Reintentar
+                    </Button>
+                  )}
+                </div>
+              )}
 
-            {view.kind === "error" && (
-              <div role="alert" className="space-y-4 rounded-xl border border-border bg-card p-5">
-                <p>{view.message}</p>
-                {view.refused ? (
+              {view.kind === "lesson" && (
+                <>
+                  {/* Por qué toca esto ahora: otra explicación, un repaso previo… */}
+                  {teaching?.reason && <p className="rounded-lg bg-muted px-4 py-3 text-sm">{teaching.reason}</p>}
+                  {/* La explicación en la pizarra; la comprobación aparece cuando está entera */}
+                  <ClassBoard
+                    key={view.check.id}
+                    lessonKey={`clase:${pathId}:${view.check.id}`}
+                    markdown={view.markdown}
+                    speech={speech}
+                    emotion={lessonEmotion(teaching)}
+                  >
+                    <section aria-labelledby="comprobacion" className="space-y-4 border-t border-border pt-6">
+                      <h2 id="comprobacion" className="text-lg font-medium">
+                        Comprueba lo que has aprendido
+                      </h2>
+                      {view.check.questions[current] && (
+                        <QuestionStep
+                          questions={view.check.questions}
+                          current={current}
+                          answers={answers}
+                          onAnswer={(question, letter) => setAnswers((prev) => ({ ...prev, [question.index]: letter }))}
+                          onPrev={() => setCurrent((n) => Math.max(0, n - 1))}
+                          onNext={() => (current < view.check.questions.length - 1 ? setCurrent((n) => n + 1) : submit())}
+                          isSubmitting={submitting}
+                          error={checkError}
+                        />
+                      )}
+                    </section>
+                  </ClassBoard>
+                  {/* En los tramos intermedio y avanzado, en qué se basa la explicación */}
+                  <ModuleSources sources={path?.modules.find((m) => m.concept === teaching?.concept)?.sources} />
+                </>
+              )}
+
+              {view.kind === "result" && (
+                <section aria-live="polite" className="space-y-5">
+                  <div className="flex items-center gap-4">
+                    <LariaMascot emotion={OUTCOME_EMOTION[view.result.outcome]} className="w-20 shrink-0" />
+                    <div className="space-y-1">
+                      <h2 className="text-xl font-semibold">{OUTCOME[view.result.outcome]}</h2>
+                      <p className="text-sm text-muted-foreground">
+                        {scoreLine(toResults(view.check.questions, view.result.questions))}.
+                      </p>
+                    </div>
+                  </div>
+                  <ResultsList results={toResults(view.check.questions, view.result.questions)} />
+                  {view.result.next.reason && <p className="rounded-lg bg-muted px-4 py-3 text-sm">{view.result.next.reason}</p>}
+                  <Button onClick={loadLesson}>Continuar</Button>
+                </section>
+              )}
+
+              {/* Terminó un tramo, no la ruta: la prueba de paso abre el siguiente, con clases nuevas */}
+              {view.kind === "completed" && path?.next_tier && (
+                <section className="space-y-4 rounded-xl border border-border bg-card p-6">
+                  <div className="flex items-center gap-4">
+                    <LariaMascot emotion="celebratory" className="w-24 shrink-0" />
+                    <div className="space-y-1">
+                      <h1 className="text-2xl font-semibold">¡Tramo {LEVEL_NAME[path.tiers?.at(-1) ?? "basico"]} terminado!</h1>
+                      <p className="text-sm text-muted-foreground">La ruta sigue: el tramo {LEVEL_NAME[path.next_tier]} tiene clases nuevas.</p>
+                    </div>
+                  </div>
+                  <p className="text-muted-foreground">
+                    {teaching?.reason || `Haz la prueba de paso para abrir el tramo ${LEVEL_NAME[path.next_tier]}.`}
+                  </p>
                   <div className="flex flex-wrap gap-2">
                     <Button asChild>
-                      <Link href={placementHref()}>Elegir otro tema</Link>
+                      <Link href={passageTestHref(pathId)}>Hacer la prueba de paso</Link>
                     </Button>
                     <Button asChild variant="outline">
                       <Link href={CLASSES_HREF}>Mis clases</Link>
                     </Button>
                   </div>
-                ) : view.needsPlacement ? (
-                  <Button asChild>
-                    <Link href={placementHref(path?.topic ?? path?.title ?? undefined)}>Hacer la nivelación</Link>
-                  </Button>
-                ) : (
-                  <Button variant="outline" onClick={loadLesson} className="gap-2">
-                    <RefreshCw className="h-4 w-4" aria-hidden />
-                    Reintentar
-                  </Button>
-                )}
-              </div>
-            )}
+                </section>
+              )}
 
-            {view.kind === "lesson" && (
-              <>
-                {/* Por qué toca esto ahora: otra explicación, un repaso previo… */}
-                {teaching?.reason && <p className="rounded-lg bg-muted px-4 py-3 text-sm">{teaching.reason}</p>}
-                {/* La explicación en la pizarra; la comprobación aparece cuando está entera */}
-                <ClassBoard
-                  key={view.check.id}
-                  lessonKey={`clase:${pathId}:${view.check.id}`}
-                  markdown={view.markdown}
-                  speech={speech}
-                  emotion={lessonEmotion(teaching)}
-                >
-                  <section aria-labelledby="comprobacion" className="space-y-4 border-t border-border pt-6">
-                    <h2 id="comprobacion" className="text-lg font-medium">
-                      Comprueba lo que has aprendido
-                    </h2>
-                    {view.check.questions[current] && (
-                      <QuestionStep
-                        questions={view.check.questions}
-                        current={current}
-                        answers={answers}
-                        onAnswer={(question, letter) => setAnswers((prev) => ({ ...prev, [question.index]: letter }))}
-                        onPrev={() => setCurrent((n) => Math.max(0, n - 1))}
-                        onNext={() => (current < view.check.questions.length - 1 ? setCurrent((n) => n + 1) : submit())}
-                        isSubmitting={submitting}
-                        error={checkError}
-                      />
-                    )}
-                  </section>
-                </ClassBoard>
-                {/* En los tramos intermedio y avanzado, en qué se basa la explicación */}
-                <ModuleSources sources={path?.modules.find((m) => m.concept === teaching?.concept)?.sources} />
-              </>
-            )}
-
-            {view.kind === "result" && (
-              <section aria-live="polite" className="space-y-5">
-                <div className="flex items-center gap-4">
-                  <LariaMascot emotion={OUTCOME_EMOTION[view.result.outcome]} className="w-20 shrink-0" />
-                  <div className="space-y-1">
-                    <h2 className="text-xl font-semibold">{OUTCOME[view.result.outcome]}</h2>
-                    <p className="text-sm text-muted-foreground">
-                      {scoreLine(toResults(view.check.questions, view.result.questions))}.
-                    </p>
+              {view.kind === "completed" && !path?.next_tier && (
+                <section className="space-y-4 rounded-xl border border-border bg-card p-6">
+                  <div className="flex items-center gap-4">
+                    <LariaMascot emotion="celebratory" className="w-24 shrink-0" />
+                    <h1 className="text-2xl font-semibold">¡Ruta completada!</h1>
                   </div>
-                </div>
-                <ResultsList results={toResults(view.check.questions, view.result.questions)} />
-                {view.result.next.reason && <p className="rounded-lg bg-muted px-4 py-3 text-sm">{view.result.next.reason}</p>}
-                <Button onClick={loadLesson}>Continuar</Button>
-              </section>
-            )}
-
-            {/* Terminó un tramo, no la ruta: la prueba de paso abre el siguiente, con clases nuevas */}
-            {view.kind === "completed" && path?.next_tier && (
-              <section className="space-y-4 rounded-xl border border-border bg-card p-6">
-                <div className="flex items-center gap-4">
-                  <LariaMascot emotion="celebratory" className="w-24 shrink-0" />
-                  <div className="space-y-1">
-                    <h1 className="text-2xl font-semibold">¡Tramo {LEVEL_NAME[path.tiers?.at(-1) ?? "basico"]} terminado!</h1>
-                    <p className="text-sm text-muted-foreground">La ruta sigue: el tramo {LEVEL_NAME[path.next_tier]} tiene clases nuevas.</p>
+                  <p className="text-muted-foreground">
+                    Has terminado la ruta de {title}. Puedes seguir preguntando a LARIA en el chat o ver tu progreso en el perfil.
+                  </p>
+                  <div className="flex flex-wrap gap-2">
+                    <Button asChild>
+                      <Link href={NEW_CHAT_HREF}>Ir al chat</Link>
+                    </Button>
+                    <Button asChild variant="outline">
+                      <Link href={PROFILE_HREF}>Ver mi progreso</Link>
+                    </Button>
                   </div>
-                </div>
-                <p className="text-muted-foreground">
-                  {teaching?.reason || `Haz la prueba de paso para abrir el tramo ${LEVEL_NAME[path.next_tier]}.`}
-                </p>
-                <div className="flex flex-wrap gap-2">
-                  <Button asChild>
-                    <Link href={passageTestHref(pathId)}>Hacer la prueba de paso</Link>
-                  </Button>
-                  <Button asChild variant="outline">
-                    <Link href={CLASSES_HREF}>Mis clases</Link>
-                  </Button>
-                </div>
-              </section>
-            )}
+                </section>
+              )}
 
-            {view.kind === "completed" && !path?.next_tier && (
-              <section className="space-y-4 rounded-xl border border-border bg-card p-6">
-                <div className="flex items-center gap-4">
-                  <LariaMascot emotion="celebratory" className="w-24 shrink-0" />
-                  <h1 className="text-2xl font-semibold">¡Ruta completada!</h1>
-                </div>
-                <p className="text-muted-foreground">
-                  Has terminado la ruta de {title}. Puedes seguir preguntando a LARIA en el chat o ver tu progreso en el perfil.
-                </p>
-                <div className="flex flex-wrap gap-2">
-                  <Button asChild>
-                    <Link href={NEW_CHAT_HREF}>Ir al chat</Link>
-                  </Button>
-                  <Button asChild variant="outline">
-                    <Link href={PROFILE_HREF}>Ver mi progreso</Link>
-                  </Button>
-                </div>
-              </section>
-            )}
-
-            {view.kind === "completed" && !path?.next_tier && <NextSuggestions pathId={pathId} />}
-          </main>
+              {view.kind === "completed" && !path?.next_tier && <NextSuggestions pathId={pathId} />}
+            </main>
+          </div>
         </div>
+        {/* Las preguntas a LARIA durante la clase (también mientras carga el paso siguiente,
+            para no perder la conversación); no al terminar ni si la clase no se pudo abrir */}
+        {questionsEnabled && view.kind !== "completed" && view.kind !== "error" && (
+          <ClassChatPanel
+            pathId={pathId}
+            concept={shownStep.concept}
+            conceptTitle={shownStep.title}
+            speech={speech}
+            docked={docked}
+            open={chat.open}
+            onOpenChange={chat.onOpenChange}
+          />
+        )}
       </div>
       {confirmingDelete && (
         <DeleteClassDialog pathId={pathId} title={title} onClose={closeDelete} onDeleted={() => router.push(CLASSES_HREF)} />
@@ -355,14 +380,15 @@ function ModuleItem({ module, current }: { module: PathModule; current: boolean 
 
 // La ruta entera con el estado de cada módulo, por tramos (básico, intermedio,
 // avanzado) si los tiene; el tramo que falta abrir, al final. En móvil, plegada
-function PathOutline({ path }: { path: LearningPath }) {
+// wide: desde qué ancho va en su columna (más tarde con el panel de preguntas al lado)
+function PathOutline({ path, wide }: { path: LearningPath; wide: "lg" | "2xl" }) {
   const modules = [...path.modules].sort((a, b) => a.position - b.position)
   const done = modules.filter((m) => m.status === "completed" || m.status === "assumed").length
   const tiers = path.tiers?.length ? path.tiers : null
   const isCurrent = (module: PathModule) => module.concept === path.teaching?.concept
   return (
-    <aside aria-label="Tu ruta" className="lg:row-span-2">
-      <details open className="group rounded-xl border border-border bg-card p-4 lg:sticky lg:top-6">
+    <aside aria-label="Tu ruta" className={wide === "lg" ? "lg:row-span-2" : "2xl:row-span-2"}>
+      <details open className={`group rounded-xl border border-border bg-card p-4 ${wide === "lg" ? "lg:sticky lg:top-6" : "2xl:sticky 2xl:top-6"}`}>
         <summary className="cursor-pointer list-none text-sm font-medium">
           Tu ruta · {done} de {modules.length}
         </summary>

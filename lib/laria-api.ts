@@ -34,6 +34,9 @@ interface TutorEnvelope {
     safety?: "refuse" | "support"
     // El esquema que trae la respuesta (ADR-048): un aviso, porque ya va en content
     visuals?: Visual[]
+    // Respuesta del chat de una clase (ADR-054): el paso del que habla
+    in_class?: boolean
+    concept_title?: string | null
     [key: string]: unknown
   }
   [key: string]: unknown
@@ -58,6 +61,8 @@ interface Chat {
   id: string
   title: string
   document_id?: string | null
+  // El chat de una clase (ADR-054): se abre desde ella, no desde la lista de chats
+  path_id?: string | null
   messages?: ChatMessage[]
   message_count?: number
   last_message_preview?: string
@@ -391,6 +396,8 @@ interface LearningPreferences {
   assessment?: AssessmentMix
   // Con el interruptor apagado, assessment se guarda pero no se usa: no se ofrece
   open_questions_enabled?: boolean
+  // Si se le puede preguntar a LARIA durante la clase (ADR-054)
+  class_questions_enabled?: boolean
 }
 
 // Cómo prefiere que le expliquen; vale para todo, con y sin material
@@ -703,12 +710,13 @@ export const lariaAPI = {
       role: "user" | "assistant",
       content: string,
       callbacks: StreamCallbacks,
-      options: { signal?: AbortSignal } = {}
+      // concept: en el chat de una clase, el paso del que se pregunta (ADR-054)
+      options: { signal?: AbortSignal; concept?: string } = {}
     ): Promise<void> => {
       try {
         const response = await request(
           `/chats/${segment(chatId)}/stream`,
-          { method: "POST", body: JSON.stringify({ role, content }), signal: options.signal },
+          { method: "POST", body: JSON.stringify({ role, content, concept: options.concept }), signal: options.signal },
           "Error de streaming",
         )
 
@@ -875,6 +883,10 @@ export const lariaAPI = {
     // terminado de ESTA ruta. Se responde con quizzes.submitAttempt (trae placement)
     passageTest: (pathId: string) =>
       fetchAPI<QuizResponse>(`/learning/paths/${segment(pathId)}/passage-test`, { method: "POST" }),
+
+    // El chat para preguntarle a LARIA durante la clase (ADR-054): uno por ruta, que
+    // se crea la primera vez. 404 con reason "class_questions_disabled" si está apagado
+    chat: (pathId: string) => fetchAPI<Chat>(`/learning/paths/${segment(pathId)}/chat`),
 
     // Hasta 3 formas de seguir tras completarla (la primera vez tarda ~2 s)
     next: async (pathId: string): Promise<NextSuggestion[]> =>

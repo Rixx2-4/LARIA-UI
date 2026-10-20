@@ -19,6 +19,8 @@ interface UseStreamingChatOptions {
   messages: ChatMessage[]
   setMessages: (msgs: ChatMessage[]) => void
   chatId: string | null
+  // En el chat de una clase: el paso que se está viendo, para que LARIA hable de ese
+  concept?: string
 }
 
 interface UseStreamingChatReturn extends StreamingState {
@@ -58,6 +60,7 @@ export function useStreamingChat({
   messages,
   setMessages,
   chatId,
+  concept,
 }: UseStreamingChatOptions): UseStreamingChatReturn {
   const [state, setState] = useState<StreamingState>(IDLE_STATE)
 
@@ -235,9 +238,9 @@ export function useStreamingChat({
           error: error.message,
         }))
       },
-    }, { signal: abortControllerRef.current.signal })
+    }, { signal: abortControllerRef.current.signal, concept })
     return completed && isCurrent() ? reply : null
-  }, [chatId, messages, setMessages, queueDisplay, showUpTo, stopAnimation])
+  }, [chatId, concept, messages, setMessages, queueDisplay, showUpTo, stopAnimation])
 
   // Corta en seco: se descarta todo lo que siga llegando (cambio de chat, envío nuevo)
   const cancelStreaming = useCallback(() => {

@@ -78,7 +78,8 @@ export function ChatProvider({ children }: { children: ReactNode }) {
     if (getSessionState() !== "signed-in") return
     try {
       const response = await lariaAPI.chats.list()
-      setChats(response.chats)
+      // Los chats de clase se abren desde su clase, no desde la lista
+      setChats(response.chats.filter((chat) => !chat.path_id))
       setChatsLoaded(true)
     } catch (error) {
       console.error("Error loading chats:", error)
@@ -243,4 +244,45 @@ export function useChat() {
     throw new Error("useChat must be used within a ChatProvider")
   }
   return context
+}
+
+// Un único chat que ya existe (el de una clase, ADR-054): el chat de siempre puede
+// funcionar dentro de él sin tocar el chat activo de la app ni la lista. No se crea,
+// borra ni renombra desde aquí: el título lo pone el backend
+export function FixedChatProvider({ chat, children }: { chat: Chat; children: ReactNode }) {
+  const [messages, setMessages] = useState<ChatMessage[]>(chat.messages ?? [])
+  const noop = useCallback(async () => {}, [])
+
+  const addMessage = useCallback(async (chatId: string, role: "user" | "assistant" | "system", content: string) => {
+    const updated = await lariaAPI.chats.addMessage(chatId, role, content)
+    setMessages(updated.messages || [])
+  }, [])
+
+  return (
+    <ChatContext.Provider
+      value={{
+        chats: [],
+        chatsLoaded: true,
+        activeChatId: chat.id,
+        activeDocumentId: null,
+        messages,
+        messagesLoading: false,
+        loadedChatId: chat.id,
+        chatError: null,
+        loadChats: noop,
+        createChat: () => Promise.reject(new Error("Este chat ya existe")),
+        selectChat: noop,
+        deleteChat: noop,
+        renameChat: noop,
+        addMessage,
+        setMessages,
+        clearActiveChat: () => {},
+        maybeGenerateTitle: noop,
+        queueFirstMessage: () => {},
+        takeFirstMessage: () => null,
+      }}
+    >
+      {children}
+    </ChatContext.Provider>
+  )
 }
