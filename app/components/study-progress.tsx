@@ -6,6 +6,7 @@ import { Flame, Timer, X } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import type { StudyTimeSummary } from "@/lib/laria-api"
 import { LariaMascot } from "./laria-mascot"
+import { CLASSES_HREF } from "@/lib/routes"
 
 // El objetivo de hoy como un anillo que se llena, con la racha al lado
 export function DailyProgress({ summary }: { summary: StudyTimeSummary }) {
@@ -111,7 +112,7 @@ export function ClassStudyBar({ summary, sessionSeconds }: { summary: StudyTimeS
               Seguir
             </Button>
             <Button size="sm" asChild>
-              <Link href="/clases">Dejarlo aquí</Link>
+              <Link href={CLASSES_HREF}>Dejarlo aquí</Link>
             </Button>
           </div>
         </div>

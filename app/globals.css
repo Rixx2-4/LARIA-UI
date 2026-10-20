@@ -197,9 +197,9 @@
 .laria-mascot * {
   transform-box: fill-box;
 }
-/* Lo que solo aparece con una emoción o un estado empieza oculto */
+/* Lo que solo aparece con una emoción o un estado empieza oculto (las cejas neutras no) */
 .laria-mascot .mascot-eye-happy,
-.laria-mascot .mascot-brows > *,
+.laria-mascot .mascot-brows > :not(.mascot-brow-left, .mascot-brow-right),
 .laria-mascot .mascot-mouth-smile,
 .laria-mascot .mascot-mouth-grin,
 .laria-mascot .mascot-mouth-o,
@@ -238,6 +238,11 @@
 .laria-mascot[data-emotion="surprised"] .mascot-mouth-closed {
   opacity: 0;
 }
+/* Las cejas de una emoción sustituyen a las neutras */
+.laria-mascot[data-emotion="patient"] :is(.mascot-brow-left, .mascot-brow-right),
+.laria-mascot[data-emotion="surprised"] :is(.mascot-brow-left, .mascot-brow-right) {
+  opacity: 0;
+}
 .laria-mascot[data-emotion="surprised"] .mascot-eyes {
   transform: scale(1.15);
 }
@@ -252,6 +257,14 @@
 .laria-mascot[data-state="thinking"] .mascot-brows-thinking,
 .laria-mascot[data-state="thinking"] .mascot-thought {
   opacity: 1;
+}
+/* Pensando levanta la derecha: la izquierda queda neutra (también si estaba paciente
+   o sorprendida, para no tener tres cejas) */
+.laria-mascot[data-state="thinking"] .mascot-brow-left {
+  opacity: 1;
+}
+.laria-mascot[data-state="thinking"] :is(.mascot-brow-right, .mascot-brows-patient, .mascot-brows-surprised) {
+  opacity: 0;
 }
 
 /* Hablando: la boca abierta manda sobre las demás bocas y se inclina hacia la pizarra */

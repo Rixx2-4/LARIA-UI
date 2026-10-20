@@ -8,7 +8,7 @@ import { MASCOT_PATHS } from "./laria-mascot-paths"
 // Solo SVG y CSS: lo anima la tarjeta gráfica. Con «reducir movimiento», quieta.
 //
 // state, lo que está haciendo:
-//   idle: flota y parpadea · thinking: mira arriba, ceja levantada y burbuja «…» ·
+//   idle: flota y parpadea · thinking: mira arriba, una ceja levantada y burbuja «…» ·
 //   speaking: habla (la boca se abre) y se inclina hacia la pizarra
 // emotion, cómo se siente (las del tutor del backend, más «surprised»):
 //   calm · encouraging (sonríe) · patient (cejas amables y sonrisa suave) ·
@@ -31,6 +31,8 @@ const EMOTION_LABEL: Partial<Record<MascotEmotion, string>> = {
   celebratory: "celebrándolo",
   surprised: "sorprendida",
 }
+
+export const MASCOT_VIEWBOX = "20 40 450 570"
 
 // Trazos añadidos, en coordenadas del logo y con su grosor de línea
 const STROKE = { fill: "none", stroke: "currentColor", strokeLinecap: "round", strokeLinejoin: "round" } as const
@@ -58,7 +60,10 @@ export function LariaMascot({
   return (
     <svg
       ref={ref}
-      viewBox="60 60 410 540"
+      // El dibujo ocupa 60 60 410 540; el margen es lo que se sale al moverse
+      // (medido en Chrome): pensando gira la cabeza 7° y se salía 38 por la izquierda
+      // y 9 por arriba y abajo; celebrando salta y llega a 18 por arriba
+      viewBox={MASCOT_VIEWBOX}
       role="img"
       aria-label={label}
       data-state={state}
@@ -92,7 +97,10 @@ export function LariaMascot({
             <path className="mascot-eye-dot" d={MASCOT_PATHS.eyeRight} />
             <path className="mascot-eye-happy" d="M248 287 Q261 264 274 287 M354 282 Q366 259 378 282" {...STROKE} strokeWidth="7" />
           </g>
+          {/* Siempre dos cejas: las neutras, salvo que una emoción o un estado ponga las suyas */}
           <g className="mascot-brows" {...STROKE} strokeWidth="6">
+            <path className="mascot-brow-left" d="M245 248 Q259 241 272 245" />
+            <path className="mascot-brow-right" d="M355 242 Q369 236 381 241" />
             <path className="mascot-brows-patient" d="M243 250 Q257 241 272 247 M354 243 Q369 238 382 246" />
             <path className="mascot-brows-surprised" d="M242 240 Q258 226 274 236 M353 232 Q369 220 384 232" />
             <path className="mascot-brows-thinking" d="M352 236 Q368 224 384 236" />

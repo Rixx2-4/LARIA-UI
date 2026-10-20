@@ -27,6 +27,10 @@ export function placementHref(topic?: string, chatId?: string | null): string {
 // Mis clases
 export const CLASSES_HREF = "/clases"
 
+// Perfil (progreso, metas, voz y estilo) y cuenta (la de Clerk)
+export const PROFILE_HREF = "/perfil"
+export const ACCOUNT_HREF = "/cuenta"
+
 // La clase guiada de una ruta de aprendizaje
 export function classHref(pathId: string): string {
   return `/clase/${encodeURIComponent(pathId)}`

@@ -105,7 +105,7 @@ function PruebaDePaso() {
 
   return (
     <AppShell>
-      <div className="h-full overflow-auto">
+      <div className="relative h-full overflow-auto">
         <div className="mx-auto max-w-3xl space-y-6 px-4 py-6 sm:px-6">
           <header className="space-y-1">
             <p className="text-sm text-muted-foreground">Prueba de paso · {title}</p>

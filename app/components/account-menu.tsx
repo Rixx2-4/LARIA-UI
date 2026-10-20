@@ -6,6 +6,7 @@ import { useTheme } from "next-themes"
 import { BrainCircuit, CircleHelp, LogOut, Monitor, Moon, Sun, UserCog } from "lucide-react"
 import { useAuth } from "@/app/contexts/auth-context"
 import { replayOnboarding } from "@/lib/onboarding"
+import { PROFILE_HREF, ACCOUNT_HREF } from "@/lib/routes"
 
 const THEMES = [
   { value: "system", label: "Sistema", Icon: Monitor },
@@ -92,7 +93,7 @@ export function AccountMenu({ isOpen, onClose, onNavigate }: AccountMenuProps) {
         </div>
         <div className="p-2">
           <Link
-            href="/perfil"
+            href={PROFILE_HREF}
             onClick={() => {
               onClose()
               onNavigate?.()
@@ -103,7 +104,7 @@ export function AccountMenu({ isOpen, onClose, onNavigate }: AccountMenuProps) {
             Perfil de aprendizaje
           </Link>
           <Link
-            href="/cuenta"
+            href={ACCOUNT_HREF}
             onClick={() => {
               onClose()
               onNavigate?.()
