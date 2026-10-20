@@ -10,7 +10,7 @@ import { ProfileSkeleton } from "../components/skeletons"
 import { LEVEL_NAME } from "../quiz/quiz-parts"
 import { StylePicker } from "../components/style-picker"
 import { useAuth } from "@/app/contexts/auth-context"
-import { placementHref } from "@/lib/routes"
+import { placementHref, quizHref } from "@/lib/routes"
 import { VoicePicker } from "../components/voice-picker"
 import { StudyGoalsPicker } from "../components/study-goals-picker"
 import { lariaAPI, StudentProfile, LearningHistory, Document, type ExplanationStyle } from "@/lib/laria-api"
@@ -411,7 +411,7 @@ function Perfil() {
                 <Link href={placementHref()}>Nivelarme en un tema</Link>
               </Button>
               <Button asChild>
-                <Link href="/quiz">Hacer un quiz</Link>
+                <Link href={quizHref(null)}>Hacer un quiz</Link>
               </Button>
             </div>
           </div>
