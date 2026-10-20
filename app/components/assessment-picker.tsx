@@ -66,28 +66,45 @@ export function AssessmentPicker() {
         Las preguntas de cada comprobación de clase y de cada práctica. Las escritas las corrige LARIA y cuentan aunque
         aciertes solo una parte.
       </p>
+      <MixSteppers mix={mix} onChange={change} disabled={saving} />
+    </section>
+  )
+}
+
+// Los dos contadores (escritas y de opción), que solo dejan llegar a mezclas válidas
+export function MixSteppers({
+  mix,
+  onChange,
+  disabled = false,
+}: {
+  mix: AssessmentMix
+  onChange: (field: keyof AssessmentMix, delta: number) => void
+  disabled?: boolean
+}) {
+  return (
+    <>
       <div className="grid gap-3 sm:grid-cols-2">
         <Stepper
           label="Para escribir"
           value={mix.open_questions}
-          onMinus={() => change("open_questions", -1)}
-          onPlus={() => change("open_questions", 1)}
+          onMinus={() => onChange("open_questions", -1)}
+          onPlus={() => onChange("open_questions", 1)}
           canMinus={validMix({ ...mix, open_questions: mix.open_questions - 1 })}
           canPlus={validMix({ ...mix, open_questions: mix.open_questions + 1 })}
-          disabled={saving}
+          disabled={disabled}
         />
         <Stepper
           label="De opción múltiple"
           value={mix.choice_questions}
-          onMinus={() => change("choice_questions", -1)}
-          onPlus={() => change("choice_questions", 1)}
+          onMinus={() => onChange("choice_questions", -1)}
+          onPlus={() => onChange("choice_questions", 1)}
           canMinus={validMix({ ...mix, choice_questions: mix.choice_questions - 1 })}
           canPlus={validMix({ ...mix, choice_questions: mix.choice_questions + 1 })}
-          disabled={saving}
+          disabled={disabled}
         />
       </div>
       <p className="mt-2 text-xs text-muted-foreground">Entre las dos, de 1 a {MAX_TOTAL} preguntas.</p>
-    </section>
+    </>
   )
 }
 
