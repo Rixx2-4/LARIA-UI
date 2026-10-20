@@ -36,3 +36,14 @@ export function classHref(pathId: string): string {
 export function passageTestHref(pathId: string): string {
   return `${classHref(pathId)}/prueba-de-paso`
 }
+
+// Términos, privacidad y cookies: los publica el backend (ADR-019) y son públicos
+export const LEGAL_DOCUMENTS = [
+  { slug: "terminos", label: "Términos" },
+  { slug: "privacidad", label: "Privacidad" },
+  { slug: "cookies", label: "Cookies" },
+] as const
+
+export function legalHref(slug: string): string {
+  return `/legal/${encodeURIComponent(slug)}`
+}

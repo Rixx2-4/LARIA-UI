@@ -5,7 +5,7 @@ import { Instrument_Serif } from "next/font/google"
 // Las fórmulas de la demo llegan ya en HTML (KaTeX en el servidor): solo falta su CSS
 import "katex/dist/katex.min.css"
 import { ArrowRight } from "lucide-react"
-import { SIGN_IN_HREF, SIGN_UP_HREF } from "@/lib/routes"
+import { LEGAL_DOCUMENTS, SIGN_IN_HREF, SIGN_UP_HREF, legalHref } from "@/lib/routes"
 import { AccountDeletedNotice } from "./components/landing/account-deleted-notice"
 import { LandingHeader } from "./components/landing/landing-header"
 import { LandingMotion, Marker, Reveal } from "./components/landing/motion"
@@ -325,13 +325,18 @@ export default function LandingPage() {
         <footer className="border-t border-foreground/10">
           <div className="mx-auto flex max-w-6xl flex-wrap items-center justify-between gap-4 px-4 py-8 text-sm text-muted-foreground sm:px-6">
             <span>© {new Date().getFullYear()} Plenum</span>
-            <div className="flex gap-5">
+            <div className="flex flex-wrap gap-x-5 gap-y-2">
               <Link href={SIGN_IN_HREF} className="hover:text-foreground">
                 Entrar
               </Link>
               <Link href={SIGN_UP_HREF} className="hover:text-foreground">
                 Crear cuenta
               </Link>
+              {LEGAL_DOCUMENTS.map((item) => (
+                <Link key={item.slug} href={legalHref(item.slug)} className="hover:text-foreground">
+                  {item.label}
+                </Link>
+              ))}
             </div>
           </div>
         </footer>
