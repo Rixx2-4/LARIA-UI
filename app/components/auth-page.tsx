@@ -4,6 +4,7 @@ import { X } from "lucide-react"
 import { PlenumLogo } from "./plenum-logo"
 import { clerkConfigured } from "@/lib/clerk-config"
 import { WakeServer } from "./wake-server"
+import { LegalLinks } from "./legal-links"
 
 // Marco de las pantallas de Clerk (entrar, crear cuenta): la marca de Plenum y
 // una salida bien visible a la página de inicio
@@ -34,6 +35,7 @@ export function AuthPage({ children }: { children: ReactNode }) {
           <p className="mt-1 text-sm text-muted-foreground">Ahora mismo no se puede entrar ni crear cuenta. Vuelve a intentarlo en un rato.</p>
         </div>
       )}
+      <LegalLinks />
     </main>
   )
 }
