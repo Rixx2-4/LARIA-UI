@@ -27,6 +27,9 @@ export function placementHref(topic?: string, chatId?: string | null): string {
 // Mis clases
 export const CLASSES_HREF = "/clases"
 
+// Repasos: lo que toca repasar según la curva del olvido (ADR-051)
+export const REVIEWS_HREF = "/repasos"
+
 // Perfil (progreso, metas, voz y estilo) y cuenta (la de Clerk)
 export const PROFILE_HREF = "/perfil"
 export const ACCOUNT_HREF = "/cuenta"

@@ -364,6 +364,45 @@ interface LessonResponse {
   check: QuizResponse | null
 }
 
+// Agenda de repasos (ADR-051). La retención es una ESTIMACIÓN del modelo, no una medida
+type ReviewStatus = "overdue" | "today" | "upcoming"
+
+interface ReviewItem {
+  // Clave canónica: la que se pide en reviews/curve
+  concept: string
+  label: string
+  status: ReviewStatus
+  estimated_retention: number
+  next_review_at: string
+  last_reviewed_at: string
+  half_life_days: number
+  // Repasos calificados (0 en perfiles anteriores al ADR-051)
+  reviews: number
+  mastery: number
+  // La ruta donde repasarlo; null si no está en ninguna
+  path_id: string | null
+}
+
+interface ReviewAgenda {
+  generated_at: string
+  desired_retention: number
+  // El total, aunque items venga recortado por limit
+  counts: Record<ReviewStatus, number>
+  items: ReviewItem[]
+}
+
+interface RetentionCurve {
+  concept: string
+  label: string
+  desired_retention: number
+  half_life_days: number
+  next_review_at: string
+  // Lo que pasó (nota de cada repaso) y lo que dice la fórmula: siempre separados
+  measured: { at: string; score_ratio: number }[]
+  estimated: { at: string; retention: number }[]
+  note: string
+}
+
 interface CheckNext {
   phase: TeachingPhase
   concept: string | null
@@ -460,6 +499,22 @@ export function onSessionChange(listener: () => void): () => void {
   return () => {
     sessionListeners.delete(listener)
   }
+}
+
+// Avisa de que se calificó un intento (quiz, nivelación, comprobación de clase): la
+// agenda de repasos cambia (ADR-051). El backend la actualiza unos segundos después
+const evidenceListeners = new Set<() => void>()
+
+export function onEvidenceRecorded(listener: () => void): () => void {
+  evidenceListeners.add(listener)
+  return () => {
+    evidenceListeners.delete(listener)
+  }
+}
+
+const evidenceRecorded = <T,>(result: T): T => {
+  evidenceListeners.forEach((listener) => listener())
+  return result
 }
 
 // Avisa de que cambiaron las clases (p. ej. se borró una), para que quien las
@@ -843,7 +898,7 @@ export const lariaAPI = {
       fetchAPI<QuizAttemptResponse>(`/quizzes/${segment(quizId)}/attempts`, {
         method: "POST",
         body: JSON.stringify({ answers }),
-      }),
+      }).then(evidenceRecorded),
   },
 
   // Voz del tutor (ADR-026): el backend limpia el texto (markdown, fórmulas, código)
@@ -927,7 +982,7 @@ export const lariaAPI = {
           quiz_id: quizId,
           answers: Object.fromEntries(Object.entries(answers).map(([index, letter]) => [String(index), letter])),
         }),
-      }),
+      }).then(evidenceRecorded),
   },
 
   // Públicos: sin sesión no se manda token y el backend responde igual
@@ -955,6 +1010,12 @@ export const lariaAPI = {
     profile: () => fetchAPI<StudentProfile>("/learning/me/profile"),
     // null = "que lo decida LARIA"
     preferences: () => fetchAPI<LearningPreferences>("/learning/me/preferences"),
+    // tz: la zona del navegador, para saber qué es «hoy»
+    reviews: (timezone: string, limit = 50) =>
+      fetchAPI<ReviewAgenda>(`/learning/me/reviews?tz=${encodeURIComponent(timezone)}&limit=${limit}`),
+    // 404 si el concepto aún no tiene evidencia calificada
+    reviewCurve: (concept: string) =>
+      fetchAPI<RetentionCurve>(`/learning/me/reviews/curve?concept=${encodeURIComponent(concept)}`),
     setPreferences: (explanationStyle: ExplanationStyle | null) =>
       fetchAPI<LearningPreferences>("/learning/me/preferences", {
         method: "PUT",
@@ -1014,6 +1075,6 @@ export type {
   QuizResponse, QuizQuestion, QuizAttemptResponse, QuizAttemptQuestion, QuestionKind, OpenVerdict, AssessmentMix, LearningPreferences,
   StreamCallbacks, TutorEnvelope, PlacementResult, PlacementLevel, ExplanationStyle,
   TutorVoice, VoicesResponse, NextSuggestion, StudyGoals, StudyTimeSummary, SessionMinutes, DailyGoalMinutes,
-  LegalDocument,
+  LegalDocument, ReviewStatus, ReviewItem, ReviewAgenda, RetentionCurve,
   LearningPath, PathModule, PathModuleStatus, TeachingState, TeachingPhase, LessonResponse, CheckResponse, CheckOutcome,
 }
