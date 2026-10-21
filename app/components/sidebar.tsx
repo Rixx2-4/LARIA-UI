@@ -11,6 +11,7 @@ import {
   Brain,
   ClipboardList,
   GraduationCap,
+  CalendarCheck,
   Trash2,
   FileText,
   Pencil,
@@ -21,10 +22,12 @@ import { PlenumMark } from "./plenum-logo"
 import { ChatListSkeleton, DocumentListSkeleton } from "./skeletons"
 import { useChat } from "@/app/contexts/chat-context"
 import { useAuth } from "@/app/contexts/auth-context"
-import { NEW_CHAT_HREF, chatHref, quizHref, CLASSES_HREF, PROFILE_HREF } from "@/lib/routes"
+import { NEW_CHAT_HREF, chatHref, quizHref, CLASSES_HREF, PROFILE_HREF, REVIEWS_HREF } from "@/lib/routes"
 import { useDocuments, documentState, type DocumentState } from "@/hooks/use-documents"
 import { lariaAPI, onPathsChanged } from "@/lib/laria-api"
 import { inProgressCount } from "@/lib/classes"
+import { dueCount } from "@/lib/reviews"
+import { useReviewAgenda } from "@/hooks/use-review-agenda"
 
 const DOCUMENT_STATE_LABEL: Record<DocumentState, string> = {
   ready: "Analizado",
@@ -56,6 +59,8 @@ export function Sidebar({ onNavigate }: { onNavigate?: () => void } = {}) {
       unsubscribe()
     }
   }, [isAuthenticated])
+  // Lo que toca repasar hoy (ADR-051); counts trae el total, así que basta con un ítem
+  const reviewsDue = dueCount(useReviewAgenda(isAuthenticated, 1).agenda)
   const [openPanel, setOpenPanel] = useState<string | null>(null)
   const [pinnedPanel, setPinnedPanel] = useState<string | null>(null)
   // Solo una fila del historial puede estar renombrándose o pidiendo confirmación
@@ -177,6 +182,23 @@ export function Sidebar({ onNavigate }: { onNavigate?: () => void } = {}) {
               )}
             </Button>
             <div aria-hidden className="text-[11px] leading-tight text-muted-foreground text-center mt-1 font-medium">Clases</div>
+          </div>
+
+          <div className="relative mb-2 flex flex-col items-center">
+            <Button
+              variant="ghost"
+              onClick={() => navigate(REVIEWS_HREF)}
+              aria-label={reviewsDue ? `Repasos (${reviewsDue} para hoy)` : "Repasos"}
+              className="relative h-10 w-10 shrink-0 mx-auto text-muted-foreground hover:text-foreground hover:bg-accent"
+            >
+              <CalendarCheck className="h-5 w-5" />
+              {reviewsDue > 0 && (
+                <span aria-hidden className="absolute -right-0.5 -top-0.5 flex h-4 min-w-4 items-center justify-center rounded-full bg-primary px-1 text-[10px] font-semibold text-primary-foreground">
+                  {reviewsDue}
+                </span>
+              )}
+            </Button>
+            <div aria-hidden className="text-[11px] leading-tight text-muted-foreground text-center mt-1 font-medium">Repasos</div>
           </div>
 
           <div className="relative mb-2 flex flex-col items-center">
