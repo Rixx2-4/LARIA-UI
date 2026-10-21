@@ -66,7 +66,16 @@ interface UploadedFile {
 }
 
 
-export function SearchBar({ isOpeningChat = false }: { isOpeningChat?: boolean }) {
+// En una clase (ADR-054) el chat es el de esa ruta: sin adjuntos ni propuestas de quiz,
+// sin quitarle el teclado a la comprobación y con la voz de la pizarra, para que no
+// suenen dos a la vez
+interface ClassMode {
+  // El paso que se está viendo: LARIA responde sobre ese
+  concept?: string
+  speech: ReturnType<typeof useSpeech>
+}
+
+export function SearchBar({ isOpeningChat = false, inClass }: { isOpeningChat?: boolean; inClass?: ClassMode }) {
   const [query, setQuery] = useState("")
   const [isFocused, setIsFocused] = useState(false)
   const [isUploading, setIsUploading] = useState(false)
@@ -99,7 +108,7 @@ export function SearchBar({ isOpeningChat = false }: { isOpeningChat?: boolean }
   const chatId = activeChatId
 
   // Empezar a escribir en cualquier parte de la página escribe en el chat (salvo con el visor abierto)
-  useTypeToFocus(messageInputRef, !viewerFile)
+  useTypeToFocus(messageInputRef, !viewerFile && !inClass)
 
   const {
     isStreaming,
@@ -117,11 +126,13 @@ export function SearchBar({ isOpeningChat = false }: { isOpeningChat?: boolean }
     messages,
     setMessages,
     chatId,
+    concept: inClass?.concept,
   })
 
   // Voz del tutor: con «Leer en voz», cada frase que se cierra en el stream se lee
   // mientras sigue escribiendo. spokenRef: hasta dónde de la respuesta ya se leyó
-  const speech = useSpeech()
+  const ownSpeech = useSpeech()
+  const speech = inClass?.speech ?? ownSpeech
   const speakAlong = speech.enabled && speech.mode === "voice"
   const spokenRef = useRef(0)
   const liveKeyRef = useRef("")
@@ -398,7 +409,7 @@ export function SearchBar({ isOpeningChat = false }: { isOpeningChat?: boolean }
   const lastEnvelope = lastIndex >= 0 && messages[lastIndex].role === "assistant" ? tutorEnvelope(messages[lastIndex]) : null
   const offerFor = (payload: NonNullable<typeof lastEnvelope>["payload"]): ChatQuizRequest | null => {
     // Tras un mensaje del filtro de seguridad no se propone nada
-    if (!payload || !chatId || payload.safety) return null
+    if (!payload || !chatId || payload.safety || inClass) return null
     if (payload.ask_learning_style) return { kind: "style" }
     if (payload.suggest_placement && !wasPlacementOffered(chatId)) return { kind: "placement", topic: payload.topic_hint ?? "" }
     if (payload.offer_quiz && activeDocumentId) return { kind: "practice" }
@@ -458,6 +469,13 @@ export function SearchBar({ isOpeningChat = false }: { isOpeningChat?: boolean }
       <div ref={messagesContainerRef} className="relative min-h-0 flex-1 overflow-y-auto motion-safe:scroll-smooth">
         {messages.length === 0 && isOpeningChat ? (
           <MessagesSkeleton />
+        ) : messages.length === 0 && inClass ? (
+          <div className="flex h-full items-center justify-center px-6">
+            <p className="text-balance text-center text-sm text-muted-foreground">
+              ¿Algo de la explicación no te queda claro? Pregúntame: te ayudo a entenderlo, sin darte las respuestas de la
+              comprobación.
+            </p>
+          </div>
         ) : messages.length === 0 ? (
           <div className="flex h-full items-center justify-center px-4">
             <h1 className="text-center text-2xl md:text-3xl font-semibold tracking-tight text-foreground">
@@ -465,7 +483,7 @@ export function SearchBar({ isOpeningChat = false }: { isOpeningChat?: boolean }
             </h1>
           </div>
         ) : (
-          <div className="mx-auto w-full max-w-3xl space-y-4 px-4 py-6 md:px-6">
+          <div className={`mx-auto w-full max-w-3xl space-y-4 ${inClass ? "px-3 py-4" : "px-4 py-6 md:px-6"}`}>
             {messages.map((msg, index) => {
               // La respuesta que se está escribiendo ahora mismo
               const isLive = isStreaming && index === messages.length - 1 && msg.role === "assistant"
@@ -534,6 +552,10 @@ export function SearchBar({ isOpeningChat = false }: { isOpeningChat?: boolean }
                           )
                         })()}
                         {label && <span className="px-1.5 py-0.5 rounded bg-secondary/50">{label}</span>}
+                        {/* En el chat de una clase: el paso del que habla la respuesta */}
+                        {envelope?.payload?.in_class && envelope.payload.concept_title && (
+                          <span className="px-1.5 py-0.5 rounded bg-secondary/50">Sobre: {envelope.payload.concept_title}</span>
+                        )}
                         {/* Contestó en el chat cómo prefiere aprender y el backend ya lo guardó */}
                         {envelope?.payload?.explanation_style_chosen !== undefined && (
                           <span className="px-1.5 py-0.5 rounded bg-secondary/50">
@@ -591,9 +613,9 @@ export function SearchBar({ isOpeningChat = false }: { isOpeningChat?: boolean }
         )}
       </div>
 
-      <div className="mx-auto w-full max-w-3xl shrink-0 px-4 pb-4 md:px-6 md:pb-6">
+      <div className={`mx-auto w-full max-w-3xl shrink-0 ${inClass ? "px-3 pb-3" : "px-4 pb-4 md:px-6 md:pb-6"}`}>
         {/* Uploaded Files */}
-        {uploadedFiles.length > 0 && (
+        {!inClass && uploadedFiles.length > 0 && (
           <div className="mb-4 flex flex-wrap gap-2">
             {uploadedFiles.map((uf, index) => (
               <FileCard
@@ -640,8 +662,8 @@ export function SearchBar({ isOpeningChat = false }: { isOpeningChat?: boolean }
                   handleSend()
                 }
               }}
-              data-tour="chat"
-              placeholder={isStreaming ? "Generando respuesta…" : "Pregunta lo que quieras…"}
+              data-tour={inClass ? undefined : "chat"}
+              placeholder={isStreaming ? "Generando respuesta…" : inClass ? "Pregunta sobre esta clase…" : "Pregunta lo que quieras…"}
               aria-label="Mensaje"
               maxLength={MAX_MESSAGE_CHARS}
               aria-describedby={remaining <= MESSAGE_WARNING_CHARS ? "message-limit" : undefined}
@@ -671,21 +693,23 @@ export function SearchBar({ isOpeningChat = false }: { isOpeningChat?: boolean }
                   if (file) handleFileUpload(file)
                 }}
               />
-              <Button
-                data-tour="adjuntar"
-                aria-label="Adjuntar archivo"
-                variant="ghost"
-                size="icon"
-                onClick={() => fileInputRef.current?.click()}
-                disabled={isUploading || isStreaming}
-                className="h-8 w-8 md:h-9 md:w-9 rounded-lg text-muted-foreground transition-all hover:bg-accent/60 hover:text-foreground"
-              >
-                {isUploading ? (
-                  <Loader2 className="h-4 w-4 animate-spin" />
-                ) : (
-                  <Paperclip className="h-4 w-4 md:h-[17px] md:w-[17px]" />
+              {!inClass && (
+                <Button
+                  data-tour="adjuntar"
+                  aria-label="Adjuntar archivo"
+                  variant="ghost"
+                  size="icon"
+                  onClick={() => fileInputRef.current?.click()}
+                  disabled={isUploading || isStreaming}
+                  className="h-8 w-8 md:h-9 md:w-9 rounded-lg text-muted-foreground transition-all hover:bg-accent/60 hover:text-foreground"
+                >
+                  {isUploading ? (
+                    <Loader2 className="h-4 w-4 animate-spin" />
+                  ) : (
+                    <Paperclip className="h-4 w-4 md:h-[17px] md:w-[17px]" />
                 )}
               </Button>
+              )}
               {speech.enabled && (
                 <Button
                   variant="ghost"
@@ -711,7 +735,7 @@ export function SearchBar({ isOpeningChat = false }: { isOpeningChat?: boolean }
                   size="icon"
                   disabled={isStreaming}
                   onClick={dictation.isListening ? dictation.stop : startDictation}
-                  data-tour="dictar"
+                  data-tour={inClass ? undefined : "dictar"}
                   aria-label={dictation.isListening ? "Parar dictado" : "Dictar"}
                   aria-pressed={dictation.isListening}
                   className={`h-8 w-8 md:h-9 md:w-9 rounded-lg transition-all hover:bg-accent/60 ${
