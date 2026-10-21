@@ -17,7 +17,11 @@ export function useReviewAgenda(enabled = true, limit = 50) {
   const load = useCallback(async () => {
     setFailed(false)
     try {
-      setAgenda(await lariaAPI.learning.reviews(timezone(), limit))
+      const loaded = await lariaAPI.learning.reviews(timezone(), limit)
+      // Una respuesta sin la forma de la agenda (otro backend, un proxy) no debe romper
+      // la barra lateral: cuenta como fallo
+      if (!loaded?.counts || !Array.isArray(loaded.items)) throw new Error("Agenda con otra forma")
+      setAgenda(loaded)
     } catch {
       setFailed(true)
     }
