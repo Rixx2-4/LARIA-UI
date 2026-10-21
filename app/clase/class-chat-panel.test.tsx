@@ -112,6 +112,33 @@ describe("ClassChatPanel", () => {
     expect(container.textContent).toBe("")
   })
 
+  it("una respuesta de otro tema ofrece volver a la clase, y eso cierra el panel", async () => {
+    const offTopic = {
+      ...classChat,
+      messages: [
+        { role: "user", content: "¿Quién ganó el mundial?" },
+        {
+          role: "assistant",
+          content: "Argentina. Volvamos a la fase luminosa.",
+          metadata: { type: "answer", payload: { in_class: true, concept_title: "La fase luminosa", off_topic: true } },
+        },
+        {
+          role: "assistant",
+          content: "La clorofila absorbe luz.",
+          metadata: { type: "answer", payload: { in_class: true, concept_title: "La fase luminosa" } },
+        },
+      ],
+    }
+    backend((url) => (url.endsWith("/learning/paths/p1/chat") ? json(offTopic) : undefined))
+    const onOpenChange = vi.fn()
+    render(<Panel onOpenChange={onOpenChange} />)
+
+    const back = await screen.findAllByRole("button", { name: "Volver a la clase" })
+    expect(back).toHaveLength(1)
+    fireEvent.click(back[0])
+    expect(onOpenChange).toHaveBeenCalledWith(false)
+  })
+
   it("si falla al abrir, se puede reintentar", async () => {
     let fail = true
     backend((url) => (url.endsWith("/learning/paths/p1/chat") && fail ? json({ detail: "Error" }, 500) : undefined))

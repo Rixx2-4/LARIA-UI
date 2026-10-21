@@ -10,7 +10,9 @@ import { RequireAuth } from "../components/require-auth"
 import { LariaMascot } from "../components/laria-mascot"
 import { DeleteClassDialog } from "../components/delete-class-dialog"
 import { lariaAPI, type LearningPath, type PathModule, type PlacementLevel } from "@/lib/laria-api"
-import { classHref, passageTestHref, placementHref } from "@/lib/routes"
+import { classHref, passageTestHref, placementHref, REVIEWS_HREF } from "@/lib/routes"
+import { dueCount } from "@/lib/reviews"
+import { useReviewAgenda } from "@/hooks/use-review-agenda"
 import { classGroups, currentTier, lastStudied, masterySteps, moduleLabel, tierDone, tierProgress } from "@/lib/classes"
 import { LEVEL_NAME } from "../quiz/quiz-parts"
 import { DailyProgress } from "../components/study-progress"
@@ -33,6 +35,8 @@ function Clases() {
   const [paths, setPaths] = useState<LearningPath[] | null>(null)
   const [error, setError] = useState<string | null>(null)
   const [deleting, setDeleting] = useState<LearningPath | null>(null)
+  // Los repasos de hoy (ADR-051): un aviso arriba, si hay alguno
+  const reviewsDue = dueCount(useReviewAgenda(true, 1).agenda)
   // El objetivo de hoy y la racha; sin el endpoint (backend anterior), no se muestra
   const [study, setStudy] = useState<StudyTimeSummary | null>(null)
   useEffect(() => {
@@ -92,6 +96,19 @@ function Clases() {
               )}
             </div>
           </header>
+
+          {reviewsDue > 0 && (
+            <Link
+              href={REVIEWS_HREF}
+              className="flex items-center justify-between gap-3 rounded-2xl border border-border bg-card px-4 py-3 text-sm transition-colors hover:bg-accent"
+            >
+              <span>
+                <span className="font-medium">{reviewsDue === 1 ? "Tienes 1 repaso para hoy" : `Tienes ${reviewsDue} repasos para hoy`}</span>
+                <span className="text-muted-foreground"> · repasar a tiempo ayuda a no olvidarlo</span>
+              </span>
+              <ArrowRight className="h-4 w-4 shrink-0" aria-hidden />
+            </Link>
+          )}
 
           {!paths && !error && <LoadingCards />}
 
