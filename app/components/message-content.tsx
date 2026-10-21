@@ -19,6 +19,13 @@ function CodeBlock({ children }: { children?: React.ReactNode }) {
 }
 
 // Sin rehype-raw a propósito: el HTML que venga en la respuesta se muestra como texto
+// De dónde puede venir una imagen de las respuestas (los mismos que acepta el backend)
+const IMAGE_ORIGINS = ["https://upload.wikimedia.org/", "https://thumb.wikimedia.org/"]
+
+export function isAllowedImage(src: unknown): src is string {
+  return typeof src === "string" && IMAGE_ORIGINS.some((origin) => src.startsWith(origin))
+}
+
 const components: Components = {
   p: ({ children }) => <p className="my-2 first:mt-0 last:mb-0">{children}</p>,
   ul: ({ children }) => <ul className="my-2 list-disc pl-5 space-y-1">{children}</ul>,
@@ -50,18 +57,24 @@ const components: Components = {
     }
     return <CodeBlock>{children}</CodeBlock>
   },
-  // Fotos con licencia de Wikimedia (ADR-048 del backend): el servidor solo deja pasar
-  // las suyas. Sin referer, para no contarle a Wikimedia en qué página se vio
-  img: ({ src, alt }) => (
-    // eslint-disable-next-line @next/next/no-img-element
-    <img
-      src={typeof src === "string" ? src : undefined}
-      alt={alt ?? ""}
-      loading="lazy"
-      referrerPolicy="no-referrer"
-      className="my-2 block max-h-80 max-w-full rounded-lg object-contain"
-    />
-  ),
+  // Fotos con licencia de Wikimedia (ADR-048 del backend). Solo se cargan de sus dos
+  // orígenes: el backend valida las fotos que coloca él, pero el modelo podría escribir
+  // otra imagen a mano (p. ej. inducido por un documento) y cargarla filtraría datos en
+  // su URL. Las demás quedan en su texto alternativo. Sin referer, para no contarle a
+  // Wikimedia en qué página se vio
+  img: ({ src, alt }) =>
+    isAllowedImage(src) ? (
+      // eslint-disable-next-line @next/next/no-img-element
+      <img
+        src={src}
+        alt={alt ?? ""}
+        loading="lazy"
+        referrerPolicy="no-referrer"
+        className="my-2 block max-h-80 max-w-full rounded-lg object-contain"
+      />
+    ) : alt ? (
+      <span className="text-muted-foreground">[Imagen: {alt}]</span>
+    ) : null,
   code: ({ children, className }) => (
     <code className={className ?? "rounded bg-foreground/[0.08] px-1 py-0.5 text-[13px]"}>{children}</code>
   ),

