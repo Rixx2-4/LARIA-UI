@@ -293,6 +293,8 @@ interface LearningPath {
   // prueba de paso; sin next_tier y completada, la ruta terminó de verdad
   tiers?: PlacementLevel[]
   next_tier?: PlacementLevel | null
+  // Empezó sin pre-test (ADR-055): se le sigue ofreciendo hasta que lo haga
+  placement_skipped?: boolean
   updated_at?: string
   teaching: TeachingState | null
 }
@@ -887,6 +889,11 @@ export const lariaAPI = {
         method: "POST",
         body: JSON.stringify({ assessment }),
       }),
+
+    // Empezar la clase sin pre-test (ADR-055): arranca en el tramo básico sin tocar
+    // el perfil. 409 si la clase ya no espera el pre-test
+    skipPlacement: (pathId: string) =>
+      fetchAPI<LearningPath>(`/learning/paths/${segment(pathId)}/skip-placement`, { method: "POST" }),
 
     // El chat para preguntarle a LARIA durante la clase (ADR-054): uno por ruta, que
     // se crea la primera vez. 404 con reason "class_questions_disabled" si está apagado
