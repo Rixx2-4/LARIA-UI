@@ -1,6 +1,6 @@
 "use client"
 
-import { useState, type PointerEvent } from "react"
+import { useEffect, useRef, useState, type PointerEvent } from "react"
 import type { RetentionCurve } from "@/lib/laria-api"
 import { percent, shortDate } from "@/lib/reviews"
 
@@ -8,10 +8,11 @@ import { percent, shortDate } from "@/lib/reviews"
 // discontinua) y la nota real de cada repaso (puntos), siempre distinguibles. La línea
 // del objetivo marca cuándo toca repasar. Al pasar el ratón se lee el valor estimado
 
-const W = 600
-const H = 220
-const PAD = { top: 16, right: 16, bottom: 28, left: 40 }
-const PLOT_W = W - PAD.left - PAD.right
+// El ancho del dibujo es el de la pantalla (así el texto no encoge en el móvil); arriba
+// queda sitio para la etiqueta del valor bajo el puntero
+const DEFAULT_W = 600
+const H = 230
+const PAD = { top: 32, right: 16, bottom: 28, left: 40 }
 const PLOT_H = H - PAD.top - PAD.bottom
 
 // now: el instante de «Hoy» (por defecto, al abrirla)
@@ -19,6 +20,16 @@ export function ForgettingCurve({ curve, now: fixedNow }: { curve: RetentionCurv
   const [openedAt] = useState(() => Date.now())
   const now = fixedNow ?? openedAt
   const [hover, setHover] = useState<number | null>(null)
+  const figureRef = useRef<HTMLElement>(null)
+  const [W, setW] = useState(DEFAULT_W)
+  useEffect(() => {
+    const figure = figureRef.current
+    if (!figure || typeof ResizeObserver === "undefined") return
+    const observer = new ResizeObserver(([entry]) => setW(Math.max(280, Math.round(entry.contentRect.width))))
+    observer.observe(figure)
+    return () => observer.disconnect()
+  }, [])
+  const PLOT_W = W - PAD.left - PAD.right
   const times = [
     ...curve.estimated.map((p) => Date.parse(p.at)),
     ...curve.measured.map((p) => Date.parse(p.at)),
@@ -53,7 +64,7 @@ export function ForgettingCurve({ curve, now: fixedNow }: { curve: RetentionCurv
   }`
 
   return (
-    <figure className="space-y-3">
+    <figure ref={figureRef} className="space-y-3">
       <ul className="flex flex-wrap gap-x-4 gap-y-1 text-xs text-muted-foreground" aria-hidden>
         <li className="flex items-center gap-1.5">
           <svg width="20" height="8" className="shrink-0">
@@ -140,7 +151,7 @@ export function ForgettingCurve({ curve, now: fixedNow }: { curve: RetentionCurv
             <circle cx={x(Date.parse(hovered.at))} cy={y(hovered.retention)} r="4" fill="var(--chart-1)" stroke="var(--background)" strokeWidth="2" />
             <text
               x={Math.min(Math.max(x(Date.parse(hovered.at)), PAD.left + 70), W - PAD.right - 70)}
-              y={PAD.top + 12}
+              y={14}
               textAnchor="middle"
               className="fill-foreground text-[12px] font-medium"
             >
