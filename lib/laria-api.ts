@@ -37,17 +37,18 @@ interface TutorEnvelope {
     // Respuesta del chat de una clase (ADR-054): el paso del que habla
     in_class?: boolean
     concept_title?: string | null
+    // La pregunta era de otro tema: se contestó corto y se ofrece volver a la clase
+    off_topic?: boolean
     [key: string]: unknown
   }
   [key: string]: unknown
 }
 
-// Un esquema Mermaid validado por el servidor; el bloque ya va dentro del markdown
-interface Visual {
-  kind: "mermaid"
-  diagram: string
-  source: string
-}
+// Un esquema Mermaid validado por el servidor o una foto con licencia (ADR-048): los
+// dos ya van dentro del markdown; esto es solo un aviso
+type Visual =
+  | { kind: "mermaid"; diagram: string; source: string }
+  | { kind: "image"; url: string; page_url: string; title: string; author: string; license: string; license_url: string }
 
 interface ChatMessage {
   // "system": notas y avisos que no son de nadie (el backend no responde a ellas)

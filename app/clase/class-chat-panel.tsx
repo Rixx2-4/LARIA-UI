@@ -169,7 +169,7 @@ export function ClassChatPanel({ pathId, concept, conceptTitle, speech, docked, 
       <div className="min-h-0 flex-1">
         {state.kind === "ready" ? (
           <FixedChatProvider chat={state.chat}>
-            <SearchBar inClass={{ concept, speech }} />
+            <SearchBar inClass={{ concept, speech, onBackToClass: () => onOpenChange(false) }} />
           </FixedChatProvider>
         ) : state.kind === "error" ? (
           <div role="alert" className="flex h-full flex-col items-center justify-center gap-3 px-6 text-center">
