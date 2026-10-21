@@ -48,7 +48,7 @@ const check = (id: string) => ({
 
 // La ruta del backend: explica «ecuación»; si no se entiende, la explica de otra
 // manera; luego «despejar»; y termina. Una comprobación pendiente se devuelve igual
-function stubServer({ lessonError, deletes }: { lessonError?: Response; deletes?: string[] } = {}) {
+function stubServer({ lessonError, deletes, skipError }: { lessonError?: Response; deletes?: string[]; skipError?: Response } = {}) {
   const steps = [
     { path: path("check", "ecuacion"), markdown: "Una **ecuación** es una igualdad con una incógnita.\n\n**Ejemplo.** $x + 1 = 3$", check: check("q1") },
     { path: path("check", "ecuacion", {}, "Lo explico de otra manera, con una balanza."), markdown: "Piensa en una **balanza** en equilibrio.", check: check("q2") },
@@ -59,7 +59,7 @@ function stubServer({ lessonError, deletes }: { lessonError?: Response; deletes?
     { outcome: "understood", next: { phase: "advance", concept: "despejar", concept_title: "Despejar la x", variant: null, reason: "¡Bien! Pasamos a despejar la x." } },
     { outcome: "understood", next: { phase: "completed", concept: null, concept_title: null, variant: null, reason: "¡Ruta terminada!" } },
   ]
-  const server = { step: 0, lessons: 0, checks: [] as unknown[] }
+  const server = { step: 0, lessons: 0, checks: [] as unknown[], skips: 0 }
   vi.stubGlobal("fetch", async (url: string, init?: RequestInit) => {
     const method = init?.method ?? "GET"
     if (url.endsWith("/users/me")) return json({ id: "u1", username: "ana", email: "a@a.a" })
@@ -71,11 +71,18 @@ function stubServer({ lessonError, deletes }: { lessonError?: Response; deletes?
       return new Response(null, { status: 204 })
     }
     if (url.endsWith("/learning/paths/p1")) return json(path("assessment", null))
+    // Empezar sin pre-test (ADR-055): la clase deja de pedir la nivelación
+    if (url.endsWith("/learning/paths/p1/skip-placement") && method === "POST") {
+      server.skips++
+      if (skipError) return skipError.clone()
+      return json({ ...path("teaching", "ecuacion"), placement_skipped: true })
+    }
     if (url.endsWith("/learning/paths/p1/lesson") && method === "POST") {
       server.lessons++
-      if (lessonError) return lessonError.clone()
+      if (lessonError && !server.skips) return lessonError.clone()
       if (server.step >= steps.length) return json({ path: path("completed", null, { ecuacion: "completed", despejar: "completed" }), markdown: null, check: null })
-      return json(steps[server.step])
+      const step = steps[server.step]
+      return json(server.skips ? { ...step, path: { ...step.path, placement_skipped: true } } : step)
     }
     if (url.endsWith("/learning/paths/p1/check") && method === "POST") {
       const body = JSON.parse(String(init?.body))
@@ -180,13 +187,38 @@ describe("Clase guiada", () => {
     expect(server.checks).toEqual([])
   })
 
-  it("sin nivelación del tema (409) lleva a hacerla", async () => {
+  it("sin nivelación del tema (409) ofrece hacer el pre-test", async () => {
     stubServer({ lessonError: json({ detail: "Primero haz la nivelación de «ecuaciones lineales»." }, 409) })
     renderPage()
 
     expect(await screen.findByText("Primero haz la nivelación de «ecuaciones lineales».")).toBeTruthy()
-    const link = await screen.findByRole("link", { name: "Hacer la nivelación" })
+    const link = await screen.findByRole("link", { name: "Hacer el pre-test" })
     await waitFor(() => expect(link.getAttribute("href")).toBe("/nivelacion?tema=ecuaciones+lineales"))
+  })
+
+  it("sin nivelación se puede empezar sin pre-test, y se le sigue ofreciendo en la clase", async () => {
+    const server = stubServer({ lessonError: json({ detail: "Primero haz la nivelación de «ecuaciones lineales»." }, 409) })
+    renderPage()
+
+    fireEvent.click(await screen.findByRole("button", { name: "Empezar sin pre-test" }))
+
+    expect(await screen.findByText("q1: ¿Qué es una ecuación?")).toBeTruthy()
+    expect(server.skips).toBe(1)
+    expect(await screen.findByText(/Empezaste sin pre-test/)).toBeTruthy()
+    const link = screen.getByRole("link", { name: "Hacer el pre-test" })
+    expect(link.getAttribute("href")).toBe("/nivelacion?tema=ecuaciones+lineales")
+  })
+
+  it("si no se puede empezar sin pre-test, lo dice sin perder la opción de hacerlo", async () => {
+    stubServer({
+      lessonError: json({ detail: "Primero haz la nivelación de «ecuaciones lineales»." }, 409),
+      skipError: json({ detail: "Esta clase ya empezó: el pre-test solo se puede saltar al principio." }, 409),
+    })
+    renderPage()
+
+    fireEvent.click(await screen.findByRole("button", { name: "Empezar sin pre-test" }))
+
+    expect(await screen.findByText("Esta clase ya empezó: el pre-test solo se puede saltar al principio.")).toBeTruthy()
   })
 
   it("un tema que el backend no trabaja (422) se explica sin «Reintentar» y deja elegir otro", async () => {
