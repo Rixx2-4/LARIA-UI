@@ -1,6 +1,6 @@
 "use client"
 
-import { useCallback, useEffect, useRef, useState } from "react"
+import { useCallback, useEffect, useMemo, useRef, useState } from "react"
 import Link from "next/link"
 import { useParams, useRouter } from "next/navigation"
 import { Check, Circle, CircleDot, Lock, Loader2, RefreshCw, Trash2 } from "lucide-react"
@@ -18,8 +18,9 @@ import { ClassStudyBar } from "@/app/components/study-progress"
 import { DeleteClassDialog } from "@/app/components/delete-class-dialog"
 import { NextSuggestions } from "@/app/components/next-suggestions"
 import { BeforeStart, type StudySetup } from "@/app/components/before-start"
+import { PomodoroTimer } from "../pomodoro-timer"
 import { ClassChatPanel, useClassChatOpen, useClassQuestionsEnabled, useDocked } from "../class-chat-panel"
-import { ApiError, isUnsafeTopic, lariaAPI, type AssessmentMix, type CheckResponse, type LessonOptions, type LearningPath, type PathModule, type QuizResponse } from "@/lib/laria-api"
+import { ApiError, isUnsafeTopic, lariaAPI, type AssessmentMix, type CheckResponse, type LessonOptions, type StudyPace, type LearningPath, type PathModule, type QuizResponse } from "@/lib/laria-api"
 import { CLASSES_HREF, NEW_CHAT_HREF, passageTestHref, placementHref, PROFILE_HREF } from "@/lib/routes"
 
 // La clase guiada de una ruta: explicación de un concepto, una comprobación corta y,
@@ -94,6 +95,28 @@ function Clase() {
   // La última pantalla de «Antes de empezar», para volver a ella si lo elegido no vale
   const setupRef = useRef<Extract<View, { kind: "setup" }> | null>(null)
 
+  // El ritmo guardado en la ruta: con Pomodoro, su temporizador (los minutos, del catálogo)
+  const [paces, setPaces] = useState<StudyPace[] | null>(null)
+  const paceKey = path?.study_pace
+  useEffect(() => {
+    if (!paceKey || paceKey === "free" || paces) return
+    let cancelled = false
+    lariaAPI.learning
+      .studyMethods()
+      .then((catalog) => !cancelled && setPaces(catalog.paces))
+      // Sin catálogo no hay temporizador
+      .catch(() => {})
+    return () => {
+      cancelled = true
+    }
+  }, [paceKey, paces])
+  const pomodoro = useMemo(() => {
+    const pace = paces?.find((p) => p.key === paceKey)
+    return pace?.focus_minutes && pace.break_minutes
+      ? { key: pace.key, focus_minutes: pace.focus_minutes, break_minutes: pace.break_minutes }
+      : null
+  }, [paces, paceKey])
+
   const loadLesson = useCallback(async () => {
     setView({ kind: "loading" })
     setCurrent(0)
@@ -133,6 +156,7 @@ function Clase() {
       const current = await lariaAPI.paths.get(pathId).catch(() => null)
       if (current?.teaching && !current.teaching.pending_check_quiz_id && current.teaching.phase !== "completed") {
         const catalog = prefs?.study_methods_enabled ? await lariaAPI.learning.studyMethods(pathId).catch(() => null) : null
+        if (catalog) setPaces(catalog.paces)
         if (mix || catalog) {
           const chosen = current.study_method ?? prefs?.study_method ?? null
           const study = catalog && {
@@ -214,6 +238,10 @@ function Clase() {
 
             <main className={`min-w-0 space-y-6 ${chatDocked ? "2xl:col-start-2" : "lg:col-start-2"}`}>
               <ClassStudyBar summary={studySummary} sessionSeconds={sessionSeconds} />
+              {/* El ritmo Pomodoro de esta clase, mientras se estudia (no al elegirlo ni al terminar) */}
+              {pomodoro && (view.kind === "lesson" || view.kind === "result" || view.kind === "loading") && (
+                <PomodoroTimer key={pomodoro.key} pathId={pathId} pace={pomodoro} />
+              )}
               <header className="flex items-start gap-3">
                 <div className="min-w-0 flex-1 space-y-1">
                   <p className="text-sm text-muted-foreground">Clase · {title}</p>
