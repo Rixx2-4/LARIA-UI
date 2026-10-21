@@ -10,6 +10,7 @@ import { ProfileSkeleton } from "../components/skeletons"
 import { LEVEL_NAME } from "../quiz/quiz-parts"
 import { StylePicker } from "../components/style-picker"
 import { AssessmentPicker } from "../components/assessment-picker"
+import { StudyDefaultsPicker } from "../components/study-defaults"
 import { useAuth } from "@/app/contexts/auth-context"
 import { placementHref, quizHref } from "@/lib/routes"
 import { VoicePicker } from "../components/voice-picker"
@@ -370,6 +371,7 @@ function Perfil() {
         )}
 
         <div className="mx-4 md:mx-6 mb-5 empty:hidden">
+          <StudyDefaultsPicker />
           <AssessmentPicker />
         </div>
 

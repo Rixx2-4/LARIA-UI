@@ -280,6 +280,9 @@ interface TeachingState {
   last_outcome: CheckOutcome | null
   passed_concepts: string[]
   reason: string | null
+  // El método aplicado a este paso (ADR-055); puede no ser el elegido si le falta un
+  // requisito, y entonces reason dice por qué. null = «que decida LARIA»
+  study_method?: StudyMethodKey | null
 }
 
 interface LearningPath {
@@ -296,6 +299,9 @@ interface LearningPath {
   next_tier?: PlacementLevel | null
   // Empezó sin pre-test (ADR-055): se le sigue ofreciendo hasta que lo haga
   placement_skipped?: boolean
+  // Lo elegido en «Antes de empezar» para esta ruta (ADR-055); null = «que decida LARIA»
+  study_method?: StudyMethodKey | null
+  study_pace?: StudyPaceKey | null
   updated_at?: string
   teaching: TeachingState | null
 }
@@ -440,6 +446,51 @@ interface LearningPreferences {
   open_questions_enabled?: boolean
   // Si se le puede preguntar a LARIA durante la clase (ADR-054)
   class_questions_enabled?: boolean
+  // Método y ritmo por defecto de las rutas nuevas (ADR-055), y si se ofrecen
+  study_method?: StudyMethodKey | null
+  study_pace?: StudyPaceKey | null
+  study_methods_enabled?: boolean
+}
+
+// Métodos de estudio y ritmos (ADR-055). Los textos los escribe el backend
+type StudyMethodKey = "active_recall" | "feynman" | "worked_examples" | "elaboration" | "interleaving"
+type StudyPaceKey = "free" | "pomodoro_25_5" | "pomodoro_15_3"
+
+interface StudyMethod {
+  key: StudyMethodKey
+  name: string
+  summary: string
+  good_for: string
+  // Un método no disponible se muestra desactivado, con su motivo
+  available: boolean
+  unavailable_reason: string | null
+  unavailable_text: string | null
+  // Como mucho uno, por el nivel de la ruta; se señala, nunca se preselecciona
+  recommended: boolean
+  recommended_text: string | null
+}
+
+interface StudyPace {
+  key: StudyPaceKey
+  name: string
+  // null en «Libre»: sin temporizador
+  focus_minutes: number | null
+  break_minutes: number | null
+}
+
+interface StudyCatalog {
+  methods: StudyMethod[]
+  paces: StudyPace[]
+  default_method: StudyMethodKey | null
+  default_pace: StudyPaceKey
+}
+
+// Lo que se elige en «Antes de empezar» y se GUARDA en la ruta. Ausente = mantener lo
+// que tenga; null = «que decida LARIA»
+interface LessonOptions {
+  assessment?: AssessmentMix
+  study_method?: StudyMethodKey | null
+  study_pace?: StudyPaceKey | null
 }
 
 // Cómo prefiere que le expliquen; vale para todo, con y sin material
@@ -982,10 +1033,10 @@ export const lariaAPI = {
     // Con una comprobación pendiente devuelve la MISMA: recargar la clase es seguro
     // assessment: la mezcla de preguntas de la comprobación nueva; si ya hay una
     // pendiente, el backend devuelve esa tal cual
-    lesson: (pathId: string, assessment?: AssessmentMix) =>
+    lesson: (pathId: string, options: LessonOptions = {}) =>
       fetchAPI<LessonResponse>(`/learning/paths/${segment(pathId)}/lesson`, {
         method: "POST",
-        body: JSON.stringify({ assessment }),
+        body: JSON.stringify(options),
       }),
 
     check: (pathId: string, quizId: string, answers: Record<number, string>) =>
@@ -1034,6 +1085,16 @@ export const lariaAPI = {
         method: "PUT",
         body: JSON.stringify({ explanation_style: explanationStyle }),
       }),
+    // El método y el ritmo por defecto de las rutas nuevas (ADR-055); el PUT mezcla
+    setStudyDefaults: (study: { study_method?: StudyMethodKey | null; study_pace?: StudyPaceKey | null }) =>
+      fetchAPI<LearningPreferences>("/learning/me/preferences", {
+        method: "PUT",
+        body: JSON.stringify(study),
+      }),
+    // Con path_id, available y recommended se calculan para esa ruta. 404
+    // study_methods_disabled con el interruptor apagado
+    studyMethods: (pathId?: string) =>
+      fetchAPI<StudyCatalog>(`/learning/study-methods${pathId ? `?path_id=${encodeURIComponent(pathId)}` : ""}`),
     // El PUT mezcla: mandar solo assessment no toca el estilo (ADR-052)
     setAssessment: (assessment: AssessmentMix) =>
       fetchAPI<LearningPreferences>("/learning/me/preferences", {
@@ -1088,6 +1149,6 @@ export type {
   QuizResponse, QuizQuestion, QuizAttemptResponse, QuizAttemptQuestion, QuestionKind, OpenVerdict, AssessmentMix, LearningPreferences,
   StreamCallbacks, TutorEnvelope, PlacementResult, PlacementLevel, ExplanationStyle,
   TutorVoice, VoicesResponse, NextSuggestion, StudyGoals, StudyTimeSummary, SessionMinutes, DailyGoalMinutes,
-  LegalDocument, ReviewStatus, ReviewItem, ReviewAgenda, RetentionCurve,
+  LegalDocument, StudyMethodKey, StudyPaceKey, StudyMethod, StudyPace, StudyCatalog, LessonOptions, ReviewStatus, ReviewItem, ReviewAgenda, RetentionCurve,
   LearningPath, PathModule, PathModuleStatus, TeachingState, TeachingPhase, LessonResponse, CheckResponse, CheckOutcome,
 }

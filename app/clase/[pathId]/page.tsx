@@ -1,6 +1,6 @@
 "use client"
 
-import { useCallback, useEffect, useRef, useState } from "react"
+import { useCallback, useEffect, useMemo, useRef, useState } from "react"
 import Link from "next/link"
 import { useParams, useRouter } from "next/navigation"
 import { Check, Circle, CircleDot, Lock, Loader2, RefreshCw, Trash2 } from "lucide-react"
@@ -17,9 +17,10 @@ import { useStudyTime } from "@/hooks/use-study-time"
 import { ClassStudyBar } from "@/app/components/study-progress"
 import { DeleteClassDialog } from "@/app/components/delete-class-dialog"
 import { NextSuggestions } from "@/app/components/next-suggestions"
-import { BeforeStart, defaultAssessment } from "@/app/components/before-start"
+import { BeforeStart, type StudySetup } from "@/app/components/before-start"
+import { PomodoroTimer } from "../pomodoro-timer"
 import { ClassChatPanel, useClassChatOpen, useClassQuestionsEnabled, useDocked } from "../class-chat-panel"
-import { ApiError, isUnsafeTopic, lariaAPI, type AssessmentMix, type CheckResponse, type LearningPath, type PathModule, type QuizResponse } from "@/lib/laria-api"
+import { ApiError, isUnsafeTopic, lariaAPI, type AssessmentMix, type CheckResponse, type LessonOptions, type StudyPace, type LearningPath, type PathModule, type QuizResponse } from "@/lib/laria-api"
 import { CLASSES_HREF, NEW_CHAT_HREF, passageTestHref, placementHref, PROFILE_HREF } from "@/lib/routes"
 
 // La clase guiada de una ruta: explicación de un concepto, una comprobación corta y,
@@ -29,7 +30,8 @@ import { CLASSES_HREF, NEW_CHAT_HREF, passageTestHref, placementHref, PROFILE_HR
 type View =
   | { kind: "loading" }
   // Antes de la primera comprobación de la sesión: cómo evaluar (con las abiertas activas)
-  | { kind: "setup"; mix: AssessmentMix }
+  // y, con los métodos activos, cómo estudiar (ADR-055)
+  | { kind: "setup"; mix: AssessmentMix | null; study: StudySetup | null; error?: string | null }
   // refused: el backend no trabaja este tema (filtro de seguridad): reintentar no sirve
   | { kind: "error"; message: string; needsPlacement: boolean; refused?: boolean }
   | { kind: "lesson"; markdown: string; check: QuizResponse }
@@ -87,8 +89,33 @@ function Clase() {
   const chat = useClassChatOpen(docked)
   const chatDocked = questionsEnabled && docked && chat.open
 
-  // La mezcla elegida en «Antes de empezar»: vale para todas las comprobaciones de la sesión
-  const assessmentRef = useRef<AssessmentMix | undefined>(undefined)
+  // Lo elegido en «Antes de empezar»: va en la siguiente lección y el backend lo guarda
+  // en la ruta (ADR-055), así que después no hace falta repetirlo
+  const optionsRef = useRef<LessonOptions>({})
+  // La última pantalla de «Antes de empezar», para volver a ella si lo elegido no vale
+  const setupRef = useRef<Extract<View, { kind: "setup" }> | null>(null)
+
+  // El ritmo guardado en la ruta: con Pomodoro, su temporizador (los minutos, del catálogo)
+  const [paces, setPaces] = useState<StudyPace[] | null>(null)
+  const paceKey = path?.study_pace
+  useEffect(() => {
+    if (!paceKey || paceKey === "free" || paces) return
+    let cancelled = false
+    lariaAPI.learning
+      .studyMethods()
+      .then((catalog) => !cancelled && setPaces(catalog.paces))
+      // Sin catálogo no hay temporizador
+      .catch(() => {})
+    return () => {
+      cancelled = true
+    }
+  }, [paceKey, paces])
+  const pomodoro = useMemo(() => {
+    const pace = paces?.find((p) => p.key === paceKey)
+    return pace?.focus_minutes && pace.break_minutes
+      ? { key: pace.key, focus_minutes: pace.focus_minutes, break_minutes: pace.break_minutes }
+      : null
+  }, [paces, paceKey])
 
   const loadLesson = useCallback(async () => {
     setView({ kind: "loading" })
@@ -96,13 +123,19 @@ function Clase() {
     setAnswers({})
     setCheckError(null)
     try {
-      const lesson = await lariaAPI.paths.lesson(pathId, assessmentRef.current)
+      const lesson = await lariaAPI.paths.lesson(pathId, optionsRef.current)
+      optionsRef.current = {}
       setPath(lesson.path)
       setShownStep({ concept: lesson.path.teaching?.concept ?? undefined, title: lesson.path.teaching?.concept_title })
       if (lesson.check) setView({ kind: "lesson", markdown: lesson.markdown ?? "", check: lesson.check })
       else if (lesson.path.teaching?.phase === "completed") setView({ kind: "completed" })
       else setView({ kind: "error", message: "No hay ninguna lección preparada ahora mismo.", needsPlacement: false })
     } catch (error) {
+      // El método elegido dejó de estar disponible: se vuelve a elegir, con el motivo
+      if (error instanceof ApiError && error.reason === "study_method_unavailable" && setupRef.current) {
+        optionsRef.current = {}
+        return setView({ ...setupRef.current, error: error.message })
+      }
       // 409: el tema aún no tiene nivelación. La ruta se pide aparte para saber qué tema es
       const needsPlacement = error instanceof ApiError && error.status === 409
       if (needsPlacement) lariaAPI.paths.get(pathId).then(setPath).catch(() => {})
@@ -111,17 +144,33 @@ function Clase() {
     }
   }, [pathId])
 
-  // Al abrir (o recargar) se retoma donde se quedó. Con las abiertas activas y sin
-  // comprobación pendiente, antes se pregunta cómo evaluar (una pendiente no cambiaría)
+  // Al abrir (o recargar) se retoma donde se quedó. Sin comprobación pendiente (una
+  // pendiente no cambiaría), antes se pregunta cómo evaluar (con las abiertas activas) y
+  // cómo estudiar (con los métodos activos). Se precarga lo de la ruta o, si no tiene
+  // nada, lo de siempre del perfil
   const prepare = useCallback(async () => {
     setView({ kind: "loading" })
-    const mix = await defaultAssessment()
-    if (mix) {
+    const prefs = await lariaAPI.learning.preferences().catch(() => null)
+    const mix = prefs?.open_questions_enabled && prefs.assessment ? prefs.assessment : null
+    if (mix || prefs?.study_methods_enabled) {
       const current = await lariaAPI.paths.get(pathId).catch(() => null)
       if (current?.teaching && !current.teaching.pending_check_quiz_id && current.teaching.phase !== "completed") {
-        setPath(current)
-        setShownStep({ concept: current.teaching.concept ?? undefined, title: current.teaching.concept_title })
-        return setView({ kind: "setup", mix })
+        const catalog = prefs?.study_methods_enabled ? await lariaAPI.learning.studyMethods(pathId).catch(() => null) : null
+        if (catalog) setPaces(catalog.paces)
+        if (mix || catalog) {
+          const chosen = current.study_method ?? prefs?.study_method ?? null
+          const study = catalog && {
+            catalog,
+            // Uno que no está disponible en esta ruta no se precarga
+            method: catalog.methods.some((m) => m.key === chosen && m.available) ? chosen : null,
+            pace: current.study_pace ?? prefs?.study_pace ?? catalog.default_pace,
+          }
+          setPath(current)
+          setShownStep({ concept: current.teaching.concept ?? undefined, title: current.teaching.concept_title })
+          const setup = { kind: "setup" as const, mix, study }
+          setupRef.current = setup
+          return setView(setup)
+        }
       }
     }
     loadLesson()
@@ -189,6 +238,10 @@ function Clase() {
 
             <main className={`min-w-0 space-y-6 ${chatDocked ? "2xl:col-start-2" : "lg:col-start-2"}`}>
               <ClassStudyBar summary={studySummary} sessionSeconds={sessionSeconds} />
+              {/* El ritmo Pomodoro de esta clase, mientras se estudia (no al elegirlo ni al terminar) */}
+              {pomodoro && (view.kind === "lesson" || view.kind === "result" || view.kind === "loading") && (
+                <PomodoroTimer key={pomodoro.key} pathId={pathId} pace={pomodoro} />
+              )}
               <header className="flex items-start gap-3">
                 <div className="min-w-0 flex-1 space-y-1">
                   <p className="text-sm text-muted-foreground">Clase · {title}</p>
@@ -226,10 +279,14 @@ function Clase() {
 
               {view.kind === "setup" && (
                 <BeforeStart
-                  intro="Elige cuántas preguntas quieres en cada comprobación de esta clase."
+                  key={view.error ?? "setup"}
+                  intro={view.study ? "Elige cómo quieres estudiar esta clase." : "Elige cuántas preguntas quieres en cada comprobación de esta clase."}
                   defaultMix={view.mix}
-                  onStart={(mix) => {
-                    assessmentRef.current = mix
+                  study={view.study}
+                  savedInPath
+                  error={view.error}
+                  onStart={(choices) => {
+                    optionsRef.current = choices
                     loadLesson()
                   }}
                 />
