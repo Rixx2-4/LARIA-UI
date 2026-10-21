@@ -825,10 +825,11 @@ export const lariaAPI = {
 
   quizzes: {
     // Quiz de práctica sobre un tema, sin documento: deja evidencia pero no cambia el nivel
-    practice: (topic: string, numQuestions: number = 5) =>
+    // assessment: cuántas escritas y de opción (solo cuenta con open_questions_enabled)
+    practice: (topic: string, numQuestions: number = 5, assessment?: AssessmentMix) =>
       fetchAPI<QuizResponse>("/quizzes/practice", {
         method: "POST",
-        body: JSON.stringify({ topic, num_questions: numQuestions }),
+        body: JSON.stringify({ topic, num_questions: numQuestions, assessment }),
       }),
 
     // Una ronda de nivelación sobre un tema; el backend decide si toca la base o la avanzada
@@ -881,8 +882,11 @@ export const lariaAPI = {
 
     // La prueba de paso al siguiente tramo: preguntas sobre los módulos del tramo
     // terminado de ESTA ruta. Se responde con quizzes.submitAttempt (trae placement)
-    passageTest: (pathId: string) =>
-      fetchAPI<QuizResponse>(`/learning/paths/${segment(pathId)}/passage-test`, { method: "POST" }),
+    passageTest: (pathId: string, assessment?: AssessmentMix) =>
+      fetchAPI<QuizResponse>(`/learning/paths/${segment(pathId)}/passage-test`, {
+        method: "POST",
+        body: JSON.stringify({ assessment }),
+      }),
 
     // El chat para preguntarle a LARIA durante la clase (ADR-054): uno por ruta, que
     // se crea la primera vez. 404 con reason "class_questions_disabled" si está apagado
@@ -908,7 +912,13 @@ export const lariaAPI = {
     },
 
     // Con una comprobación pendiente devuelve la MISMA: recargar la clase es seguro
-    lesson: (pathId: string) => fetchAPI<LessonResponse>(`/learning/paths/${segment(pathId)}/lesson`, { method: "POST" }),
+    // assessment: la mezcla de preguntas de la comprobación nueva; si ya hay una
+    // pendiente, el backend devuelve esa tal cual
+    lesson: (pathId: string, assessment?: AssessmentMix) =>
+      fetchAPI<LessonResponse>(`/learning/paths/${segment(pathId)}/lesson`, {
+        method: "POST",
+        body: JSON.stringify({ assessment }),
+      }),
 
     check: (pathId: string, quizId: string, answers: Record<number, string>) =>
       fetchAPI<CheckResponse>(`/learning/paths/${segment(pathId)}/check`, {

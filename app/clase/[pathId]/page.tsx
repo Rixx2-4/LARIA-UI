@@ -1,6 +1,6 @@
 "use client"
 
-import { useCallback, useEffect, useState } from "react"
+import { useCallback, useEffect, useRef, useState } from "react"
 import Link from "next/link"
 import { useParams, useRouter } from "next/navigation"
 import { Check, Circle, CircleDot, Lock, Loader2, RefreshCw, Trash2 } from "lucide-react"
@@ -17,8 +17,9 @@ import { useStudyTime } from "@/hooks/use-study-time"
 import { ClassStudyBar } from "@/app/components/study-progress"
 import { DeleteClassDialog } from "@/app/components/delete-class-dialog"
 import { NextSuggestions } from "@/app/components/next-suggestions"
+import { BeforeStart, defaultAssessment } from "@/app/components/before-start"
 import { ClassChatPanel, useClassChatOpen, useClassQuestionsEnabled, useDocked } from "../class-chat-panel"
-import { ApiError, isUnsafeTopic, lariaAPI, type CheckResponse, type LearningPath, type PathModule, type QuizResponse } from "@/lib/laria-api"
+import { ApiError, isUnsafeTopic, lariaAPI, type AssessmentMix, type CheckResponse, type LearningPath, type PathModule, type QuizResponse } from "@/lib/laria-api"
 import { CLASSES_HREF, NEW_CHAT_HREF, passageTestHref, placementHref, PROFILE_HREF } from "@/lib/routes"
 
 // La clase guiada de una ruta: explicación de un concepto, una comprobación corta y,
@@ -27,6 +28,8 @@ import { CLASSES_HREF, NEW_CHAT_HREF, passageTestHref, placementHref, PROFILE_HR
 
 type View =
   | { kind: "loading" }
+  // Antes de la primera comprobación de la sesión: cómo evaluar (con las abiertas activas)
+  | { kind: "setup"; mix: AssessmentMix }
   // refused: el backend no trabaja este tema (filtro de seguridad): reintentar no sirve
   | { kind: "error"; message: string; needsPlacement: boolean; refused?: boolean }
   | { kind: "lesson"; markdown: string; check: QuizResponse }
@@ -83,13 +86,16 @@ function Clase() {
   const chat = useClassChatOpen(docked)
   const chatDocked = questionsEnabled && docked && chat.open
 
+  // La mezcla elegida en «Antes de empezar»: vale para todas las comprobaciones de la sesión
+  const assessmentRef = useRef<AssessmentMix | undefined>(undefined)
+
   const loadLesson = useCallback(async () => {
     setView({ kind: "loading" })
     setCurrent(0)
     setAnswers({})
     setCheckError(null)
     try {
-      const lesson = await lariaAPI.paths.lesson(pathId)
+      const lesson = await lariaAPI.paths.lesson(pathId, assessmentRef.current)
       setPath(lesson.path)
       setShownStep({ concept: lesson.path.teaching?.concept ?? undefined, title: lesson.path.teaching?.concept_title })
       if (lesson.check) setView({ kind: "lesson", markdown: lesson.markdown ?? "", check: lesson.check })
@@ -104,11 +110,27 @@ function Clase() {
     }
   }, [pathId])
 
-  useEffect(() => {
-    // Al abrir (o recargar) se retoma donde se quedó
-    // eslint-disable-next-line react-hooks/set-state-in-effect
+  // Al abrir (o recargar) se retoma donde se quedó. Con las abiertas activas y sin
+  // comprobación pendiente, antes se pregunta cómo evaluar (una pendiente no cambiaría)
+  const prepare = useCallback(async () => {
+    setView({ kind: "loading" })
+    const mix = await defaultAssessment()
+    if (mix) {
+      const current = await lariaAPI.paths.get(pathId).catch(() => null)
+      if (current?.teaching && !current.teaching.pending_check_quiz_id && current.teaching.phase !== "completed") {
+        setPath(current)
+        setShownStep({ concept: current.teaching.concept ?? undefined, title: current.teaching.concept_title })
+        return setView({ kind: "setup", mix })
+      }
+    }
     loadLesson()
-  }, [loadLesson])
+  }, [pathId, loadLesson])
+
+  useEffect(() => {
+    // El estado se actualiza tras las respuestas
+    // eslint-disable-next-line react-hooks/set-state-in-effect
+    prepare()
+  }, [prepare])
 
   // La lectura de la pizarra se corta al salir de la clase
   const { stop: stopSpeech } = speech
@@ -183,6 +205,17 @@ function Clase() {
                       : "Suele tardar unos segundos."}
                   </p>
                 </div>
+              )}
+
+              {view.kind === "setup" && (
+                <BeforeStart
+                  intro="Elige cuántas preguntas quieres en cada comprobación de esta clase."
+                  defaultMix={view.mix}
+                  onStart={(mix) => {
+                    assessmentRef.current = mix
+                    loadLesson()
+                  }}
+                />
               )}
 
               {view.kind === "error" && (

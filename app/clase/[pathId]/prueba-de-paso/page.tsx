@@ -1,6 +1,6 @@
 "use client"
 
-import { useCallback, useEffect, useState } from "react"
+import { useCallback, useEffect, useRef, useState } from "react"
 import Link from "next/link"
 import { useParams } from "next/navigation"
 import { Loader2, RefreshCw } from "lucide-react"
@@ -8,8 +8,9 @@ import { Button } from "@/components/ui/button"
 import { AppShell } from "@/app/components/app-shell"
 import { RequireAuth } from "@/app/components/require-auth"
 import { LariaMascot } from "@/app/components/laria-mascot"
+import { BeforeStart, defaultAssessment } from "@/app/components/before-start"
 import { LEVEL_NAME, QuestionStep, ResultsList, submitErrorMessage, toResults, type QuizResult } from "@/app/quiz/quiz-parts"
-import { ApiError, isUnsafeTopic, lariaAPI, type LearningPath, type PlacementResult, type QuizResponse } from "@/lib/laria-api"
+import { ApiError, isUnsafeTopic, lariaAPI, type AssessmentMix, type LearningPath, type PlacementResult, type QuizResponse } from "@/lib/laria-api"
 import { classHref } from "@/lib/routes"
 
 // La prueba de paso de UNA ruta: preguntas sobre los módulos del tramo que acaba de
@@ -19,6 +20,8 @@ import { classHref } from "@/lib/routes"
 
 type View =
   | { kind: "loading" }
+  // Con las abiertas activas: cómo evaluar, antes de pedir la prueba
+  | { kind: "setup"; mix: AssessmentMix }
   | { kind: "error"; message: string; retry: boolean }
   | { kind: "questions"; quiz: QuizResponse }
   | { kind: "grading"; quiz: QuizResponse }
@@ -42,6 +45,8 @@ function PruebaDePaso() {
   const [answers, setAnswers] = useState<Record<number, string>>({})
   const [error, setError] = useState<string | null>(null)
 
+  const assessmentRef = useRef<AssessmentMix | undefined>(undefined)
+
   const start = useCallback(async () => {
     setView({ kind: "loading" })
     setCurrent(0)
@@ -50,7 +55,7 @@ function PruebaDePaso() {
     // La ruta, para saber a qué tramo se opta y volver a ella
     lariaAPI.paths.get(pathId).then(setPath).catch(() => {})
     try {
-      const quiz = await lariaAPI.paths.passageTest(pathId)
+      const quiz = await lariaAPI.paths.passageTest(pathId, assessmentRef.current)
       if (!quiz.questions?.length) throw new Error("No se pudieron preparar las preguntas. Prueba de nuevo.")
       setView({ kind: "questions", quiz })
     } catch (err) {
@@ -71,11 +76,19 @@ function PruebaDePaso() {
     }
   }, [pathId])
 
+  // Al abrir se pide la prueba; con las abiertas activas, antes se elige cómo evaluar
+  const prepare = useCallback(async () => {
+    const mix = await defaultAssessment()
+    if (!mix) return start()
+    lariaAPI.paths.get(pathId).then(setPath).catch(() => {})
+    setView({ kind: "setup", mix })
+  }, [pathId, start])
+
   useEffect(() => {
-    // Al abrir, se pide la prueba: el estado se actualiza desde aquí
+    // El estado se actualiza tras las respuestas
     // eslint-disable-next-line react-hooks/set-state-in-effect
-    start()
-  }, [start])
+    prepare()
+  }, [prepare])
 
   const submit = async () => {
     if (view.kind !== "questions") return
@@ -122,6 +135,17 @@ function PruebaDePaso() {
                 Preparando preguntas sobre lo que has estudiado…
               </p>
             </div>
+          )}
+
+          {view.kind === "setup" && (
+            <BeforeStart
+              intro="Preguntas sobre lo que has estudiado en este tramo."
+              defaultMix={view.mix}
+              onStart={(mix) => {
+                assessmentRef.current = mix
+                start()
+              }}
+            />
           )}
 
           {view.kind === "error" && (
