@@ -15,6 +15,19 @@ async function renderMath(ui: React.ReactElement) {
 }
 
 describe("MessageContent", () => {
+  it("pinta la foto de Wikimedia que manda el backend, ajustada al ancho y sin enviar referer", () => {
+    const { container } = render(
+      <MessageContent content={"Así es un volcán:\n\n![Volcán Villarrica](https://thumb.wikimedia.org/v.jpg)\n*Foto: Ana · CC BY-SA 4.0 · Wikimedia Commons*"} />,
+    )
+
+    const img = container.querySelector("img")
+    expect(img?.getAttribute("src")).toBe("https://thumb.wikimedia.org/v.jpg")
+    expect(img?.getAttribute("alt")).toBe("Volcán Villarrica")
+    expect(img?.getAttribute("loading")).toBe("lazy")
+    expect(img?.getAttribute("referrerpolicy")).toBe("no-referrer")
+    expect(img?.className).toContain("max-w-full")
+  })
+
   it("pinta Markdown: negritas, listas y tablas", () => {
     const { container } = render(
       <MessageContent content={"La **mitocondria** produce energía:\n\n- ATP\n- Calor\n\n| Orgánulo | Función |\n|---|---|\n| Núcleo | ADN |"} />,

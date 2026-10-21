@@ -50,6 +50,18 @@ const components: Components = {
     }
     return <CodeBlock>{children}</CodeBlock>
   },
+  // Fotos con licencia de Wikimedia (ADR-048 del backend): el servidor solo deja pasar
+  // las suyas. Sin referer, para no contarle a Wikimedia en qué página se vio
+  img: ({ src, alt }) => (
+    // eslint-disable-next-line @next/next/no-img-element
+    <img
+      src={typeof src === "string" ? src : undefined}
+      alt={alt ?? ""}
+      loading="lazy"
+      referrerPolicy="no-referrer"
+      className="my-2 block max-h-80 max-w-full rounded-lg object-contain"
+    />
+  ),
   code: ({ children, className }) => (
     <code className={className ?? "rounded bg-foreground/[0.08] px-1 py-0.5 text-[13px]"}>{children}</code>
   ),

@@ -73,6 +73,8 @@ interface ClassMode {
   // El paso que se está viendo: LARIA responde sobre ese
   concept?: string
   speech: ReturnType<typeof useSpeech>
+  // Tras una respuesta de otro tema, para cerrar el chat y seguir con la clase
+  onBackToClass?: () => void
 }
 
 export function SearchBar({ isOpeningChat = false, inClass }: { isOpeningChat?: boolean; inClass?: ClassMode }) {
@@ -555,6 +557,15 @@ export function SearchBar({ isOpeningChat = false, inClass }: { isOpeningChat?: 
                         {/* En el chat de una clase: el paso del que habla la respuesta */}
                         {envelope?.payload?.in_class && envelope.payload.concept_title && (
                           <span className="px-1.5 py-0.5 rounded bg-secondary/50">Sobre: {envelope.payload.concept_title}</span>
+                        )}
+                        {/* Preguntó por otro tema: LARIA contestó corto y propone volver */}
+                        {envelope?.payload?.off_topic && inClass?.onBackToClass && (
+                          <button
+                            onClick={inClass.onBackToClass}
+                            className="rounded bg-primary/10 px-1.5 py-0.5 font-medium text-foreground transition-colors hover:bg-primary/20"
+                          >
+                            Volver a la clase
+                          </button>
                         )}
                         {/* Contestó en el chat cómo prefiere aprender y el backend ya lo guardó */}
                         {envelope?.payload?.explanation_style_chosen !== undefined && (
