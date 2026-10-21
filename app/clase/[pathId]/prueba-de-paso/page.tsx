@@ -141,8 +141,8 @@ function PruebaDePaso() {
             <BeforeStart
               intro="Preguntas sobre lo que has estudiado en este tramo."
               defaultMix={view.mix}
-              onStart={(mix) => {
-                assessmentRef.current = mix
+              onStart={(choices) => {
+                assessmentRef.current = choices.assessment
                 start()
               }}
             />
