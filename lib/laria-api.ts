@@ -871,8 +871,13 @@ export const lariaAPI = {
     },
 
     // Genera (y guarda) un quiz nuevo: es un POST, el backend responde 405 a un GET
-    generateQuiz: (chatId: string, numQuestions: number = 5) =>
-      fetchAPI<QuizResponse>(`/chats/${segment(chatId)}/quiz?num_questions=${numQuestions}`, { method: "POST" }),
+    // Con las abiertas activas manda la mezcla (assessment) y no num_questions; sin
+    // ella, el backend usa la del perfil
+    generateQuiz: (chatId: string, numQuestions: number = 5, assessment?: AssessmentMix) =>
+      fetchAPI<QuizResponse>(`/chats/${segment(chatId)}/quiz?num_questions=${numQuestions}`, {
+        method: "POST",
+        ...(assessment && { body: JSON.stringify({ assessment }) }),
+      }),
 
     generateTitle: (messages: { role: string; content: string }[]) =>
       fetchAPI<{ title: string }>("/chats/generate-title", {

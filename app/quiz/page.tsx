@@ -1,6 +1,6 @@
 "use client"
 
-import { Suspense, useState } from "react"
+import { Suspense, useEffect, useState } from "react"
 import { useRouter, useSearchParams } from "next/navigation"
 import { ArrowRight, FileText, MessageSquare, RotateCcw, Settings2, Sparkles } from "lucide-react"
 import { Button } from "@/components/ui/button"
@@ -9,7 +9,9 @@ import { RequireAuth } from "../components/require-auth"
 import { SelectSkeleton } from "../components/skeletons"
 import { useChat } from "@/app/contexts/chat-context"
 import { NEW_CHAT_HREF, chatHref, placementHref, quizHref } from "@/lib/routes"
-import { lariaAPI, QuizQuestion } from "@/lib/laria-api"
+import { lariaAPI, QuizQuestion, type AssessmentMix } from "@/lib/laria-api"
+import { MixSteppers, validMix } from "../components/assessment-picker"
+import { defaultAssessment } from "../components/before-start"
 import { LariaMascot, type MascotEmotion } from "../components/laria-mascot"
 import { QuestionStep, ResultsList, scoreLine, scorePercentage, submitErrorMessage, toResults, type QuizResult } from "./quiz-parts"
 
@@ -63,6 +65,22 @@ function Quiz({ chatId }: { chatId: string | null }) {
   const [isCustomCount, setIsCustomCount] = useState(false)
   // Lo que se está escribiendo; solo se valida al generar
   const [customCountText, setCustomCountText] = useState("")
+  // Con las abiertas activas, el backend arma el quiz con la mezcla (escritas y de
+  // opción) y no con el número: se elige la mezcla, partiendo de la del perfil
+  const [mix, setMix] = useState<AssessmentMix | null>(null)
+  useEffect(() => {
+    let cancelled = false
+    defaultAssessment().then((loaded) => !cancelled && setMix(loaded))
+    return () => {
+      cancelled = true
+    }
+  }, [])
+  const changeMix = (field: keyof AssessmentMix, delta: number) =>
+    setMix((current) => {
+      if (!current) return current
+      const next = { ...current, [field]: current[field] + delta }
+      return validMix(next) ? next : current
+    })
   const [quizId, setQuizId] = useState<string | null>(null)
   const [questions, setQuestions] = useState<QuizQuestion[]>([])
   const [currentQuestion, setCurrentQuestion] = useState(0)
@@ -78,15 +96,15 @@ function Quiz({ chatId }: { chatId: string | null }) {
 
   const generateQuiz = async () => {
     if (!chatId) return
-    const count = isCustomCount ? Number(customCountText) : questionCount
-    if (!Number.isInteger(count) || count < 1 || count > MAX_QUESTIONS) {
+    const count = mix ? mix.open_questions + mix.choice_questions : isCustomCount ? Number(customCountText) : questionCount
+    if (!mix && (!Number.isInteger(count) || count < 1 || count > MAX_QUESTIONS)) {
       setError(`Elige entre 1 y ${MAX_QUESTIONS} preguntas.`)
       return
     }
     setIsLoading(true)
     setError(null)
     try {
-      const data = await lariaAPI.chats.generateQuiz(chatId, count)
+      const data = await lariaAPI.chats.generateQuiz(chatId, count, mix ?? undefined)
       if (data.questions && data.questions.length > 0) {
         setQuizId(data.id)
         setQuestions(data.questions)
@@ -156,7 +174,7 @@ function Quiz({ chatId }: { chatId: string | null }) {
   const percentage = scorePercentage(results)
   const total = results.length
   const mistakes = results.filter((r) => !r.isCorrect)
-  const pendingCount = isCustomCount ? Number(customCountText) || 0 : questionCount
+  const pendingCount = mix ? mix.open_questions + mix.choice_questions : isCustomCount ? Number(customCountText) || 0 : questionCount
   const docChats = chats.filter((c) => c.document_id)
   // Generando (al empezar o con «Otro quiz igual»): LARIA lo cuenta en vez de un botón girando
   const generating = isLoading && step !== "quiz"
@@ -267,6 +285,15 @@ function Quiz({ chatId }: { chatId: string | null }) {
                   <span className="mr-2 inline-flex h-5 w-5 items-center justify-center rounded-full bg-primary text-xs text-primary-foreground">2</span>
                   ¿Cuántas preguntas?
                 </legend>
+                {mix ? (
+                  <div>
+                    <p className="mb-3 text-xs text-muted-foreground">
+                      Las escritas las corrige LARIA y cuentan aunque aciertes solo una parte.
+                    </p>
+                    <MixSteppers mix={mix} onChange={changeMix} />
+                  </div>
+                ) : (
+                <>
                 <div className="grid grid-cols-2 gap-2 sm:grid-cols-4">
                   {PRESETS.map(({ count, label }) => {
                     const active = !isCustomCount && questionCount === count
@@ -322,6 +349,8 @@ function Quiz({ chatId }: { chatId: string | null }) {
                     />
                     <span className="text-xs text-muted-foreground">de 1 a {MAX_QUESTIONS}</span>
                   </div>
+                )}
+                </>
                 )}
               </fieldset>
 
