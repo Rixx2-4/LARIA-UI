@@ -96,7 +96,7 @@ function Clase() {
     setAnswers({})
     setCheckError(null)
     try {
-      const lesson = await lariaAPI.paths.lesson(pathId, assessmentRef.current)
+      const lesson = await lariaAPI.paths.lesson(pathId, { assessment: assessmentRef.current })
       setPath(lesson.path)
       setShownStep({ concept: lesson.path.teaching?.concept ?? undefined, title: lesson.path.teaching?.concept_title })
       if (lesson.check) setView({ kind: "lesson", markdown: lesson.markdown ?? "", check: lesson.check })
