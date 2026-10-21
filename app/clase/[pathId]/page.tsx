@@ -75,6 +75,7 @@ function Clase() {
   const [answers, setAnswers] = useState<Record<number, string>>({})
   const [submitting, setSubmitting] = useState(false)
   const [checkError, setCheckError] = useState<string | null>(null)
+  const [skipping, setSkipping] = useState(false)
   const speech = useSpeech()
   // El tiempo de estudio (cuenta también mientras LARIA explica, aunque no se toque nada)
   const { summary: studySummary, sessionSeconds } = useStudyTime({ busy: !!speech.speaking })
@@ -155,6 +156,22 @@ function Clase() {
     }
   }
 
+  // El pre-test se ofrece, pero no es obligatorio (ADR-055): sin él, la clase
+  // empieza por el tramo básico
+  const startWithoutPlacement = async () => {
+    setSkipping(true)
+    try {
+      setPath(await lariaAPI.paths.skipPlacement(pathId))
+      await loadLesson()
+    } catch (error) {
+      setView({ kind: "error", message: error instanceof Error ? error.message : "No se pudo empezar la clase", needsPlacement: true })
+    } finally {
+      setSkipping(false)
+    }
+  }
+
+  const placementLink = placementHref(path?.topic ?? path?.title ?? undefined)
+
   // Abrir un tramo nuevo investiga en internet y tarda: si la espera se alarga, se explica
   const slowLoading = useSlow(view.kind === "loading")
   const upcomingTier = path?.next_tier ?? null
@@ -231,9 +248,14 @@ function Clase() {
                       </Button>
                     </div>
                   ) : view.needsPlacement ? (
-                    <Button asChild>
-                      <Link href={placementHref(path?.topic ?? path?.title ?? undefined)}>Hacer la nivelación</Link>
-                    </Button>
+                    <div className="flex flex-wrap gap-2">
+                      <Button asChild>
+                        <Link href={placementLink}>Hacer el pre-test</Link>
+                      </Button>
+                      <Button variant="outline" onClick={startWithoutPlacement} disabled={skipping}>
+                        Empezar sin pre-test
+                      </Button>
+                    </div>
                   ) : (
                     <Button variant="outline" onClick={loadLesson} className="gap-2">
                       <RefreshCw className="h-4 w-4" aria-hidden />
@@ -245,6 +267,15 @@ function Clase() {
 
               {view.kind === "lesson" && (
                 <>
+                  {/* Empezó sin pre-test: se le sigue ofreciendo para ajustar el nivel */}
+                  {path?.placement_skipped && (
+                    <p className="text-sm text-muted-foreground">
+                      Empezaste sin pre-test: si lo haces, LARIA ajusta el nivel de la clase.{" "}
+                      <Link href={placementLink} className="font-medium text-foreground underline underline-offset-4">
+                        Hacer el pre-test
+                      </Link>
+                    </p>
+                  )}
                   {/* Por qué toca esto ahora: otra explicación, un repaso previo… */}
                   {teaching?.reason && <p className="rounded-lg bg-muted px-4 py-3 text-sm">{teaching.reason}</p>}
                   {/* La explicación en la pizarra; la comprobación aparece cuando está entera */}
