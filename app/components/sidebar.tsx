@@ -260,6 +260,8 @@ export function Sidebar({ onNavigate }: { onNavigate?: () => void } = {}) {
           <div className="mb-6 flex h-10 shrink-0 items-center px-3">
             <span className="text-xl font-bold tracking-tight text-foreground">Plenum</span>
           </div>
+          {/* Cada lista (Historial, Documentos) se desplaza dentro de su ScrollArea: con
+              min-h-0 se queda en el alto del panel en vez de crecer con sus elementos */}
           <div className="min-h-0 flex-1">
             {openPanel === "history" && (
               <div className="flex flex-col h-full animate-in fade-in duration-300">
@@ -280,7 +282,7 @@ export function Sidebar({ onNavigate }: { onNavigate?: () => void } = {}) {
                 <div className="px-3 py-1.5">
                   <h3 className="text-[11px] font-medium text-muted-foreground">Recientes</h3>
                 </div>
-                <ScrollArea className="flex-1 px-1.5">
+                <ScrollArea className="min-h-0 flex-1 px-1.5">
                   <div className="space-y-0 pb-2">
                     {!chatsLoaded ? (
                       <ChatListSkeleton />
@@ -323,7 +325,7 @@ export function Sidebar({ onNavigate }: { onNavigate?: () => void } = {}) {
                     />
                   </Button>
                 </div>
-                <ScrollArea className="flex-1 px-1.5">
+                <ScrollArea className="min-h-0 flex-1 px-1.5">
                   <div className="space-y-0 pb-2">
                     {!documentsLoaded ? (
                       <DocumentListSkeleton />

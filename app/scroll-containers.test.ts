@@ -37,4 +37,21 @@ describe("contenedores con scroll", () => {
     }
     expect(offenders).toEqual([])
   })
+
+  // Un ScrollArea que ocupa el resto de una columna flex (flex-1) necesita min-h-0: sin
+  // él crece hasta su contenido y no hay nada que desplazar. Pasaba en el Historial de la
+  // barra lateral: con 40 chats la lista medía 1166 px en una ventana de 720 y los últimos
+  // no se podían alcanzar ni con la rueda ni con el dedo. Comprobado en Chrome a 1280×720
+  // y 390×700
+  it("cada ScrollArea que llena una columna flex puede encogerse (min-h-0) para desplazarse", () => {
+    const offenders: string[] = []
+    for (const file of [...sources(join(root, "app")), ...sources(join(root, "components"))]) {
+      const name = relative(root, file)
+      for (const [, classes] of readFileSync(file, "utf8").matchAll(/<ScrollArea\s[^>]*className="([^"]*)"/g)) {
+        const list = classes.split(/\s+/)
+        if (list.includes("flex-1") && !list.includes("min-h-0")) offenders.push(`${name}: ${classes}`)
+      }
+    }
+    expect(offenders).toEqual([])
+  })
 })
