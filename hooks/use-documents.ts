@@ -11,7 +11,8 @@ const MAX_POLLS = 200
 export type DocumentState = "ready" | "failed" | "processing"
 
 export function documentState(doc: Document): DocumentState {
-  if (doc.status === "analysis_failed") return "failed"
+  // "error" es el estado de fallo del backend actual; "analysis_failed", el de antes
+  if (doc.status === "error" || doc.status === "analysis_failed") return "failed"
   if (doc.status === "analyzed" || doc.has_analysis) return "ready"
   return "processing"
 }

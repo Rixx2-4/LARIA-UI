@@ -16,6 +16,9 @@ export function mimeFromFilename(filename: string): string {
 
 // Texto legible tal cual: código, datos y texto plano
 export function isTextMime(mimeType: string): boolean {
+  // Word, PowerPoint y Excel (…openxmlformats-officedocument…) llevan "xml" en el tipo,
+  // pero son un ZIP: leídos como texto saldría basura
+  if (mimeType.includes("officedocument")) return false
   return (
     mimeType.startsWith("text/") ||
     mimeType.includes("json") ||

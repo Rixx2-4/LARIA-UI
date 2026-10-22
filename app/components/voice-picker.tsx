@@ -25,6 +25,10 @@ export function VoicePicker({ className = "" }: { className?: string }) {
   const [preview, setPreview] = useState<{ id: string; loading: boolean } | null>(null)
   const audioRef = useRef<HTMLAudioElement | null>(null)
   const urlRef = useRef<string | null>(null)
+  // Cada escucha tiene su generación: la que llegue tarde (se pulsó otra voz, se paró
+  // o se salió de la página) ya no suena
+  const previewGenRef = useRef(0)
+  const abortRef = useRef<AbortController | null>(null)
 
   useEffect(() => {
     let cancelled = false
@@ -42,6 +46,9 @@ export function VoicePicker({ className = "" }: { className?: string }) {
   }, [])
 
   const stopPreview = () => {
+    previewGenRef.current++
+    abortRef.current?.abort()
+    abortRef.current = null
     audioRef.current?.pause()
     if (urlRef.current) URL.revokeObjectURL(urlRef.current)
     urlRef.current = null
@@ -56,12 +63,16 @@ export function VoicePicker({ className = "" }: { className?: string }) {
   const listen = async (id: string) => {
     if (preview?.id === id) return stopPreview()
     stopPreview()
+    const gen = previewGenRef.current
+    const controller = new AbortController()
+    abortRef.current = controller
     setPreview({ id, loading: true })
     // Dentro del clic: así el navegador deja sonar el audio cuando llegue
     audioRef.current ??= new Audio()
     try {
       const voice = data.voices.find((v) => v.id === id)
-      const blob = await lariaAPI.speech.synthesize(sampleFor(data, voice?.gender), "calm", undefined, id)
+      const blob = await lariaAPI.speech.synthesize(sampleFor(data, voice?.gender), "calm", controller.signal, id)
+      if (gen !== previewGenRef.current) return
       if (!blob) return setPreview(null)
       urlRef.current = URL.createObjectURL(blob)
       const audio = audioRef.current
@@ -70,6 +81,7 @@ export function VoicePicker({ className = "" }: { className?: string }) {
       setPreview({ id, loading: false })
       await audio.play()
     } catch (error) {
+      if (gen !== previewGenRef.current) return
       setPreview(null)
       toast.error("No se pudo reproducir la voz", { description: error instanceof Error ? error.message : undefined })
     }

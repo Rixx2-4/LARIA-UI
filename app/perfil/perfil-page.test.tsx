@@ -272,4 +272,35 @@ describe("PerfilPage", () => {
     expect(await screen.findByText("3 intentos de quiz completados")).toBeTruthy()
     expect(screen.queryByText(/Muestras dificultad repetida/)).toBeNull()
   })
+
+  it("«Actualizar» recarga sin tapar la página, y un intento sin documento no se da por nivelación", async () => {
+    let profileCalls = 0
+    vi.stubGlobal("fetch", async (url: string) => {
+      if (url.endsWith("/users/me")) return json({ id: "u1", username: "ana", email: "a@a.a" })
+      if (url.endsWith("/chats/")) return json({ chats: [] })
+      if (url.endsWith("/documents/")) return json([])
+      if (url.endsWith("/profile")) {
+        profileCalls++
+        return json({ student_id: "u1", pace: "normal", total_attempts: 1, total_struggle_signals: 0, frequent_errors: [], updated_at: "", learning_velocity: 0, pedagogical_memory: null, mastery_by_document: [], mastery_by_concept: [] })
+      }
+      if (url.endsWith("/learning/me"))
+        return json({ attempts: [{ attempt_id: "a1", quiz_id: "q1", document_id: null, score: 3, total_points: 5, completed_at: "2026-10-01T10:00:00Z" }], tutor_interactions: [], recommendations: [] })
+      if (url.includes("/learning/") || url.includes("/speech/")) return json({ detail: "Not Found" }, 404)
+      throw new Error(`Petición inesperada: ${url}`)
+    })
+    render(
+      <AuthProvider>
+        <ChatProvider>
+          <PerfilPage />
+        </ChatProvider>
+      </AuthProvider>,
+    )
+
+    expect(await screen.findByText("Nivelación o práctica")).toBeTruthy()
+    fireEvent.click(screen.getByRole("button", { name: "Actualizar" }))
+    // Sigue a la vista mientras recarga
+    expect(screen.getByText("Nivelación o práctica")).toBeTruthy()
+    await waitFor(() => expect(profileCalls).toBe(2))
+    expect(await screen.findByText("Nivelación o práctica")).toBeTruthy()
+  })
 })

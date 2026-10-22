@@ -1,6 +1,6 @@
 "use client"
 
-import { useCallback, useEffect, useRef, useState } from "react"
+import { useCallback, useEffect, useRef, useState, useSyncExternalStore } from "react"
 
 // Lo mínimo de la Web Speech API que se usa (TypeScript no la incluye)
 interface SpeechRecognitionLike {
@@ -48,6 +48,11 @@ export function dictationErrorMessage(error: string): string | null {
 
 const UNAVAILABLE = new Set(["network", "service-not-allowed", "language-not-supported"])
 
+// Si el navegador dicta solo se sabe en el cliente: en el servidor (y al hidratar) no,
+// para que el HTML de los dos coincida
+const subscribeNothing = () => () => {}
+const hasRecognition = () => getRecognitionCtor() !== null
+
 interface DictationCallbacks {
   // Todo lo dictado en esta pulsación del micrófono: lo ya definitivo y lo que se va
   // entendiendo de la frase en curso. Es el total, no un trozo nuevo: quien lo use
@@ -91,7 +96,10 @@ function isMobile(): boolean {
 
 // Dictado con el reconocimiento de voz del navegador (Chrome, Edge, Safari; no Firefox)
 export function useDictation(callbacks: DictationCallbacks) {
-  const [isSupported, setIsSupported] = useState(() => getRecognitionCtor() !== null)
+  const available = useSyncExternalStore(subscribeNothing, hasRecognition, () => false)
+  // El navegador lo trae pero su servicio falló (Brave, Chromium…): fuera el micrófono
+  const [serviceMissing, setServiceMissing] = useState(false)
+  const isSupported = available && !serviceMissing
   const [isListening, setIsListening] = useState(false)
   const recognitionRef = useRef<SpeechRecognitionLike | null>(null)
   const callbacksRef = useRef(callbacks)
@@ -134,7 +142,7 @@ export function useDictation(callbacks: DictationCallbacks) {
       const message = dictationErrorMessage(event.error)
       if (message) callbacksRef.current.onError?.(message)
       // Sin servicio de dictado no se arreglará reintentando: fuera el micrófono
-      if (UNAVAILABLE.has(event.error)) setIsSupported(false)
+      if (UNAVAILABLE.has(event.error)) setServiceMissing(true)
     }
     recognition.onend = () => {
       recognitionRef.current = null

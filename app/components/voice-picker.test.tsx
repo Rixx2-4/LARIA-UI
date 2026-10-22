@@ -115,4 +115,45 @@ describe("VoicePicker", () => {
     await new Promise((r) => setTimeout(r, 50))
     expect(container.textContent).toBe("")
   })
+
+  it("si se pulsa otra voz mientras carga la primera, la primera ya no suena al llegar", async () => {
+    const pending: ((r: Response) => void)[] = []
+    vi.stubGlobal("fetch", async (url: string, init?: RequestInit) => {
+      if (url.endsWith("/speech/voices")) return json(VOICES)
+      if (url.endsWith("/speech") && init?.method === "POST") return new Promise<Response>((resolve) => pending.push(resolve))
+      throw new Error(`Petición inesperada: ${url}`)
+    })
+    const play = vi.mocked(HTMLMediaElement.prototype.play)
+    render(<VoicePicker />)
+    fireEvent.click(await screen.findByRole("button", { name: "Escuchar Coral" }))
+    fireEvent.click(screen.getByRole("button", { name: "Escuchar Nova" }))
+    await waitFor(() => expect(pending).toHaveLength(2))
+
+    pending[0](new Response(new Blob(["mp3"], { type: "audio/mpeg" })))
+    await new Promise((resolve) => setTimeout(resolve, 20))
+    expect(play).not.toHaveBeenCalled()
+
+    pending[1](new Response(new Blob(["mp3"], { type: "audio/mpeg" })))
+    await waitFor(() => expect(play).toHaveBeenCalledTimes(1))
+    expect(screen.getByRole("button", { name: "Detener Nova" })).toBeTruthy()
+  })
+
+  it("si se sale de la página mientras carga, no suena después", async () => {
+    let answer: ((r: Response) => void) | null = null
+    vi.stubGlobal("fetch", async (url: string, init?: RequestInit) => {
+      if (url.endsWith("/speech/voices")) return json(VOICES)
+      if (url.endsWith("/speech") && init?.method === "POST") return new Promise<Response>((resolve) => (answer = resolve))
+      throw new Error(`Petición inesperada: ${url}`)
+    })
+    const play = vi.mocked(HTMLMediaElement.prototype.play)
+    const { unmount } = render(<VoicePicker />)
+    fireEvent.click(await screen.findByRole("button", { name: "Escuchar Coral" }))
+    // La petición ya salió y aún no ha vuelto
+    await waitFor(() => expect(answer).not.toBeNull())
+    unmount()
+
+    answer!(new Response(new Blob(["mp3"], { type: "audio/mpeg" })))
+    await new Promise((resolve) => setTimeout(resolve, 20))
+    expect(play).not.toHaveBeenCalled()
+  })
 })

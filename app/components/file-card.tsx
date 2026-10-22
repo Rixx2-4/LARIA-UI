@@ -2,7 +2,7 @@
 
 import { Loader2, X } from "lucide-react"
 import { FileTypeIcon } from "./file-type-icon"
-import { useDocumentStatus } from "@/hooks/use-document-status"
+import { isAnalysisPending, useDocumentStatus } from "@/hooks/use-document-status"
 
 interface FileCardProps {
   filename: string
@@ -67,13 +67,13 @@ export function FileCard({ filename, size, mimeType, documentId, documentStatus,
           <p className="text-xs text-muted-foreground">
             {getFileTypeLabel(mimeType)}{size !== undefined && ` · ${formatSize(size)}`}
           </p>
-          {status === "analyzing" && (
+          {isAnalysisPending(status) && (
             <p role="status" className="flex items-center gap-1 text-xs text-muted-foreground">
               <Loader2 className="h-3 w-3 animate-spin motion-reduce:animate-none" aria-hidden />
               Analizando… puede tardar hasta un minuto
             </p>
           )}
-          {status === "error" && (
+          {(status === "error" || status === "analysis_failed") && (
             <p role="alert" className="text-xs text-destructive">
               {errorMessage || "No se pudo analizar el documento"}
             </p>
@@ -87,7 +87,7 @@ export function FileCard({ filename, size, mimeType, documentId, documentStatus,
             e.stopPropagation()
             onRemove()
           }}
-          className="absolute -top-2 -right-2 h-5 w-5 rounded-full bg-destructive text-destructive-foreground flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity"
+          className="absolute -top-2 -right-2 h-5 w-5 rounded-full bg-destructive text-destructive-foreground flex items-center justify-center transition-opacity md:opacity-0 md:group-hover:opacity-100 md:group-focus-within:opacity-100"
         >
           <X className="h-3 w-3" />
         </button>

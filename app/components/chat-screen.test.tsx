@@ -719,6 +719,289 @@ describe("ChatScreen", () => {
     expect(await screen.findByText("tema1.pdf")).toBeTruthy()
   })
 
+  describe("adjuntar archivos", () => {
+    const uploaded = (id: string, filename: string) =>
+      json({ id, owner_id: "u1", filename, subject: "", status: "uploaded", uploaded_at: "", has_analysis: false, error_message: null })
+
+    // Un chat c1 que ya existe; link decide qué responde el PUT que vincula el documento
+    function serverWithChat(link: (body: { document_id?: string }) => Response = () => json({ id: "c1", title: "t" })) {
+      const calls: { method: string; url: string; body?: string }[] = []
+      let uploads = 0
+      vi.stubGlobal("fetch", async (url: string, init?: RequestInit) => {
+        const method = init?.method ?? "GET"
+        calls.push({ method, url, body: typeof init?.body === "string" ? init.body : undefined })
+        if (url.endsWith("/users/me")) return json({ id: "u1", username: "ana", email: "a@a.a" })
+        if (url.endsWith("/chats/")) return json({ chats: [{ id: "c1", title: "t" }] })
+        if (url.endsWith("/documents/upload")) {
+          uploads++
+          return uploaded(`d${uploads}`, uploads === 1 ? "tema1.txt" : "tema2.txt")
+        }
+        if (url.endsWith("/documents/")) return json([])
+        if (url.endsWith("/chats/c1") && method === "PUT") return link(JSON.parse(String(init?.body)))
+        if (url.endsWith("/messages")) return json({ id: "c1", title: "t", messages: [{ role: "user", content: "Hola" }] })
+        if (url.endsWith("/chats/c1")) return json({ id: "c1", title: "t", messages: [{ role: "user", content: "Hola" }] })
+        throw new Error(`Petición inesperada: ${method} ${url}`)
+      })
+      return calls
+    }
+
+    const pick = (container: HTMLElement, file: File) =>
+      fireEvent.change(container.querySelector<HTMLInputElement>('input[type="file"]')!, { target: { files: [file] } })
+
+    it("en un chat que ya existe, el archivo se vincula antes de mostrarse como adjunto", async () => {
+      const calls = serverWithChat()
+      const { container } = renderAt("c1")
+      await screen.findByText("Hola")
+
+      pick(container, new File(["apuntes"], "tema1.txt", { type: "text/plain" }))
+
+      expect(await screen.findByText("tema1.txt")).toBeTruthy()
+      const link = calls.find((c) => c.method === "PUT" && c.url.endsWith("/chats/c1"))
+      expect(JSON.parse(String(link?.body))).toEqual({ document_id: "d1" })
+      // La lista de chats se recarga: el botón Quiz sabe que el chat ya tiene documento
+      expect(calls.filter((c) => c.method === "GET" && c.url.endsWith("/chats/")).length).toBeGreaterThan(1)
+    })
+
+    it("si no se puede vincular al chat, avisa y no lo presenta como adjunto", async () => {
+      serverWithChat(() => json({ detail: "No se pudo actualizar el chat" }, 500))
+      const toastError = vi.spyOn(toast, "error")
+      const { container } = renderAt("c1")
+      await screen.findByText("Hola")
+
+      pick(container, new File(["apuntes"], "tema1.txt", { type: "text/plain" }))
+
+      await waitFor(() => expect(toastError).toHaveBeenCalledWith("No se pudo actualizar el chat"))
+      expect(screen.queryByText("tema1.txt")).toBeNull()
+    })
+
+    it("un segundo archivo sustituye al primero: el chat solo tiene un documento", async () => {
+      serverWithChat()
+      const { container } = renderAt("c1")
+      await screen.findByText("Hola")
+
+      pick(container, new File(["uno"], "tema1.txt", { type: "text/plain" }))
+      await screen.findByText("tema1.txt")
+      await waitFor(() => expect(screen.getByRole("button", { name: "Adjuntar archivo" }).hasAttribute("disabled")).toBe(false))
+      pick(container, new File(["dos"], "tema2.txt", { type: "text/plain" }))
+
+      expect(await screen.findByText("tema2.txt")).toBeTruthy()
+      expect(screen.queryByText("tema1.txt")).toBeNull()
+    })
+
+    it("quitar el adjunto lo quita, también si es el documento vinculado al chat", async () => {
+      vi.stubGlobal("fetch", async (url: string) => {
+        if (url.endsWith("/users/me")) return json({ id: "u1", username: "ana", email: "a@a.a" })
+        if (url.endsWith("/chats/")) return json({ chats: [] })
+        if (url.endsWith("/documents/"))
+          return json([{ id: "d1", owner_id: "u1", filename: "tema1.pdf", subject: "", status: "analyzed", uploaded_at: "", has_analysis: true, error_message: null }])
+        if (url.endsWith("/chats/c1")) return json({ id: "c1", title: "Tema 1", document_id: "d1", messages: [{ role: "user", content: "Hola" }] })
+        throw new Error(`Petición inesperada: ${url}`)
+      })
+      renderAt("c1")
+      await screen.findByText("tema1.pdf")
+
+      fireEvent.click(screen.getByRole("button", { name: "Quitar archivo" }))
+
+      expect(screen.queryByText("tema1.pdf")).toBeNull()
+    })
+
+    it("tras rechazar un archivo, elegirlo otra vez vuelve a avisar", async () => {
+      serverWithChat()
+      const toastError = vi.spyOn(toast, "error")
+      const { container } = renderAt("c1")
+      await screen.findByText("Hola")
+      const input = container.querySelector<HTMLInputElement>('input[type="file"]')!
+
+      pick(container, new File(["x"], "programa.exe"))
+
+      await waitFor(() => expect(toastError).toHaveBeenCalledWith("No se pueden subir archivos .exe", expect.anything()))
+      // El campo queda vacío: el navegador avisará otra vez aunque sea el mismo archivo
+      expect(input.value).toBe("")
+    })
+
+    it("al adjuntar en un chat nuevo, lo que se estaba escribiendo sigue en el chat que se crea", async () => {
+      vi.stubGlobal("fetch", async (url: string, init?: RequestInit) => {
+        const method = init?.method ?? "GET"
+        if (url.endsWith("/users/me")) return json({ id: "u1", username: "ana", email: "a@a.a" })
+        if (url.endsWith("/chats/") && method === "GET") return json({ chats: [] })
+        if (url.endsWith("/chats/") && method === "POST") return json({ id: "c9", title: "Nuevo chat", document_id: "d1" })
+        if (url.endsWith("/documents/upload")) return uploaded("d1", "tema1.txt")
+        if (url.endsWith("/documents/")) return json([])
+        if (url.endsWith("/messages")) return json({ id: "c9", title: "t", messages: [] })
+        if (method === "PUT") return json({ id: "c9", title: "Tema1" })
+        throw new Error(`Petición inesperada: ${method} ${url}`)
+      })
+      const { container } = renderAt()
+      const input = (await screen.findByRole("textbox")) as HTMLTextAreaElement
+      fireEvent.change(input, { target: { value: "Explícame este tema" } })
+
+      pick(container, new File(["apuntes"], "tema1.txt", { type: "text/plain" }))
+
+      await waitFor(() => expect(nav.replace).toHaveBeenCalledWith("/chat/c9"))
+      await screen.findByText("tema1.txt")
+      expect(input.value).toBe("Explícame este tema")
+    })
+
+    it("el tipo sale de la extensión cuando el navegador no lo da (.md) o da otro (.ts)", async () => {
+      serverWithChat()
+      const { container } = renderAt("c1")
+      await screen.findByText("Hola")
+
+      pick(container, new File(["# Tema"], "tema1.md", { type: "" }))
+
+      const card = (await screen.findByText("tema1.md")).parentElement!
+      expect(card.textContent).toMatch(/Texto/)
+    })
+  })
+
+  describe("enviar mensajes", () => {
+    it("Shift+Enter hace un salto de línea; Enter envía el mensaje con sus líneas", async () => {
+      const sent: string[] = []
+      vi.stubGlobal("fetch", async (url: string, init?: RequestInit) => {
+        if (url.endsWith("/users/me")) return json({ id: "u1", username: "ana", email: "a@a.a" })
+        if (url.endsWith("/chats/")) return json({ chats: [{ id: "c1", title: "t" }] })
+        if (url.endsWith("/chats/c1/stream")) {
+          sent.push(JSON.parse(String(init?.body)).content)
+          return new Response(tokenEvent("Vale.") + doneEvent(), { status: 200, headers: { "Content-Type": "text/event-stream" } })
+        }
+        if (url.endsWith("/chats/c1")) return json({ id: "c1", title: "t", messages: [{ role: "assistant", content: "Hola" }] })
+        throw new Error(`Petición inesperada: ${url}`)
+      })
+      renderAt("c1")
+      await screen.findByText("Hola")
+      const input = screen.getByRole("textbox") as HTMLTextAreaElement
+
+      fireEvent.change(input, { target: { value: "Primera línea" } })
+      // El navegador escribe el salto: aquí basta con que no se envíe ni se impida
+      expect(fireEvent.keyDown(input, { key: "Enter", shiftKey: true })).toBe(true)
+      expect(sent).toEqual([])
+
+      fireEvent.change(input, { target: { value: "Primera línea\nSegunda línea" } })
+      fireEvent.keyDown(input, { key: "Enter" })
+
+      await waitFor(() => expect(sent).toEqual(["Primera línea\nSegunda línea"]))
+    })
+
+    it("lo escrito en un chat nuevo no viaja al abrir otro chat, y sigue ahí al volver al nuevo", async () => {
+      vi.stubGlobal("fetch", async (url: string) => {
+        if (url.endsWith("/users/me")) return json({ id: "u1", username: "ana", email: "a@a.a" })
+        if (url.endsWith("/chats/")) return json({ chats: [] })
+        const id = url.match(/\/chats\/(c\d)$/)?.[1]
+        if (id) return json({ id, title: id, messages: [{ role: "user", content: `Hola desde ${id}` }] })
+        throw new Error(`Petición inesperada: ${url}`)
+      })
+      const page = () => <AuthProvider><ChatProvider><ChatScreen /></ChatProvider></AuthProvider>
+      const { rerender } = renderAt()
+      fireEvent.change(await screen.findByRole("textbox"), { target: { value: "Idea para un chat nuevo" } })
+
+      nav.params = { id: "c1" }
+      rerender(page())
+      await screen.findByText("Hola desde c1")
+      expect((screen.getByRole("textbox") as HTMLTextAreaElement).value).toBe("")
+
+      nav.params = {}
+      rerender(page())
+      await waitFor(() => expect((screen.getByRole("textbox") as HTMLTextAreaElement).value).toBe("Idea para un chat nuevo"))
+    })
+
+    it("lo escrito en un chat se queda en ese chat al cambiar a otro y volver", async () => {
+      vi.stubGlobal("fetch", async (url: string) => {
+        if (url.endsWith("/users/me")) return json({ id: "u1", username: "ana", email: "a@a.a" })
+        if (url.endsWith("/chats/")) return json({ chats: [] })
+        const id = url.match(/\/chats\/(c\d)$/)?.[1]
+        if (id) return json({ id, title: id, messages: [{ role: "user", content: `Hola desde ${id}` }] })
+        throw new Error(`Petición inesperada: ${url}`)
+      })
+      // Un elemento nuevo en cada rerender: React no vuelve a pintar uno idéntico
+      const page = () => <AuthProvider><ChatProvider><ChatScreen /></ChatProvider></AuthProvider>
+      const { rerender } = renderAt("c1")
+      await screen.findByText("Hola desde c1")
+      fireEvent.change(screen.getByRole("textbox"), { target: { value: "Borrador de c1" } })
+
+      nav.params = { id: "c2" }
+      rerender(page())
+      await screen.findByText("Hola desde c2")
+      expect((screen.getByRole("textbox") as HTMLTextAreaElement).value).toBe("")
+
+      nav.params = { id: "c1" }
+      rerender(page())
+      await screen.findByText("Hola desde c1")
+      expect((screen.getByRole("textbox") as HTMLTextAreaElement).value).toBe("Borrador de c1")
+    })
+
+    it("Enter mientras un método de entrada (IME) compone no envía", async () => {
+      const requests: string[] = []
+      vi.stubGlobal("fetch", async (url: string) => {
+        requests.push(url)
+        if (url.endsWith("/users/me")) return json({ id: "u1", username: "ana", email: "a@a.a" })
+        if (url.endsWith("/chats/")) return json({ chats: [] })
+        throw new Error(`Petición inesperada: ${url}`)
+      })
+      renderAt()
+      const input = await screen.findByRole("textbox")
+      fireEvent.change(input, { target: { value: "にほん" } })
+      fireEvent.keyDown(input, { key: "Enter", isComposing: true })
+
+      expect((input as HTMLInputElement).value).toBe("にほん")
+      expect(requests.some((u) => u.includes("/stream"))).toBe(false)
+    })
+
+    it("un segundo envío mientras se crea el chat no crea otro chat ni lanza otro turno", async () => {
+      const sse = controllableSSE()
+      let created = 0
+      let streams = 0
+      let finishCreate: () => void = () => {}
+      vi.stubGlobal("fetch", async (url: string, init?: RequestInit) => {
+        const method = init?.method ?? "GET"
+        if (url.endsWith("/users/me")) return json({ id: "u1", username: "ana", email: "a@a.a" })
+        if (url.endsWith("/chats/") && method === "GET") return json({ chats: [] })
+        if (url.endsWith("/chats/") && method === "POST") {
+          created++
+          await new Promise<void>((resolve) => (finishCreate = resolve))
+          return json({ id: "c2", title: "Nuevo chat" })
+        }
+        if (url.endsWith("/chats/c2/stream")) {
+          streams++
+          return sse.fetchMock(url, init)
+        }
+        throw new Error(`Petición inesperada: ${method} ${url}`)
+      })
+      renderAt()
+      const input = await screen.findByRole("textbox")
+
+      fireEvent.change(input, { target: { value: "Primera" } })
+      fireEvent.keyDown(input, { key: "Enter" })
+      fireEvent.change(input, { target: { value: "Segunda" } })
+      fireEvent.keyDown(input, { key: "Enter" })
+      await waitFor(() => expect(created).toBe(1))
+      await act(async () => finishCreate())
+
+      await waitFor(() => expect(streams).toBe(1))
+      expect(created).toBe(1)
+      // Lo que no se envió sigue en el campo
+      expect((input as HTMLInputElement).value).toBe("Segunda")
+    })
+
+    it("si la respuesta falla, lo enviado vuelve al campo para reintentarlo", async () => {
+      vi.stubGlobal("fetch", async (url: string) => {
+        if (url.endsWith("/users/me")) return json({ id: "u1", username: "ana", email: "a@a.a" })
+        if (url.endsWith("/chats/")) return json({ chats: [{ id: "c1", title: "t" }] })
+        if (url.endsWith("/chats/c1/stream")) return json({ detail: "El tutor no está disponible" }, 500)
+        if (url.endsWith("/chats/c1")) return json({ id: "c1", title: "t", messages: [{ role: "assistant", content: "Hola" }] })
+        throw new Error(`Petición inesperada: ${url}`)
+      })
+      renderAt("c1")
+      await screen.findByText("Hola")
+      const input = screen.getByRole("textbox") as HTMLInputElement
+
+      fireEvent.change(input, { target: { value: "¿Qué es un átomo?" } })
+      fireEvent.keyDown(input, { key: "Enter" })
+
+      expect(await screen.findByText("El tutor no está disponible")).toBeTruthy()
+      expect(input.value).toBe("¿Qué es un átomo?")
+    })
+  })
+
   describe("dictado por voz", () => {
     const serverWithEmptyChat = () =>
       vi.stubGlobal("fetch", async (url: string) => {

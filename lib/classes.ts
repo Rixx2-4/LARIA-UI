@@ -22,7 +22,9 @@ export function classGroups(paths: LearningPath[]): ClassGroups {
     .sort((a, b) => (b.updated_at ?? "").localeCompare(a.updated_at ?? ""))
   const phase = (path: LearningPath) => path.teaching?.phase
   return {
-    inProgress: classes.filter((path) => IN_PROGRESS.has(phase(path) ?? "")),
+    // Sin estado de enseñanza (teaching: null) aún no empezó: se abre como una en curso,
+    // que es lo que ya dice su tarjeta; si no, desaparecería de la lista
+    inProgress: classes.filter((path) => !path.teaching || IN_PROGRESS.has(phase(path) ?? "")),
     needsPlacement: classes.filter((path) => phase(path) === "assessment" || tierDone(path)),
     completed: classes.filter((path) => phase(path) === "completed" && !path.next_tier),
   }

@@ -282,7 +282,8 @@ export function QuestionStep({ questions, current, answers, onAnswer, onPrev, on
               <button
                 key={key}
                 type="button"
-                onClick={() => onAnswer(question, key)}
+                // Mientras se envían, las respuestas ya mandadas no cambian (como con el teclado)
+                onClick={() => !isSubmitting && onAnswer(question, key)}
                 aria-pressed={isSelected}
                 className={`group flex w-full items-center gap-3 rounded-xl border p-3.5 text-left transition-all focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring ${
                   isSelected ? "border-primary bg-primary/5 shadow-sm" : "border-border hover:border-primary/40 hover:bg-muted/50"
@@ -313,7 +314,7 @@ export function QuestionStep({ questions, current, answers, onAnswer, onPrev, on
       {isSubmitting && isLast && <GradingNotice questions={questions} />}
 
       <div className="flex items-center gap-3">
-        <Button variant="ghost" onClick={onPrev} disabled={current === 0} className="gap-1.5">
+        <Button variant="ghost" onClick={() => !isSubmitting && onPrev()} disabled={current === 0} className="gap-1.5">
           <ArrowLeft className="h-4 w-4" aria-hidden />
           Anterior
         </Button>

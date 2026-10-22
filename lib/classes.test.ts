@@ -54,4 +54,8 @@ describe("cómo se cuenta el avance de una clase", () => {
     expect(lastStudied(new Date(2026, 6, 1, 12, 0).toISOString(), now)).toBe("hace 3 meses")
     expect(lastStudied(undefined, now)).toBe("")
   })
+
+  it("una clase con tema pero aún sin estado de enseñanza sale en curso, no desaparece", () => {
+    expect(classGroups([path("p9", "teaching", { teaching: null })]).inProgress.map((p) => p.id)).toEqual(["p9"])
+  })
 })
