@@ -19,7 +19,7 @@ describe("CSS global", () => {
   })
 
   it("el indicador «pensando» tiene estilos: sin ellos se queda en blanco", () => {
-    for (const selector of [".thinking-sparkle", ".thinking-text", ".thinking-dots span"]) {
+    for (const selector of [".thinking-loader rect", ".thinking-text", ".thinking-dots span"]) {
       expect(rule(selector)).toMatch(/animation:/)
     }
   })
