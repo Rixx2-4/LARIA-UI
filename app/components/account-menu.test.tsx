@@ -91,4 +91,27 @@ describe("AccountMenu", () => {
     fireEvent.keyDown(document, { key: "Escape" })
     expect(document.activeElement).toBe(trigger)
   })
+
+  it("se abre al lado del botón y por encima de él, sin mover la página", async () => {
+    // El botón Cuenta está abajo del todo: abierto hacia abajo se salía de la pantalla, el
+    // foco desplazaba la app y tapaba la caja de texto del chat
+    const anchor = document.createElement("div")
+    anchor.getBoundingClientRect = () => ({ top: 600, bottom: 660, left: 0, right: 72, width: 72, height: 60, x: 0, y: 600, toJSON: () => ({}) })
+    document.body.appendChild(anchor)
+    const focus = vi.spyOn(HTMLElement.prototype, "focus")
+    render(
+      <AuthProvider>
+        <AccountMenu isOpen onClose={() => {}} />
+      </AuthProvider>,
+      { container: anchor },
+    )
+
+    const menu = screen.getByRole("dialog", { name: "Menú de cuenta" })
+    expect(menu.className).toMatch(/\bfixed\b/)
+    expect(menu.style.left).toBe("80px")
+    expect(menu.style.bottom).toBe(`${window.innerHeight - 600 + 8}px`)
+    expect(focus).toHaveBeenCalledWith({ preventScroll: true })
+    focus.mockRestore()
+    anchor.remove()
+  })
 })
