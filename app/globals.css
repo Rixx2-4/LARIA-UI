@@ -365,9 +365,14 @@
   to { transform: rotate(48deg); }
 }
 
-/* Indicador "pensando" del chat (thinking-indicator.tsx) */
-.thinking-sparkle {
-  animation: thinking-sparkle 1.6s ease-in-out infinite;
+/* Indicador "pensando" del chat (thinking-indicator.tsx). La cuadrícula es «Loading V2»
+   de useAnimations: 46 fotogramas a 30 fps; cada cuadrado crece en 10, se queda 8 y
+   mengua en 10, y cada diagonal empieza 3 fotogramas (0,1 s) después de la anterior */
+.thinking-loader rect {
+  transform-box: fill-box;
+  transform-origin: center;
+  animation: thinking-loader 1.5333s cubic-bezier(0.333, 0, 0.667, 1) infinite backwards;
+  animation-delay: calc(var(--diagonal) * 0.1s);
 }
 
 .thinking-text {
@@ -409,9 +414,11 @@
   animation-delay: 0.3s;
 }
 
-@keyframes thinking-sparkle {
-  0%, 100% { transform: scale(0.85) rotate(0deg); opacity: 0.6; }
-  50% { transform: scale(1.1) rotate(20deg); opacity: 1; }
+@keyframes thinking-loader {
+  0% { transform: scale(0); }
+  21.739% { transform: scale(1); }
+  39.13% { transform: scale(1); }
+  60.87%, 100% { transform: scale(0); }
 }
 
 @keyframes thinking-shimmer {
@@ -435,7 +442,8 @@
 }
 
 @media (prefers-reduced-motion: reduce) {
-  .thinking-sparkle,
+  /* Sin animación, la cuadrícula se ve entera y quieta */
+  .thinking-loader rect,
   .thinking-text,
   .thinking-dots span,
   .typing-live > :last-child::after,
