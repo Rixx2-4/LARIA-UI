@@ -38,7 +38,7 @@ export function MethodChoices({
           checked={value === method.key}
           onSelect={() => onChange(method.key)}
           title={method.name}
-          detail={method.summary}
+          detail={method.good_for ? `${method.summary} ${method.good_for}` : method.summary}
           badge={method.recommended ? method.recommended_text ?? "Recomendado" : null}
           unavailable={method.available ? null : method.unavailable_text ?? "No disponible ahora"}
         />
