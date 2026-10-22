@@ -1,6 +1,6 @@
 import { useState } from "react"
 import { describe, it, expect, vi, afterEach, beforeEach } from "vitest"
-import { render, screen, cleanup, fireEvent, waitFor, act } from "@testing-library/react"
+import { render, screen, cleanup, fireEvent, waitFor, act, within } from "@testing-library/react"
 import { AuthProvider } from "@/app/contexts/auth-context"
 import { ChatProvider, useChat } from "@/app/contexts/chat-context"
 import { ChatScreen } from "./chat-screen"
@@ -682,33 +682,127 @@ describe("ChatScreen", () => {
     expect(screen.getByText("tema1.txt")).toBeTruthy()
   })
 
-  it("la nota de archivo subido va como mensaje de sistema: no dispara un turno del tutor", async () => {
-    const sent: { role: string; content: string }[] = []
-    vi.stubGlobal("fetch", async (url: string, init?: RequestInit) => {
-      const method = init?.method ?? "GET"
-      if (url.endsWith("/users/me")) return json({ id: "u1", username: "ana", email: "a@a.a" })
-      if (url.endsWith("/chats/")) return json({ chats: [] })
-      if (url.endsWith("/documents/upload"))
-        return json({ id: "d1", owner_id: "u1", filename: "tema1.txt", subject: "", status: "processing", uploaded_at: "", has_analysis: false, error_message: null })
-      if (method === "PUT") return json({ id: "c1", title: "t", messages: [] })
-      if (url.endsWith("/messages")) {
-        const body = JSON.parse(String(init?.body))
-        sent.push(body)
-        return json({ id: "c1", title: "t", messages: [{ role: "user", content: "Hola" }, body] })
-      }
-      if (url.endsWith("/chats/c1")) return json({ id: "c1", title: "t", messages: [{ role: "user", content: "Hola" }] })
-      throw new Error(`Petición inesperada: ${method} ${url}`)
+  // Como en Claude: el archivo espera en la caja de texto y sale con el mensaje, como
+  // parte de él; en el chat no se escribe ningún aviso al subirlo
+  describe("el archivo sale con el mensaje", () => {
+    function server(opts: { holdUpload?: Promise<void> } = {}) {
+      const calls: { method: string; url: string; body?: { role?: string; content?: string } }[] = []
+      let saved = [{ role: "user", content: "Hola" }, { role: "assistant", content: "¡Hola!" }]
+      vi.stubGlobal("fetch", async (url: string, init?: RequestInit) => {
+        const method = init?.method ?? "GET"
+        const body = typeof init?.body === "string" ? JSON.parse(init.body) : undefined
+        calls.push({ method, url, body })
+        if (url.endsWith("/users/me")) return json({ id: "u1", username: "ana", email: "a@a.a" })
+        if (url.endsWith("/chats/")) return json({ chats: [{ id: "c1", title: "t" }] })
+        if (url.endsWith("/documents/upload")) {
+          await opts.holdUpload
+          return json({ id: "d1", owner_id: "u1", filename: "tema1.pdf", subject: "", status: "analyzed", uploaded_at: "", has_analysis: true, error_message: null })
+        }
+        if (url.endsWith("/documents/")) return json([])
+        if (url.endsWith("/chats/c1") && method === "PUT") return json({ id: "c1", title: "t", document_id: "d1" })
+        if (url.endsWith("/messages")) {
+          saved = [...saved, body]
+          return json({ id: "c1", title: "t", messages: saved })
+        }
+        if (url.endsWith("/chats/c1/stream")) {
+          saved = [...saved, { role: "user", content: body.content }, { role: "assistant", content: "Es un resumen." }]
+          return new Response(tokenEvent("Es un resumen.") + doneEvent(), { status: 200, headers: { "Content-Type": "text/event-stream" } })
+        }
+        if (url.endsWith("/chats/c1")) return json({ id: "c1", title: "t", document_id: calls.some((c) => c.method === "PUT") ? "d1" : null, messages: saved })
+        throw new Error(`Petición inesperada: ${method} ${url}`)
+      })
+      return calls
+    }
+    const composer = () => screen.getByRole("textbox", { name: "Mensaje" }).closest(".rounded-2xl") as HTMLElement
+
+    it("al subirlo no se escribe nada en el chat: espera dentro de la caja de texto", async () => {
+      const calls = server()
+      const { container } = renderAt("c1")
+      await screen.findByText("¡Hola!")
+
+      fireEvent.change(container.querySelector<HTMLInputElement>('input[type="file"]')!, {
+        target: { files: [new File(["%PDF"], "tema1.pdf", { type: "application/pdf" })] },
+      })
+
+      await waitFor(() => expect(composer().textContent).toContain("tema1.pdf"))
+      expect(within(composer()).getByRole("button", { name: "Quitar archivo" })).toBeTruthy()
+      expect(calls.some((c) => c.url.endsWith("/messages"))).toBe(false)
+      expect(screen.queryByText(/Subí el archivo/)).toBeNull()
+      expect(screen.getByPlaceholderText("Pregunta algo sobre el archivo…")).toBeTruthy()
     })
-    const { container } = renderAt("c1")
-    await screen.findByText("Hola")
 
-    const fileInput = container.querySelector<HTMLInputElement>('input[type="file"]')!
-    fireEvent.change(fileInput, { target: { files: [new File(["apuntes"], "tema1.txt", { type: "text/plain" })] } })
+    it("al enviar, sale con el mensaje: su nota se guarda justo antes y se ve como el archivo del mensaje", async () => {
+      const calls = server()
+      const { container } = renderAt("c1")
+      await screen.findByText("¡Hola!")
+      fireEvent.change(container.querySelector<HTMLInputElement>('input[type="file"]')!, {
+        target: { files: [new File(["%PDF"], "tema1.pdf", { type: "application/pdf" })] },
+      })
+      await waitFor(() => expect(composer().textContent).toContain("tema1.pdf"))
 
-    const note = await screen.findByText("Subí el archivo: tema1.txt")
-    expect(sent).toEqual([{ role: "system", content: "📎 Subí el archivo: tema1.txt" }])
-    // Una línea de aviso, no una burbuja del tutor
-    expect(note.tagName).toBe("P")
+      const input = screen.getByRole("textbox", { name: "Mensaje" })
+      fireEvent.change(input, { target: { value: "Resúmelo" } })
+      fireEvent.keyDown(input, { key: "Enter" })
+      await screen.findByText("Es un resumen.")
+
+      // En el servidor: la nota (de sistema, no dispara un turno) y después la pregunta
+      const note = calls.findIndex((c) => c.url.endsWith("/messages"))
+      const stream = calls.findIndex((c) => c.url.endsWith("/stream"))
+      expect(calls[note].body).toEqual({ role: "system", content: "📎 Subí el archivo: tema1.pdf" })
+      expect(note).toBeLessThan(stream)
+      // En pantalla: el archivo, encima de la pregunta y fuera de la caja de texto; sin aviso
+      await waitFor(() => expect(composer().textContent).not.toContain("tema1.pdf"))
+      const file = screen.getByText("tema1.pdf")
+      const question = screen.getByText("Resúmelo")
+      expect(file.compareDocumentPosition(question) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy()
+      expect(screen.queryByText(/Subí el archivo/)).toBeNull()
+      expect(screen.getByPlaceholderText("Pregunta lo que quieras…")).toBeTruthy()
+    })
+
+    it("mientras se sube no se puede enviar: el mensaje saldría sin el archivo", async () => {
+      let release!: () => void
+      const calls = server({ holdUpload: new Promise((resolve) => (release = resolve)) })
+      const { container } = renderAt("c1")
+      await screen.findByText("¡Hola!")
+      fireEvent.change(container.querySelector<HTMLInputElement>('input[type="file"]')!, {
+        target: { files: [new File(["%PDF"], "tema1.pdf", { type: "application/pdf" })] },
+      })
+      expect(await within(composer()).findByText("Subiendo…")).toBeTruthy()
+
+      const input = screen.getByRole("textbox", { name: "Mensaje" })
+      fireEvent.change(input, { target: { value: "Resúmelo" } })
+      fireEvent.keyDown(input, { key: "Enter" })
+      expect(calls.some((c) => c.url.endsWith("/stream"))).toBe(false)
+      expect((screen.getByRole("button", { name: "Enviar" }) as HTMLButtonElement).disabled).toBe(true)
+
+      await act(async () => release())
+      await waitFor(() => expect(composer().textContent).not.toContain("Subiendo…"))
+      expect((input as HTMLTextAreaElement).value).toBe("Resúmelo")
+    })
+
+    it("en un chat guardado, la nota se ve como el archivo de su mensaje, también las antiguas (como «user»)", async () => {
+      vi.stubGlobal("fetch", async (url: string) => {
+        if (url.endsWith("/users/me")) return json({ id: "u1", username: "ana", email: "a@a.a" })
+        if (url.endsWith("/chats/")) return json({ chats: [] })
+        if (url.endsWith("/documents/")) return json([])
+        if (url.endsWith("/chats/c1"))
+          return json({
+            id: "c1",
+            title: "t",
+            messages: [
+              { role: "system", content: "📎 Subí el archivo: tema1.pdf" },
+              { role: "user", content: "Resúmelo" },
+              { role: "user", content: "📎 Subí el archivo: viejo.docx" },
+            ],
+          })
+        throw new Error(`Petición inesperada: ${url}`)
+      })
+      renderAt("c1")
+
+      expect(await screen.findByText("tema1.pdf")).toBeTruthy()
+      expect(screen.getByText("viejo.docx")).toBeTruthy()
+      expect(screen.queryByText(/Subí el archivo/)).toBeNull()
+    })
   })
 
   it("un archivo de más de 25 MB se rechaza antes de subirlo", async () => {

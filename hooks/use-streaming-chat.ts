@@ -27,7 +27,9 @@ interface UseStreamingChatOptions {
 
 interface UseStreamingChatReturn extends StreamingState {
   // Resuelve con la respuesta completa, o null si se cortó, falló o se cambió de chat
-  startStreaming: (content: string, targetChatId?: string) => Promise<string | null>
+  // before: mensajes ya guardados que van justo antes del del usuario (la nota del archivo
+  // adjunto); sin ellos aquí, el stream los quitaría de la vista hasta terminar
+  startStreaming: (content: string, targetChatId?: string, before?: ChatMessage[]) => Promise<string | null>
   stopStreaming: () => void
   cancelStreaming: () => void
   resetStreaming: () => void
@@ -149,7 +151,7 @@ export function useStreamingChat({
     return () => document.removeEventListener("visibilitychange", onVisibilityChange)
   }, [revealAll])
 
-  const startStreaming = useCallback(async (content: string, targetChatId?: string) => {
+  const startStreaming = useCallback(async (content: string, targetChatId?: string, before: ChatMessage[] = []) => {
     const activeId = targetChatId || chatId
     if (!activeId) return null
     let reply = ""
@@ -167,7 +169,7 @@ export function useStreamingChat({
     finishRef.current = null
 
     const userMsg: ChatMessage = { role: "user", content }
-    baseMessagesRef.current = [...messages, userMsg]
+    baseMessagesRef.current = [...messages, ...before, userMsg]
     setMessages(baseMessagesRef.current)
 
     await lariaAPI.chats.stream(activeId, "user", content, {

@@ -6,7 +6,7 @@ import { toast } from "sonner"
 import { Button } from "@/components/ui/button"
 import { Paperclip, Mic, Send, Loader2, Square, Copy, Volume2, VolumeX } from "lucide-react"
 import { useChat } from "@/app/contexts/chat-context"
-import { lariaAPI, Document } from "@/lib/laria-api"
+import { lariaAPI, Document, type ChatMessage } from "@/lib/laria-api"
 import { FileCard } from "./file-card"
 import { FileViewer } from "./file-viewer"
 import { MessageContent } from "./message-content"
@@ -25,8 +25,17 @@ import { useTypeToFocus } from "@/hooks/use-type-to-focus"
 import { toEmotion, useSpeech } from "@/hooks/use-speech"
 import { takeSpeakable } from "@/lib/speech-chunks"
 
-// Así empieza el aviso que queda en el chat al subir un archivo (los ya guardados lo llevan)
+// La nota que deja en el chat un archivo adjunto (los chats ya guardados la llevan): se
+// guarda al enviar el mensaje que lo acompaña, justo antes de él, y se pinta como el
+// archivo de ese mensaje, no como texto
 const UPLOAD_NOTE_PREFIX = "📎 "
+const UPLOAD_NOTE = `${UPLOAD_NOTE_PREFIX}Subí el archivo: `
+
+// El nombre del archivo si el mensaje es esa nota. Las más antiguas se guardaron como
+// mensaje del usuario en vez de sistema: se pintan igual
+function attachedFilename(msg: ChatMessage): string | null {
+  return msg.role !== "assistant" && msg.content.startsWith(UPLOAD_NOTE) ? msg.content.slice(UPLOAD_NOTE.length) : null
+}
 
 // «Copiar» y «Escuchar» bajo cada respuesta: en móvil, con zona táctil más alta que el texto
 const MESSAGE_ACTION_CLASS =
@@ -69,6 +78,8 @@ interface UploadedFile {
   size?: number
   document?: Document
   dataUrl?: string
+  // Ya salió con un mensaje: se ve en la conversación, no en la caja de texto
+  sent?: boolean
 }
 
 
@@ -87,6 +98,9 @@ export function SearchBar({ isOpeningChat = false, inClass }: { isOpeningChat?: 
   const [query, setQuery] = useState("")
   const [isFocused, setIsFocused] = useState(false)
   const [isUploading, setIsUploading] = useState(false)
+  // El archivo que se está subiendo: se ve ya en la caja de texto de su chat (null, el
+  // chat nuevo, hasta que se crea), con «Subiendo…»
+  const [uploadingFile, setUploadingFile] = useState<{ chatId: string | null; filename: string; mimeType: string } | null>(null)
   // Los adjuntos de cada chat, para que no se vean en los demás
   const [uploadsByChat, setUploadsByChat] = useState<Record<string, UploadedFile[]>>({})
   const [viewerFile, setViewerFile] = useState<{
@@ -303,27 +317,26 @@ export function SearchBar({ isOpeningChat = false, inClass }: { isOpeningChat?: 
     const mimeType = known !== "application/octet-stream" ? known : file.type || known
 
     setIsUploading(true)
+    setUploadingFile({ chatId, filename: file.name, mimeType })
     try {
       const doc = await lariaAPI.documents.upload(file)
       const { id: currentChatId, isNew: isNewChat } = await ensureChat(doc.id)
+      setUploadingFile((prev) => prev && { ...prev, chatId: currentChatId })
       // Un chat nuevo ya nace con el documento; uno que ya existía se vincula ahora.
       // Hasta que el chat lo tiene, no se enseña como adjunto
       if (!isNewChat) await linkDocument(currentChatId, doc.id)
 
       const dataUrl = await generatePreview(file, mimeType)
-      // El backend vincula un documento por chat (el nuevo sustituye al anterior): la
-      // tarjeta es la del que el tutor usa de verdad
+      // El backend vincula un documento por chat (el nuevo sustituye al anterior): el
+      // adjunto pendiente es el que el tutor usa de verdad. Los ya enviados se quedan para
+      // poder abrirlos desde su mensaje. En el chat no se escribe nada hasta enviar
       setUploadsByChat((prev) => ({
         ...prev,
-        [currentChatId]: [{ filename: file.name, mimeType, size: file.size, document: doc, dataUrl }],
+        [currentChatId]: [
+          ...(prev[currentChatId] ?? []).filter((uf) => uf.sent),
+          { filename: file.name, mimeType, size: file.size, document: doc, dataUrl },
+        ],
       }))
-
-      // Una nota, no una pregunta: con "user" el backend lanzaría un turno del tutor
-      // (llamada a la IA, respuesta fantasma y el perfil del alumno alterado). Es solo un
-      // aviso: si no se guarda, el archivo ya está subido y vinculado igual
-      await addMessage(currentChatId, "system", `${UPLOAD_NOTE_PREFIX}Subí el archivo: ${file.name}`).catch((error) =>
-        console.warn("No se pudo guardar la nota del archivo:", error),
-      )
 
       if (isNewChat) {
         // Título de apoyo hasta que la primera respuesta permita generar uno de verdad
@@ -334,6 +347,7 @@ export function SearchBar({ isOpeningChat = false, inClass }: { isOpeningChat?: 
       toast.error(error instanceof Error ? error.message : "Error al subir el archivo")
     } finally {
       setIsUploading(false)
+      setUploadingFile(null)
     }
   }
 
@@ -362,11 +376,22 @@ export function SearchBar({ isOpeningChat = false, inClass }: { isOpeningChat?: 
   const [hiddenByChat, setHiddenByChat] = useState<Record<string, string[]>>({})
   const hidden = (chatId && hiddenByChat[chatId]) || []
   const isShown = (documentId?: string) => !documentId || !hidden.includes(documentId)
-  const localUploads = ((chatId && uploadsByChat[chatId]) || []).filter((uf) => isShown(uf.document?.id))
-  const uploadedFiles: UploadedFile[] =
-    localUploads.length > 0 || !linkedDocument || !isShown(linkedDocument.id)
-      ? localUploads
-      : [{ document: linkedDocument, filename: linkedDocument.filename, mimeType: mimeFromFilename(linkedDocument.filename) }]
+  const chatUploads = (chatId && uploadsByChat[chatId]) || []
+  const linkedFile: UploadedFile | null = linkedDocument
+    ? { document: linkedDocument, filename: linkedDocument.filename, mimeType: mimeFromFilename(linkedDocument.filename) }
+    : null
+  // El adjunto que espera en la caja de texto a salir con el próximo mensaje. Tras
+  // recargar, el documento vinculado al chat, si aún no salió con ningún mensaje
+  const localPending = chatUploads.filter((uf) => !uf.sent && isShown(uf.document?.id))
+  const linkedPending =
+    chatUploads.length === 0 && linkedFile && isShown(linkedFile.document?.id) && !messages.some((m) => attachedFilename(m) === linkedFile.filename)
+      ? [linkedFile]
+      : []
+  const pendingFiles: UploadedFile[] = localPending.length > 0 ? localPending : linkedPending
+  // El archivo de un mensaje ya enviado, para abrirlo desde la conversación
+  const uploadingHere = uploadingFile?.chatId === chatId ? uploadingFile : null
+  const sentFile = (filename: string) =>
+    chatUploads.findLast((uf) => uf.filename === filename) ?? (linkedFile?.filename === filename ? linkedFile : undefined)
 
   const removeFile = (file: UploadedFile) => {
     if (!chatId) return
@@ -446,9 +471,11 @@ export function SearchBar({ isOpeningChat = false, inClass }: { isOpeningChat?: 
   const sendingRef = useRef(false)
 
   const sendMessage = async (userMessage: string) => {
-    if (!userMessage || isStreaming || sendingRef.current) return
+    // Con un archivo subiéndose se espera: el mensaje saldría sin él
+    if (!userMessage || isStreaming || uploadingHere || sendingRef.current) return
     sendingRef.current = true
     lastSentRef.current = userMessage
+    const attachment = pendingFiles[0]
 
     setQuery("")
     dictation.cancel()
@@ -462,11 +489,34 @@ export function SearchBar({ isOpeningChat = false, inClass }: { isOpeningChat?: 
 
     try {
       const { id: currentChatId } = await ensureChat()
-      // La respuesta será el mensaje tras el del usuario: la misma clave que su «Escuchar»
-      liveKeyRef.current = `${currentChatId}:${messages.length + 1}`
 
-      const previous = messages
-      const reply = await startStreaming(userMessage, currentChatId)
+      // El archivo adjunto sale con este mensaje: su nota se guarda justo antes, como
+      // mensaje de sistema (con "user" el backend lanzaría un turno del tutor), y en la
+      // conversación se ve como el archivo del mensaje. Si no se guarda, el archivo ya
+      // está vinculado al chat igual: el mensaje sale de todos modos
+      const before: ChatMessage[] = []
+      if (attachment) {
+        const note = `${UPLOAD_NOTE}${attachment.filename}`
+        try {
+          await addMessage(currentChatId, "system", note)
+          before.push({ role: "system", content: note })
+        } catch (error) {
+          console.warn("No se pudo guardar la nota del archivo:", error)
+        }
+        // Deja la caja de texto: ya es parte de la conversación
+        setUploadsByChat((prev) => ({
+          ...prev,
+          [currentChatId]: (prev[currentChatId]?.length ? prev[currentChatId] : [attachment]).map((uf) =>
+            uf.filename === attachment.filename ? { ...uf, sent: true } : uf,
+          ),
+        }))
+      }
+
+      // La respuesta será el mensaje tras el del usuario: la misma clave que su «Escuchar»
+      liveKeyRef.current = `${currentChatId}:${messages.length + before.length + 1}`
+
+      const previous = [...messages, ...before]
+      const reply = await startStreaming(userMessage, currentChatId, before)
       // Con la respuesta ya completa, el título puede resumir de qué va el chat
       if (reply) {
         maybeGenerateTitle(currentChatId, [
@@ -607,23 +657,34 @@ export function SearchBar({ isOpeningChat = false, inClass }: { isOpeningChat?: 
               const safety = envelope?.payload?.safety
               const label = safety ? null : envelopeLabel(envelope)
               const grounded = safety ? null : envelopeGrounded(envelope)
-              // Notas del sistema (archivo subido, avisos): una línea centrada, no una burbuja
+              // El archivo adjunto a un mensaje: va encima de él, a la derecha, como en el
+              // mensaje del usuario (no un aviso de texto en medio del chat)
+              const attached = attachedFilename(msg)
+              if (attached) {
+                const file = sentFile(attached)
+                return (
+                  <div key={`${index}-file`} className="mb-2 flex justify-end">
+                    <FileCard
+                      filename={attached}
+                      mimeType={file?.mimeType ?? mimeFromFilename(attached)}
+                      size={file?.size}
+                      documentId={file?.document?.id}
+                      documentStatus={file?.document?.status}
+                      previewDataUrl={file?.dataUrl}
+                      onClick={
+                        file
+                          ? () => setViewerFile({ filename: file.filename, mimeType: file.mimeType, documentId: file.document?.id, dataUrl: file.dataUrl })
+                          : undefined
+                      }
+                    />
+                  </div>
+                )
+              }
+              // Otras notas del sistema (avisos): una línea centrada, no una burbuja
               if (msg.role === "system") {
                 return (
-                  <p
-                    key={`${index}-system`}
-                    className="flex items-center justify-center gap-1.5 text-center text-xs text-muted-foreground"
-                  >
-                    {/* El aviso de subida se guarda con 📎: se pinta con el icono, que no depende
-                        de tener una fuente de emojis instalada */}
-                    {msg.content.startsWith(UPLOAD_NOTE_PREFIX) ? (
-                      <>
-                        <Paperclip className="h-3.5 w-3.5 shrink-0" aria-hidden />
-                        {msg.content.slice(UPLOAD_NOTE_PREFIX.length)}
-                      </>
-                    ) : (
-                      msg.content
-                    )}
+                  <p key={`${index}-system`} className="text-center text-xs text-muted-foreground">
+                    {msg.content}
                   </p>
                 )
               }
@@ -737,10 +798,18 @@ export function SearchBar({ isOpeningChat = false, inClass }: { isOpeningChat?: 
       </div>
 
       <div className={`mx-auto w-full max-w-3xl shrink-0 ${inClass ? "px-3 pb-3" : "px-4 pb-4 md:px-6 md:pb-6"}`}>
-        {/* Uploaded Files */}
-        {!inClass && uploadedFiles.length > 0 && (
-          <div className="mb-4 flex flex-wrap gap-2">
-            {uploadedFiles.map((uf, index) => (
+        {/* Input */}
+        <div
+          className={`animate-in fade-in slide-in-from-bottom-4 duration-500 rounded-2xl border-2 bg-card shadow-[0_4px_20px_rgb(0,0,0,0.03)] transition-all hover:shadow-[0_4px_30px_rgb(0,0,0,0.06)] ${
+            isFocused ? "border-ring/50 ring-1 ring-ring/20" : "border-border hover:border-ring/40"
+          }`}
+        >
+          {/* El adjunto, dentro de la caja de texto hasta que sale con el mensaje */}
+          {!inClass && (uploadingHere || pendingFiles.length > 0) && (
+          <div className="flex flex-wrap gap-2 px-3 pt-3 md:px-3.5 md:pt-3.5">
+            {uploadingHere ? (
+              <FileCard filename={uploadingHere.filename} mimeType={uploadingHere.mimeType} uploading />
+            ) : pendingFiles.map((uf, index) => (
               <FileCard
                 key={`${uf.document?.id || index}`}
                 filename={uf.filename}
@@ -761,14 +830,7 @@ export function SearchBar({ isOpeningChat = false, inClass }: { isOpeningChat?: 
               />
             ))}
           </div>
-        )}
-
-        {/* Input */}
-        <div
-          className={`animate-in fade-in slide-in-from-bottom-4 duration-500 rounded-2xl border-2 bg-card shadow-[0_4px_20px_rgb(0,0,0,0.03)] transition-all hover:shadow-[0_4px_30px_rgb(0,0,0,0.06)] ${
-            isFocused ? "border-ring/50 ring-1 ring-ring/20" : "border-border hover:border-ring/40"
-          }`}
-        >
+          )}
           <div className="flex items-center px-4 md:px-5 py-3 md:py-3.5">
             <textarea
               ref={messageInputRef}
@@ -785,10 +847,18 @@ export function SearchBar({ isOpeningChat = false, inClass }: { isOpeningChat?: 
                 // a medias, Enter confirma la palabra: no envía
                 if (e.key !== "Enter" || e.shiftKey || e.nativeEvent.isComposing) return
                 e.preventDefault()
-                if (shownQuery.trim() && !isStreaming) handleSend()
+                if (shownQuery.trim() && !isStreaming && !uploadingHere) handleSend()
               }}
               data-tour={inClass ? undefined : "chat"}
-              placeholder={isStreaming ? "Generando respuesta…" : inClass ? "Pregunta sobre esta clase…" : "Pregunta lo que quieras…"}
+              placeholder={
+                isStreaming
+                  ? "Generando respuesta…"
+                  : inClass
+                    ? "Pregunta sobre esta clase…"
+                    : uploadingHere || pendingFiles.length > 0
+                      ? "Pregunta algo sobre el archivo…"
+                      : "Pregunta lo que quieras…"
+              }
               aria-label="Mensaje"
               maxLength={MAX_MESSAGE_CHARS}
               aria-describedby={remaining <= MESSAGE_WARNING_CHARS ? "message-limit" : undefined}
@@ -891,6 +961,7 @@ export function SearchBar({ isOpeningChat = false, inClass }: { isOpeningChat?: 
                   aria-label="Enviar"
                   variant="ghost"
                   size="icon"
+                  disabled={!!uploadingHere}
                   className="h-8 w-8 md:h-9 md:w-9 rounded-lg bg-primary text-primary-foreground hover:bg-primary/90 transition-all"
                   onClick={handleSend}
                 >
