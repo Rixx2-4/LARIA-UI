@@ -497,19 +497,23 @@ export function SearchBar({ isOpeningChat = false, inClass }: { isOpeningChat?: 
       const before: ChatMessage[] = []
       if (attachment) {
         const note = `${UPLOAD_NOTE}${attachment.filename}`
-        try {
-          await addMessage(currentChatId, "system", note)
-          before.push({ role: "system", content: note })
-        } catch (error) {
-          console.warn("No se pudo guardar la nota del archivo:", error)
-        }
-        // Deja la caja de texto: ya es parte de la conversación
+        // Deja la zona de escritura en el acto y pasa ya a la conversación, sin esperar a
+        // que el servidor guarde la nota
         setUploadsByChat((prev) => ({
           ...prev,
           [currentChatId]: (prev[currentChatId]?.length ? prev[currentChatId] : [attachment]).map((uf) =>
             uf.filename === attachment.filename ? { ...uf, sent: true } : uf,
           ),
         }))
+        setMessages([...messages, { role: "system", content: note }])
+        try {
+          await addMessage(currentChatId, "system", note)
+          before.push({ role: "system", content: note })
+        } catch (error) {
+          // Sin la nota guardada, el archivo sigue vinculado al chat: el mensaje sale igual
+          // (y startStreaming parte de los mensajes sin ella)
+          console.warn("No se pudo guardar la nota del archivo:", error)
+        }
       }
 
       // La respuesta será el mensaje tras el del usuario: la misma clave que su «Escuchar»
@@ -798,39 +802,41 @@ export function SearchBar({ isOpeningChat = false, inClass }: { isOpeningChat?: 
       </div>
 
       <div className={`mx-auto w-full max-w-3xl shrink-0 ${inClass ? "px-3 pb-3" : "px-4 pb-4 md:px-6 md:pb-6"}`}>
+        {/* El adjunto, justo encima de la caja de texto (fuera de ella: la caja no cambia
+            de tamaño) hasta que sale con el mensaje */}
+        {!inClass && (uploadingHere || pendingFiles.length > 0) && (
+        <div className="mb-2 flex flex-wrap gap-2">
+          {uploadingHere ? (
+            <FileCard filename={uploadingHere.filename} mimeType={uploadingHere.mimeType} uploading />
+          ) : pendingFiles.map((uf, index) => (
+            <FileCard
+              key={`${uf.document?.id || index}`}
+              filename={uf.filename}
+              size={uf.size}
+              mimeType={uf.mimeType}
+              documentId={uf.document?.id}
+              documentStatus={uf.document?.status}
+              previewDataUrl={uf.dataUrl}
+              onClick={() =>
+                setViewerFile({
+                  filename: uf.filename,
+                  mimeType: uf.mimeType,
+                  documentId: uf.document?.id,
+                  dataUrl: uf.dataUrl,
+                })
+              }
+              onRemove={() => removeFile(uf)}
+            />
+          ))}
+        </div>
+        )}
+
         {/* Input */}
         <div
           className={`animate-in fade-in slide-in-from-bottom-4 duration-500 rounded-2xl border-2 bg-card shadow-[0_4px_20px_rgb(0,0,0,0.03)] transition-all hover:shadow-[0_4px_30px_rgb(0,0,0,0.06)] ${
             isFocused ? "border-ring/50 ring-1 ring-ring/20" : "border-border hover:border-ring/40"
           }`}
         >
-          {/* El adjunto, dentro de la caja de texto hasta que sale con el mensaje */}
-          {!inClass && (uploadingHere || pendingFiles.length > 0) && (
-          <div className="flex flex-wrap gap-2 px-3 pt-3 md:px-3.5 md:pt-3.5">
-            {uploadingHere ? (
-              <FileCard filename={uploadingHere.filename} mimeType={uploadingHere.mimeType} uploading />
-            ) : pendingFiles.map((uf, index) => (
-              <FileCard
-                key={`${uf.document?.id || index}`}
-                filename={uf.filename}
-                size={uf.size}
-                mimeType={uf.mimeType}
-                documentId={uf.document?.id}
-                documentStatus={uf.document?.status}
-                previewDataUrl={uf.dataUrl}
-                onClick={() =>
-                  setViewerFile({
-                    filename: uf.filename,
-                    mimeType: uf.mimeType,
-                    documentId: uf.document?.id,
-                    dataUrl: uf.dataUrl,
-                  })
-                }
-                onRemove={() => removeFile(uf)}
-              />
-            ))}
-          </div>
-          )}
           <div className="flex items-center px-4 md:px-5 py-3 md:py-3.5">
             <textarea
               ref={messageInputRef}
