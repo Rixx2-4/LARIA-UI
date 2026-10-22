@@ -61,7 +61,8 @@ export function toResults(questions: QuizQuestion[], graded: QuizAttemptQuestion
     }
     const open = q.kind === "open" || isOpen(question)
     return {
-      question,
+      // La corrección también dice si era de repaso de otro concepto
+      question: q.concept_title && !question.concept_title ? { ...question, concept_title: q.concept_title } : question,
       userAnswer: q.selected,
       isCorrect: q.is_correct,
       correctAnswer: q.correct_answer,
@@ -197,11 +198,13 @@ interface QuestionStepProps {
   onNext: () => void
   isSubmitting: boolean
   error: string | null
+  // El texto del último paso ("Finalizar"); p. ej. «Ver la explicación» tras el recuerdo activo
+  finishLabel?: string
 }
 
 // Una pregunta con su progreso, sus opciones y la navegación. Con teclado: 1-4 o
 // A-D eligen la opción y Enter pasa a la siguiente
-export function QuestionStep({ questions, current, answers, onAnswer, onPrev, onNext, isSubmitting, error }: QuestionStepProps) {
+export function QuestionStep({ questions, current, answers, onAnswer, onPrev, onNext, isSubmitting, error, finishLabel = "Finalizar" }: QuestionStepProps) {
   const question = questions[current]
   const isLast = current === questions.length - 1
   const selected = answers[question.index]
@@ -261,6 +264,7 @@ export function QuestionStep({ questions, current, answers, onAnswer, onPrev, on
       </div>
 
       <div className="rounded-2xl border border-border bg-card p-5 shadow-sm sm:p-6">
+        {question.concept_title && <ReviewTag title={question.concept_title} className="mb-3" />}
         <h2 ref={headingRef} tabIndex={-1} className="message-text mb-5 text-lg font-medium leading-snug outline-none sm:text-xl">
           <MathText text={question.text} />
         </h2>
@@ -323,7 +327,7 @@ export function QuestionStep({ questions, current, answers, onAnswer, onPrev, on
         </p>
         <Button onClick={onNext} disabled={!canContinue} className="ml-auto min-w-36 gap-2 sm:ml-0">
           {isSubmitting && isLast ? <Loader2 className="h-4 w-4 animate-spin motion-reduce:animate-none" aria-hidden /> : null}
-          {isLast ? "Finalizar" : "Siguiente"}
+          {isLast ? finishLabel : "Siguiente"}
           {!(isSubmitting && isLast) && <ArrowRight className="h-4 w-4" aria-hidden />}
         </Button>
       </div>
@@ -350,6 +354,16 @@ const TONE_BORDER = {
 // Cada pregunta corregida: lo que respondiste y, si fallaste, lo correcto. En las
 // abiertas, el veredicto (no un ✓/✗: el crédito puede ser parcial), el comentario del
 // corrector, las ideas clave que cubriste y una respuesta de ejemplo
+// Una pregunta de repaso de otro concepto (intercalado o recuerdo activo, ADR-055): cuenta
+// para ese concepto, no para el paso de ahora
+export function ReviewTag({ title, className = "" }: { title: string; className?: string }) {
+  return (
+    <span className={`inline-flex rounded-md bg-secondary px-2 py-0.5 text-xs font-medium text-secondary-foreground ${className}`}>
+      Repaso: {title}
+    </span>
+  )
+}
+
 export function ResultsList({ results }: { results: QuizResult[] }) {
   return (
     <ol className="space-y-3">
@@ -370,6 +384,7 @@ export function ResultsList({ results }: { results: QuizResult[] }) {
                 <XCircle className="h-5 w-5 text-red-600 dark:text-red-400 mt-0.5 shrink-0" aria-label="Incorrecta" />
               )}
               <div className="min-w-0 flex-1 space-y-2">
+                {result.question.concept_title && <ReviewTag title={result.question.concept_title} />}
                 <p className="message-text font-medium">
                   <span className="mr-1.5 text-muted-foreground">{index + 1}.</span>
                   <MathText text={result.question.text} />
@@ -413,6 +428,7 @@ function OpenResult({ result, number }: { result: QuizResult; number: number }) 
       <div className="flex items-start gap-3">
         <Icon className={`mt-0.5 h-5 w-5 shrink-0 ${iconColor}`} aria-hidden />
         <div className="min-w-0 flex-1 space-y-2.5">
+          {result.question.concept_title && <ReviewTag title={result.question.concept_title} />}
           <p className="message-text font-medium">
             <span className="mr-1.5 text-muted-foreground">{number}.</span>
             <MathText text={result.question.text} />
