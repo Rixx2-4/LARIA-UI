@@ -12,7 +12,10 @@ interface FileCardProps {
   // Estado del documento al subirlo; la tarjeta sigue su análisis hasta que termina
   documentStatus?: string
   previewDataUrl?: string
-  onClick: () => void
+  // Mientras se sube (aún no hay documento)
+  uploading?: boolean
+  // Sin onClick (un archivo de un mensaje antiguo que ya no está), no se puede abrir
+  onClick?: () => void
   onRemove?: () => void
 }
 
@@ -37,15 +40,18 @@ function formatSize(bytes: number): string {
   return `${(bytes / (1024 * 1024)).toFixed(1)} MB`
 }
 
-export function FileCard({ filename, size, mimeType, documentId, documentStatus, previewDataUrl, onClick, onRemove }: FileCardProps) {
+export function FileCard({ filename, size, mimeType, documentId, documentStatus, previewDataUrl, uploading, onClick, onRemove }: FileCardProps) {
   const isImage = mimeType.startsWith("image/")
   const { status, errorMessage } = useDocumentStatus(documentId, documentStatus)
+  const Card = onClick ? "button" : "div"
 
   return (
     <div className="relative group min-w-0 max-w-full">
-      <button
+      <Card
         onClick={onClick}
-        className="flex items-center gap-3 w-full max-w-[320px] rounded-xl border border-border bg-background p-3 text-left transition-all hover:bg-accent/50 hover:border-ring/40 cursor-pointer"
+        className={`flex items-center gap-3 w-full max-w-[320px] rounded-xl border border-border bg-background p-3 text-left transition-all ${
+          onClick ? "hover:bg-accent/50 hover:border-ring/40 cursor-pointer" : ""
+        }`}
       >
         {isImage && previewDataUrl ? (
           <div className="h-10 w-10 shrink-0 rounded-lg overflow-hidden bg-muted">
@@ -67,6 +73,12 @@ export function FileCard({ filename, size, mimeType, documentId, documentStatus,
           <p className="text-xs text-muted-foreground">
             {getFileTypeLabel(mimeType)}{size !== undefined && ` · ${formatSize(size)}`}
           </p>
+          {uploading && (
+            <p role="status" className="flex items-center gap-1 text-xs text-muted-foreground">
+              <Loader2 className="h-3 w-3 animate-spin motion-reduce:animate-none" aria-hidden />
+              Subiendo…
+            </p>
+          )}
           {isAnalysisPending(status) && (
             <p role="status" className="flex items-center gap-1 text-xs text-muted-foreground">
               <Loader2 className="h-3 w-3 animate-spin motion-reduce:animate-none" aria-hidden />
@@ -79,7 +91,7 @@ export function FileCard({ filename, size, mimeType, documentId, documentStatus,
             </p>
           )}
         </div>
-      </button>
+      </Card>
       {onRemove && (
         // El círculo es pequeño, pero la zona que se puede tocar llega a 44px (before:)
         <button
