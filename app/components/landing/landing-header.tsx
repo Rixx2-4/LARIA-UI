@@ -21,7 +21,9 @@ export function LandingHeader() {
   const [scrolled, setScrolled] = useState(false)
   useMotionValueEvent(scrollY, "change", (y) => setScrolled(y > 8))
 
-  // Quien ya tiene sesión viene a estudiar, no a leer la presentación
+  // Quien ya tiene sesión viene a estudiar, no a leer la presentación. Lo redirige ya
+  // el servidor (proxy.ts) antes de enviar la portada; esto es el respaldo si llega
+  // igualmente (p. ej. desde una caché)
   useEffect(() => {
     if (looksSignedIn()) router.replace(NEW_CHAT_HREF)
   }, [router])

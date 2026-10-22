@@ -41,10 +41,22 @@ describe("proxy: pantallas con sesión", () => {
     }
   })
 
-  it("solo se ejecuta en las pantallas con sesión y en la API", () => {
+  it("con sesión, la portada lleva al chat desde el servidor: no se ve ni un instante", async () => {
+    const res = await get("/", "__client_uat_fHoTIQtm=1792000000")
+    expect(res.status).toBe(307)
+    expect(res.headers.get("location")).toBe("https://laria.test/chat")
+  })
+
+  it("con la sesión cerrada (__client_uat a 0), la portada se ve", async () => {
+    const res = await get("/", "__client_uat=0; __client_uat_fHoTIQtm=0")
+    expect(res.headers.get("location")).toBeNull()
+    expect(res.headers.get("x-middleware-next")).toBe("1")
+  })
+
+  it("solo se ejecuta en la portada, las pantallas con sesión y la API", () => {
     expect(config.matcher).toEqual(
-      expect.arrayContaining(["/chat/:path*", "/perfil", "/quiz", "/nivelacion", "/cuenta/:path*", "/clases", "/clase/:path*"]),
+      expect.arrayContaining(["/", "/chat/:path*", "/perfil", "/quiz", "/nivelacion", "/cuenta/:path*", "/clases", "/clase/:path*"]),
     )
-    expect(config.matcher.some((m) => m === "/" || m.includes("sign-in"))).toBe(false)
+    expect(config.matcher.some((m) => m.includes("sign-in") || m.includes("legal"))).toBe(false)
   })
 })
