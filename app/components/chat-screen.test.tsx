@@ -685,7 +685,7 @@ describe("ChatScreen", () => {
   // Como en Claude: el archivo espera en la caja de texto y sale con el mensaje, como
   // parte de él; en el chat no se escribe ningún aviso al subirlo
   describe("el archivo sale con el mensaje", () => {
-    function server(opts: { holdUpload?: Promise<void> } = {}) {
+    function server(opts: { holdUpload?: Promise<void>; holdNote?: Promise<void> } = {}) {
       const calls: { method: string; url: string; body?: { role?: string; content?: string } }[] = []
       let saved = [{ role: "user", content: "Hola" }, { role: "assistant", content: "¡Hola!" }]
       vi.stubGlobal("fetch", async (url: string, init?: RequestInit) => {
@@ -701,6 +701,7 @@ describe("ChatScreen", () => {
         if (url.endsWith("/documents/")) return json([])
         if (url.endsWith("/chats/c1") && method === "PUT") return json({ id: "c1", title: "t", document_id: "d1" })
         if (url.endsWith("/messages")) {
+          await opts.holdNote
           saved = [...saved, body]
           return json({ id: "c1", title: "t", messages: saved })
         }
@@ -713,9 +714,11 @@ describe("ChatScreen", () => {
       })
       return calls
     }
-    const composer = () => screen.getByRole("textbox", { name: "Mensaje" }).closest(".rounded-2xl") as HTMLElement
+    // La caja de texto, y la zona justo encima donde espera el adjunto (fuera de la caja)
+    const box = () => screen.getByRole("textbox", { name: "Mensaje" }).closest(".rounded-2xl") as HTMLElement
+    const composer = () => box().parentElement as HTMLElement
 
-    it("al subirlo no se escribe nada en el chat: espera dentro de la caja de texto", async () => {
+    it("al subirlo no se escribe nada en el chat: espera justo encima de la caja de texto, fuera de ella", async () => {
       const calls = server()
       const { container } = renderAt("c1")
       await screen.findByText("¡Hola!")
@@ -726,6 +729,9 @@ describe("ChatScreen", () => {
 
       await waitFor(() => expect(composer().textContent).toContain("tema1.pdf"))
       expect(within(composer()).getByRole("button", { name: "Quitar archivo" })).toBeTruthy()
+      // Fuera de la caja (no la estira) y justo encima de ella
+      expect(box().textContent).not.toContain("tema1.pdf")
+      expect(box().previousElementSibling?.textContent).toContain("tema1.pdf")
       expect(calls.some((c) => c.url.endsWith("/messages"))).toBe(false)
       expect(screen.queryByText(/Subí el archivo/)).toBeNull()
       expect(screen.getByPlaceholderText("Pregunta algo sobre el archivo…")).toBeTruthy()
@@ -757,6 +763,30 @@ describe("ChatScreen", () => {
       expect(file.compareDocumentPosition(question) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy()
       expect(screen.queryByText(/Subí el archivo/)).toBeNull()
       expect(screen.getByPlaceholderText("Pregunta lo que quieras…")).toBeTruthy()
+    })
+
+    it("al enviar, deja la zona de escritura en el acto y pasa al historial, sin esperar al servidor", async () => {
+      let saveNote!: () => void
+      server({ holdNote: new Promise((resolve) => (saveNote = resolve)) })
+      const { container } = renderAt("c1")
+      await screen.findByText("¡Hola!")
+      fireEvent.change(container.querySelector<HTMLInputElement>('input[type="file"]')!, {
+        target: { files: [new File(["%PDF"], "tema1.pdf", { type: "application/pdf" })] },
+      })
+      await waitFor(() => expect(composer().textContent).toContain("tema1.pdf"))
+
+      const input = screen.getByRole("textbox", { name: "Mensaje" })
+      fireEvent.change(input, { target: { value: "Resúmelo" } })
+      fireEvent.keyDown(input, { key: "Enter" })
+
+      // La nota aún no está guardada y el archivo ya no está junto a la caja: está en el chat
+      await waitFor(() => expect(composer().textContent).not.toContain("tema1.pdf"))
+      expect(screen.getByText("tema1.pdf")).toBeTruthy()
+      expect(screen.queryByRole("button", { name: "Quitar archivo" })).toBeNull()
+
+      await act(async () => saveNote())
+      expect(await screen.findByText("Es un resumen.")).toBeTruthy()
+      expect(screen.getAllByText("tema1.pdf")).toHaveLength(1)
     })
 
     it("mientras se sube no se puede enviar: el mensaje saldría sin el archivo", async () => {
