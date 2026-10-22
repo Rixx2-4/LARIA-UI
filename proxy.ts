@@ -1,6 +1,6 @@
 import { NextResponse, type NextFetchEvent, type NextRequest } from "next/server"
 import { clerkMiddleware } from "@clerk/nextjs/server"
-import { SIGN_IN_HREF } from "@/lib/routes"
+import { NEW_CHAT_HREF, SIGN_IN_HREF } from "@/lib/routes"
 
 // Las pantallas con sesión NO pasan por clerkMiddleware. La app es de cliente: Clerk
 // lleva la sesión en el navegador y es el backend quien exige el token, así que
@@ -30,6 +30,13 @@ const clerk = configured ? clerkMiddleware() : null
 export default function proxy(request: NextRequest, event: NextFetchEvent) {
   const { pathname, search } = request.nextUrl
 
+  // Con sesión, la portada lleva directamente al chat desde el servidor. Redirigir en el
+  // navegador (landing-header.tsx, que se queda de respaldo) dejaba ver la portada un
+  // instante. Sin sesión, la portada se sirve como siempre (estática, sin Clerk)
+  if (pathname === "/") {
+    return looksSignedIn(request) ? NextResponse.redirect(new URL(NEW_CHAT_HREF, request.url), 307) : NextResponse.next()
+  }
+
   if (PROTECTED.test(pathname)) {
     if (looksSignedIn(request)) return NextResponse.next()
     const signIn = new URL(SIGN_IN_HREF, request.url)
@@ -43,6 +50,7 @@ export default function proxy(request: NextRequest, event: NextFetchEvent) {
 
 export const config = {
   matcher: [
+    "/",
     "/chat/:path*",
     "/perfil",
     "/quiz",
