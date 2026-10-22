@@ -140,6 +140,24 @@ describe("Clase guiada", () => {
     expect(deletes).toHaveLength(1)
   })
 
+  it("en el móvil la ruta empieza plegada (va encima de la explicación); en pantallas anchas, abierta", async () => {
+    stubServer()
+    // jsdom responde «no» a toda media query: es un móvil
+    const { unmount } = renderPage()
+    await screen.findByText("Una igualdad con una incógnita.", { exact: false })
+    const outline = screen.getByText("Tu ruta · 1 de 3").closest("details")!
+    expect(outline.open).toBe(false)
+    unmount()
+
+    vi.spyOn(window, "matchMedia").mockImplementation(
+      (query: string) => ({ matches: query === "(min-width: 768px)", media: query, addEventListener() {}, removeEventListener() {} }) as unknown as MediaQueryList,
+    )
+    renderPage()
+    await screen.findByText("Una igualdad con una incógnita.", { exact: false })
+    expect(screen.getByText("Tu ruta · 1 de 3").closest("details")!.open).toBe(true)
+    vi.restoreAllMocks()
+  })
+
   it("lección → comprobación → otra explicación → siguiente concepto → ruta completada", async () => {
     const server = stubServer()
     renderPage()

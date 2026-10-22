@@ -141,6 +141,21 @@
     outline: 2px solid var(--ring);
     outline-offset: 2px;
   }
+  /* Un fieldset crece por defecto hasta su contenido más ancho (min-width: min-content):
+     en móvil, un título largo sacaba de la pantalla todo el grupo */
+  fieldset {
+    min-width: 0;
+  }
+}
+
+/* En móvil los campos de texto van a 16px: con menos, Safari en iPhone amplía la página al
+   tocarlos y se queda ampliada. Fuera de @layer para ganar a las clases text-sm */
+@media (max-width: 767px) {
+  input:not([type="checkbox"]):not([type="radio"]):not([type="range"]):not([type="file"]),
+  textarea,
+  select {
+    font-size: 16px;
+  }
 }
 
 /* Added custom animations for smooth transitions */
@@ -190,6 +205,12 @@
 .message-text {
   overflow-wrap: anywhere;
   min-width: 0;
+}
+/* Salvo en las tablas: con «anywhere» el navegador las estrechaba partiendo las palabras
+   letra a letra; así cada columna mide al menos su palabra más larga y, si no cabe, la
+   tabla se desplaza de lado en su caja */
+.message-text table {
+  overflow-wrap: normal;
 }
 
 /* LARIA, la mascota (app/components/laria-mascot.tsx). Solo transform y opacity:
