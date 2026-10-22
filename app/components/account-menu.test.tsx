@@ -110,6 +110,8 @@ describe("AccountMenu", () => {
     expect(menu.className).toMatch(/\bfixed\b/)
     expect(menu.style.left).toBe("80px")
     expect(menu.style.bottom).toBe(`${window.innerHeight - 600 + 8}px`)
+    // Y en un móvil estrecho no se sale por la derecha
+    expect(menu.style.maxWidth).toBe(`${window.innerWidth - 80 - 8}px`)
     expect(focus).toHaveBeenCalledWith({ preventScroll: true })
     focus.mockRestore()
     anchor.remove()

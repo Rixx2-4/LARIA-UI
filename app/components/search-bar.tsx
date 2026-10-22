@@ -28,6 +28,10 @@ import { takeSpeakable } from "@/lib/speech-chunks"
 // Así empieza el aviso que queda en el chat al subir un archivo (los ya guardados lo llevan)
 const UPLOAD_NOTE_PREFIX = "📎 "
 
+// «Copiar» y «Escuchar» bajo cada respuesta: en móvil, con zona táctil más alta que el texto
+const MESSAGE_ACTION_CLASS =
+  "relative flex items-center gap-1 transition-colors hover:text-foreground before:absolute before:-inset-x-1.5 before:-inset-y-3 before:content-[''] md:before:hidden"
+
 // "apuntes_tema-3.pdf" → "Apuntes tema 3"
 function titleFromFilename(filename: string): string {
   const base = filename.replace(/\.[^.]+$/, "").replace(/[_-]+/g, " ").replace(/\s+/g, " ").trim()
@@ -213,6 +217,23 @@ export function SearchBar({ isOpeningChat = false, inClass }: { isOpeningChat?: 
   useEffect(() => {
     if (!isUserScrolledRef.current) scrollToBottom(false)
   }, [activeChatId, messages.length, scrollToBottom])
+
+  // Diagramas, fórmulas e imágenes se dibujan después de llegar el mensaje y lo alargan, y
+  // la zona de mensajes se encoge al aparecer la tarjeta del archivo o el teclado del
+  // móvil: si se estaba al final, se sigue al final (si no, al abrir un chat la última
+  // respuesta quedaba tapada por la caja de texto)
+  const hasMessages = messages.length > 0
+  useEffect(() => {
+    const container = messagesContainerRef.current
+    const content = container?.firstElementChild
+    if (!container || !content || typeof ResizeObserver === "undefined") return
+    const observer = new ResizeObserver(() => {
+      if (!isUserScrolledRef.current) scrollToBottom(false)
+    })
+    observer.observe(container)
+    observer.observe(content)
+    return () => observer.disconnect()
+  }, [hasMessages, scrollToBottom])
 
   // El chat activo, o uno nuevo si no hay (y la URL pasa a apuntar a él). Si ya se está
   // creando uno (enviar y adjuntar a la vez), se espera a ese: nunca se crean dos
@@ -556,8 +577,10 @@ export function SearchBar({ isOpeningChat = false, inClass }: { isOpeningChat?: 
 
       <p aria-live="polite" className="sr-only">{streamAnnouncement}</p>
 
-      {/* Chat Messages: siempre montado para que el scroll tenga a quién escuchar */}
-      <div ref={messagesContainerRef} className="relative min-h-0 flex-1 overflow-y-auto motion-safe:scroll-smooth">
+      {/* Chat Messages: siempre montado para que el scroll tenga a quién escuchar. Sin el
+          anclaje de scroll del navegador: al cambiar el alto del contenido movía la posición
+          y ese scroll se tomaba por el usuario subiendo a leer (y se dejaba de seguir el final) */}
+      <div ref={messagesContainerRef} className="relative min-h-0 flex-1 overflow-y-auto [overflow-anchor:none] motion-safe:scroll-smooth">
         {messages.length === 0 && isOpeningChat ? (
           <MessagesSkeleton />
         ) : messages.length === 0 && inClass ? (
@@ -608,7 +631,7 @@ export function SearchBar({ isOpeningChat = false, inClass }: { isOpeningChat?: 
                 <Fragment key={`${index}-${msg.role}`}>
                 <div className={`flex ${msg.role === "user" ? "justify-end" : "justify-start"}`}>
                   <div
-                    className={`min-w-0 max-w-[80%] rounded-2xl px-4 py-3 ${
+                    className={`min-w-0 rounded-2xl px-4 py-3 ${msg.role === "user" ? "max-w-[85%] md:max-w-[80%]" : "max-w-full md:max-w-[80%]"} ${
                       msg.role === "user"
                         ? "bg-primary text-primary-foreground"
                         : safety === "support"
@@ -619,11 +642,11 @@ export function SearchBar({ isOpeningChat = false, inClass }: { isOpeningChat?: 
                     {renderMessageContent(msg, isLive)}
 
                     {msg.role === "assistant" && !isLive && (
-                      <div className="mt-2 pt-2 border-t border-border/30 flex flex-wrap items-center gap-2 text-[11px] text-muted-foreground">
+                      <div className="mt-2 pt-2 border-t border-border/30 flex flex-wrap items-center gap-x-4 gap-y-2 text-xs text-muted-foreground md:gap-2 md:text-[11px]">
                         <button
                           onClick={() => copyToClipboard(msg.content)}
                           aria-label="Copiar respuesta"
-                          className="flex items-center gap-1 transition-colors hover:text-foreground"
+                          className={MESSAGE_ACTION_CLASS}
                         >
                           <Copy className="h-3 w-3" />
                           Copiar
@@ -635,7 +658,7 @@ export function SearchBar({ isOpeningChat = false, inClass }: { isOpeningChat?: 
                             <button
                               onClick={() => (playing ? speech.stop() : speech.playMessage(key, msg.content, toEmotion(envelope?.emotion)))}
                               aria-label={playing ? "Detener la lectura" : "Escuchar respuesta"}
-                              className="flex items-center gap-1 transition-colors hover:text-foreground"
+                              className={MESSAGE_ACTION_CLASS}
                             >
                               {playing ? <Square className="h-3 w-3" /> : <Volume2 className="h-3 w-3" />}
                               {playing ? "Detener" : "Escuchar"}

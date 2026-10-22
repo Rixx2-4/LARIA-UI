@@ -331,9 +331,9 @@ function Perfil() {
           <div className="w-[52px] h-[52px] rounded-full bg-primary/10 text-primary flex items-center justify-center font-semibold text-lg shrink-0">
             {iniciales}
           </div>
-          <div>
-            <h1 className="text-xl font-medium mb-1">{username}</h1>
-            <p className="text-xs text-muted-foreground mb-1.5">{email}</p>
+          <div className="min-w-0">
+            <h1 className="text-xl font-medium mb-1 break-words">{username}</h1>
+            <p className="text-xs text-muted-foreground mb-1.5 break-all">{email}</p>
             <div className="flex gap-2.5 items-center flex-wrap">
               {/* Sin actividad, el ritmo sería un valor por defecto, no una medida */}
               {hasNoActivity ? (
@@ -457,9 +457,9 @@ function Perfil() {
               {mastery.length > 0 ? (
                 mastery.map((m) => (
                   <div key={m.concepto}>
-                    <div className="flex justify-between items-baseline mb-1.5">
-                      <span className="text-[13px] font-medium">{m.concepto}</span>
-                      <span className="text-xs text-muted-foreground flex items-center gap-1.5">{m.valor}% {trendArrow(m.tendencia)}</span>
+                    <div className="flex justify-between items-baseline gap-3 mb-1.5">
+                      <span className="min-w-0 break-words text-[13px] font-medium">{m.concepto}</span>
+                      <span className="shrink-0 whitespace-nowrap text-xs text-muted-foreground flex items-center gap-1.5">{m.valor}% {trendArrow(m.tendencia)}</span>
                     </div>
                     <div className="h-[7px] bg-muted rounded-full border border-border overflow-hidden">
                       <div className="h-full rounded-full" style={{ width: `${m.valor}%`, background: masteryColor(m.valor) }} />

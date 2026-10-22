@@ -1,6 +1,6 @@
 "use client"
 
-import { useState, useEffect, useRef } from "react"
+import { useState, useEffect, useRef, useSyncExternalStore } from "react"
 import { X, Download, ZoomIn, ZoomOut, RotateCw } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { lariaAPI } from "@/lib/laria-api"
@@ -82,7 +82,38 @@ function ImageViewer({ src, filename }: { src: string; filename: string }) {
   )
 }
 
-function PdfViewer({ src }: { src: string }) {
+// Chrome en Android no pinta un PDF dentro de un iframe (queda en blanco) e iOS Safari
+// solo enseña la primera página: en pantallas táctiles se ofrece abrirlo con el visor del
+// sistema o descargarlo
+const subscribeNothing = () => () => {}
+function canEmbedPdf(): boolean {
+  if (typeof navigator !== "undefined" && "pdfViewerEnabled" in navigator && !navigator.pdfViewerEnabled) return false
+  return !window.matchMedia?.("(pointer: coarse)").matches
+}
+
+function PdfViewer({ src, filename }: { src: string; filename: string }) {
+  const embed = useSyncExternalStore(subscribeNothing, canEmbedPdf, () => true)
+  if (!embed) {
+    return (
+      <div className="flex h-full flex-col items-center justify-center gap-4 px-6 text-center text-muted-foreground">
+        <FileTypeIcon mimeType="application/pdf" className="h-10 w-10" />
+        <p className="text-base font-medium text-foreground break-all">{filename}</p>
+        <div className="flex w-full max-w-xs flex-col gap-2">
+          <Button asChild size="lg">
+            <a href={src} target="_blank" rel="noopener">
+              Abrir el PDF
+            </a>
+          </Button>
+          <Button asChild variant="outline" size="lg" className="gap-2">
+            <a href={src} download={filename}>
+              <Download className="h-4 w-4" aria-hidden />
+              Descargar
+            </a>
+          </Button>
+        </div>
+      </div>
+    )
+  }
   return (
     <div className="w-full h-full">
       <iframe
@@ -259,7 +290,7 @@ export function FileViewer({ filename, mimeType, documentId, previewDataUrl, onC
     }
 
     if (kind === "pdf") {
-      return <PdfViewer src={sourceUrl} />
+      return <PdfViewer src={sourceUrl} filename={filename} />
     }
 
     if (text !== null) {
@@ -283,7 +314,7 @@ export function FileViewer({ filename, mimeType, documentId, previewDataUrl, onC
         aria-modal="true"
         aria-label={filename}
         tabIndex={-1}
-        className="relative w-full max-w-4xl h-[80vh] mx-4 bg-background rounded-2xl shadow-2xl overflow-hidden flex flex-col focus:outline-none"
+        className="relative w-full max-w-4xl h-[88dvh] mx-3 md:h-[80vh] md:mx-4 bg-background rounded-2xl shadow-2xl overflow-hidden flex flex-col focus:outline-none"
       >
         <div className="flex items-center justify-between px-4 py-3 border-b border-border">
           <div className="min-w-0 flex-1">
@@ -294,7 +325,7 @@ export function FileViewer({ filename, mimeType, documentId, previewDataUrl, onC
             variant="ghost"
             size="sm"
             onClick={onClose}
-            className="ml-2 h-8 w-8 p-0"
+            className="ml-2 h-10 w-10 p-0 md:h-8 md:w-8"
           >
             <X className="h-4 w-4" />
           </Button>

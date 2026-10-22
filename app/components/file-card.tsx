@@ -42,7 +42,7 @@ export function FileCard({ filename, size, mimeType, documentId, documentStatus,
   const { status, errorMessage } = useDocumentStatus(documentId, documentStatus)
 
   return (
-    <div className="relative group">
+    <div className="relative group min-w-0 max-w-full">
       <button
         onClick={onClick}
         className="flex items-center gap-3 w-full max-w-[320px] rounded-xl border border-border bg-background p-3 text-left transition-all hover:bg-accent/50 hover:border-ring/40 cursor-pointer"
@@ -81,13 +81,14 @@ export function FileCard({ filename, size, mimeType, documentId, documentStatus,
         </div>
       </button>
       {onRemove && (
+        // El círculo es pequeño, pero la zona que se puede tocar llega a 44px (before:)
         <button
           aria-label="Quitar archivo"
           onClick={(e) => {
             e.stopPropagation()
             onRemove()
           }}
-          className="absolute -top-2 -right-2 h-5 w-5 rounded-full bg-destructive text-destructive-foreground flex items-center justify-center transition-opacity md:opacity-0 md:group-hover:opacity-100 md:group-focus-within:opacity-100"
+          className="absolute -top-2 -right-2 h-5 w-5 rounded-full bg-destructive text-destructive-foreground flex items-center justify-center transition-opacity before:absolute before:-inset-3 before:content-[''] md:opacity-0 md:group-hover:opacity-100 md:group-focus-within:opacity-100"
         >
           <X className="h-3 w-3" />
         </button>

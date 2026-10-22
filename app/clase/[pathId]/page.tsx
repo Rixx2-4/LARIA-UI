@@ -1,9 +1,9 @@
 "use client"
 
-import { useCallback, useEffect, useMemo, useRef, useState } from "react"
+import { useCallback, useEffect, useMemo, useRef, useState, useSyncExternalStore } from "react"
 import Link from "next/link"
 import { useParams, useRouter } from "next/navigation"
-import { Check, Circle, CircleDot, Lock, Loader2, RefreshCw, Trash2 } from "lucide-react"
+import { Check, ChevronDown, Circle, CircleDot, Lock, Loader2, RefreshCw, Trash2 } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { AppShell } from "@/app/components/app-shell"
 import { RequireAuth } from "@/app/components/require-auth"
@@ -499,19 +499,37 @@ function ModuleItem({ module, current }: { module: PathModule; current: boolean 
   )
 }
 
+// En móvil la ruta empieza plegada (en tablet y escritorio, abierta como siempre)
+const OUTLINE_OPEN_QUERY = "(min-width: 768px)"
+
+function useMatchMedia(query: string): boolean {
+  const subscribe = useCallback(
+    (onChange: () => void) => {
+      const list = window.matchMedia?.(query)
+      list?.addEventListener("change", onChange)
+      return () => list?.removeEventListener("change", onChange)
+    },
+    [query],
+  )
+  return useSyncExternalStore(subscribe, () => window.matchMedia?.(query).matches ?? true, () => true)
+}
+
 // La ruta entera con el estado de cada módulo, por tramos (básico, intermedio,
-// avanzado) si los tiene; el tramo que falta abrir, al final. En móvil, plegada
+// avanzado) si los tiene; el tramo que falta abrir, al final. En móvil, plegada: va
+// encima de la explicación y abierta la empujaba una pantalla más abajo
 // wide: desde qué ancho va en su columna (más tarde con el panel de preguntas al lado)
 function PathOutline({ path, wide }: { path: LearningPath; wide: "lg" | "2xl" }) {
+  const openByDefault = useMatchMedia(OUTLINE_OPEN_QUERY)
   const modules = [...path.modules].sort((a, b) => a.position - b.position)
   const done = modules.filter((m) => m.status === "completed" || m.status === "assumed").length
   const tiers = path.tiers?.length ? path.tiers : null
   const isCurrent = (module: PathModule) => module.concept === path.teaching?.concept
   return (
     <aside aria-label="Tu ruta" className={wide === "lg" ? "lg:row-span-2" : "2xl:row-span-2"}>
-      <details open className={`group rounded-xl border border-border bg-card p-4 ${wide === "lg" ? "lg:sticky lg:top-6" : "2xl:sticky 2xl:top-6"}`}>
-        <summary className="cursor-pointer list-none text-sm font-medium">
+      <details open={openByDefault} className={`group rounded-xl border border-border bg-card p-4 ${wide === "lg" ? "lg:sticky lg:top-6" : "2xl:sticky 2xl:top-6"}`}>
+        <summary className="flex min-h-6 cursor-pointer list-none items-center justify-between gap-2 text-sm font-medium [&::-webkit-details-marker]:hidden">
           Tu ruta · {done} de {modules.length}
+          <ChevronDown className="h-4 w-4 shrink-0 text-muted-foreground transition-transform group-open:rotate-180 md:hidden" aria-hidden />
         </summary>
         {tiers ? (
           <div className="mt-3 space-y-4">

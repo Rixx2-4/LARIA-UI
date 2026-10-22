@@ -237,14 +237,14 @@ function Quiz({ chatId }: { chatId: string | null }) {
                 ) : chats.length > 0 ? (
                   <>
                     {/* El quiz se genera a partir del documento del chat */}
-                    <div role="radiogroup" aria-label="Chat" className="relative grid max-h-80 gap-2 overflow-auto p-0.5 sm:grid-cols-2">
+                    <div role="radiogroup" aria-label="Chat" className="relative grid max-h-80 grid-cols-1 gap-2 overflow-auto p-0.5 sm:grid-cols-2">
                       {chats.map((chat) => {
                         const hasDocument = !!chat.document_id
                         const checked = chat.id === chatId
                         return (
                           <label
                             key={chat.id}
-                            className={`flex items-center gap-3 rounded-xl border p-3 text-sm transition-colors has-[:focus-visible]:ring-2 has-[:focus-visible]:ring-ring ${
+                            className={`flex min-w-0 items-center gap-3 rounded-xl border p-3 text-sm transition-colors has-[:focus-visible]:ring-2 has-[:focus-visible]:ring-ring ${
                               !hasDocument
                                 ? "cursor-not-allowed border-dashed border-border opacity-55"
                                 : checked

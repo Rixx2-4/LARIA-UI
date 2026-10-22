@@ -325,15 +325,15 @@ export default function LandingPage() {
         <footer className="border-t border-foreground/10">
           <div className="mx-auto flex max-w-6xl flex-wrap items-center justify-between gap-4 px-4 py-8 text-sm text-muted-foreground sm:px-6">
             <span>© {new Date().getFullYear()} Plenum</span>
-            <div className="flex flex-wrap gap-x-5 gap-y-2">
-              <Link href={SIGN_IN_HREF} className="hover:text-foreground">
+            <div className="flex flex-wrap gap-x-5 md:gap-y-2">
+              <Link href={SIGN_IN_HREF} className="py-2 hover:text-foreground md:py-0">
                 Entrar
               </Link>
-              <Link href={SIGN_UP_HREF} className="hover:text-foreground">
+              <Link href={SIGN_UP_HREF} className="py-2 hover:text-foreground md:py-0">
                 Crear cuenta
               </Link>
               {LEGAL_DOCUMENTS.map((item) => (
-                <Link key={item.slug} href={legalHref(item.slug)} className="hover:text-foreground">
+                <Link key={item.slug} href={legalHref(item.slug)} className="py-2 hover:text-foreground md:py-0">
                   {item.label}
                 </Link>
               ))}

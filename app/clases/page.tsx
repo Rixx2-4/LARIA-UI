@@ -262,7 +262,7 @@ function ClassCard({ path, featured = false, onDelete }: { path: LearningPath; f
 
   return (
     <li
-      className={`flex flex-col gap-4 rounded-2xl border bg-card p-4 shadow-sm transition-shadow hover:shadow-md sm:p-5 ${
+      className={`flex min-w-0 flex-col gap-4 rounded-2xl border bg-card p-4 shadow-sm transition-shadow hover:shadow-md sm:p-5 ${
         featured ? "border-primary/40 sm:col-span-2" : "border-border"
       }`}
     >
@@ -348,7 +348,7 @@ function TierSteps({ opened, current, completed }: { opened: PlacementLevel[]; c
         const isOpen = opened.includes(tier)
         const isCurrent = tier === current && !completed
         return (
-          <li key={tier} className="flex flex-1 items-center gap-1.5">
+          <li key={tier} className="flex min-w-0 flex-1 items-center gap-1.5">
             <span
               className={`flex min-w-0 flex-1 items-center justify-center gap-1 rounded-full px-2 py-1 text-xs font-medium ${
                 isCurrent
