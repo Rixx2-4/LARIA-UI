@@ -119,7 +119,9 @@ export function Sidebar({ onNavigate }: { onNavigate?: () => void } = {}) {
         openPanel ? "w-[280px]" : "w-[72px]"
       }`}
     >
-      <div className="flex flex-col h-full w-[72px] shrink-0 items-center">
+      {/* En ventanas bajas los iconos no caben: la columna se desplaza por dentro (sin barra
+          visible, como hasta ahora) en vez de mover toda la página */}
+      <div className="relative flex flex-col h-full min-h-0 w-[72px] shrink-0 items-center overflow-y-auto overflow-x-hidden [scrollbar-width:none]">
         {/* Logo */}
         <div className="mb-6 flex h-10 w-10 shrink-0 items-center justify-center">
           <PlenumMark className="h-9 text-foreground" />

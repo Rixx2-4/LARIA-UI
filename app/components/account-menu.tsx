@@ -1,6 +1,6 @@
 "use client"
 
-import { useEffect, useRef, useSyncExternalStore } from "react"
+import { useEffect, useLayoutEffect, useRef, useSyncExternalStore } from "react"
 import Link from "next/link"
 import { useTheme } from "next-themes"
 import { BrainCircuit, CircleHelp, LogOut, Monitor, Moon, Sun, UserCog } from "lucide-react"
@@ -46,6 +46,9 @@ function ThemePicker() {
   )
 }
 
+// Separación entre el botón Cuenta y el menú (antes ml-2)
+const MENU_GAP_PX = 8
+
 interface AccountMenuProps {
   isOpen: boolean
   onClose: () => void
@@ -61,8 +64,9 @@ export function AccountMenu({ isOpen, onClose, onNavigate }: AccountMenuProps) {
   useEffect(() => {
     if (!isOpen) return
     const previous = document.activeElement as HTMLElement | null
-    panelRef.current?.querySelector<HTMLElement>("a, button")?.focus()
-    return () => previous?.focus()
+    // Sin desplazar: el contenedor de la app (overflow-hidden) se movería y ocultaría parte de la página
+    panelRef.current?.querySelector<HTMLElement>("a, button")?.focus({ preventScroll: true })
+    return () => previous?.focus({ preventScroll: true })
   }, [isOpen])
 
   useEffect(() => {
@@ -73,6 +77,24 @@ export function AccountMenu({ isOpen, onClose, onNavigate }: AccountMenuProps) {
     document.addEventListener("keydown", closeOnEscape)
     return () => document.removeEventListener("keydown", closeOnEscape)
   }, [isOpen, onClose])
+
+  // Fijo en pantalla, al lado de la barra y con el borde inferior a la altura del botón:
+  // hacia abajo se salía de la pantalla, y más abajo tapa la caja de texto del chat. Fijo y
+  // no absoluto para que no lo recorte la columna de iconos, que en ventanas bajas se
+  // desplaza por dentro
+  useLayoutEffect(() => {
+    const panel = panelRef.current
+    const anchor = panel?.parentElement
+    if (!isOpen || !panel || !anchor) return
+    const place = () => {
+      const rect = anchor.getBoundingClientRect()
+      panel.style.left = `${rect.right + MENU_GAP_PX}px`
+      panel.style.bottom = `${Math.max(MENU_GAP_PX * 2, window.innerHeight - rect.top + MENU_GAP_PX)}px`
+    }
+    place()
+    window.addEventListener("resize", place)
+    return () => window.removeEventListener("resize", place)
+  }, [isOpen])
 
   if (!isOpen) return null
 
@@ -85,7 +107,7 @@ export function AccountMenu({ isOpen, onClose, onNavigate }: AccountMenuProps) {
         ref={panelRef}
         role="dialog"
         aria-label="Menú de cuenta"
-        className="absolute left-full top-0 z-[70] ml-2 w-72 rounded-lg border border-border bg-background shadow-2xl animate-in fade-in slide-in-from-bottom-2 duration-200"
+        className="fixed z-[70] max-h-[calc(100dvh-2rem)] w-72 overflow-y-auto rounded-lg border border-border bg-background shadow-2xl animate-in fade-in slide-in-from-bottom-2 duration-200"
       >
         <div className="border-b border-border px-4 py-3">
           <p className="truncate text-sm font-medium">{user?.username}</p>
