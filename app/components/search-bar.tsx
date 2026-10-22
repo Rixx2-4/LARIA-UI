@@ -15,7 +15,7 @@ import { ThinkingIndicator } from "./thinking-indicator"
 import { ChatQuiz, type ChatQuizRequest } from "./chat-quiz"
 import { STYLE_OPTIONS } from "./style-picker"
 import { markPlacementOffered, wasPlacementOffered } from "@/lib/placement"
-import { isTextMime, mimeFromFilename } from "@/lib/file-types"
+import { ALLOWED_EXTENSIONS, isTextMime, mimeFromFilename } from "@/lib/file-types"
 import { chatHref } from "@/lib/routes"
 import { envelopeGrounded, envelopeLabel, tutorEnvelope } from "@/lib/tutor-envelope"
 import { LEVEL_NAME } from "@/app/quiz/quiz-parts"
@@ -46,15 +46,6 @@ function titleFromFilename(filename: string): string {
   const base = filename.replace(/\.[^.]+$/, "").replace(/[_-]+/g, " ").replace(/\s+/g, " ").trim()
   return base ? base.charAt(0).toUpperCase() + base.slice(1) : filename
 }
-
-// Lo mismo que acepta el backend (file_parser.py): texto, datos, código y cuatro binarios
-const ALLOWED_EXTENSIONS = [
-  ".pdf", ".docx", ".pptx", ".xlsx",
-  ".txt", ".md", ".markdown",
-  ".csv", ".json", ".xml", ".yaml", ".yml", ".toml", ".ini", ".cfg", ".tex", ".rst", ".log",
-  ".py", ".js", ".ts", ".tsx", ".jsx", ".html", ".htm", ".css", ".scss", ".sh", ".bash", ".sql",
-  ".java", ".c", ".cpp", ".h", ".cs", ".php", ".rb", ".go", ".rs", ".swift", ".kt", ".r", ".jl", ".lua", ".pl",
-]
 
 // Los formatos antiguos de Office tienen arreglo fácil: guardarlos en el formato nuevo
 // Límite de subida del backend (DOCUMENT_MAX_UPLOAD_BYTES en Render): mejor avisar
