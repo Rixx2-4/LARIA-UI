@@ -259,4 +259,34 @@ describe("QuizPage", () => {
     await screen.findByText("Pregunta 1 de 2")
     expect(requests[2]).toMatchObject({ method: "POST", url: expect.stringMatching(/\/chats\/c1\/quiz\?num_questions=5$/) })
   })
+
+  it("mientras se envían las respuestas no se pueden cambiar, y si sale, el resultado tardío no aparece", async () => {
+    stubServer()
+    const serve = globalThis.fetch as (url: string, init?: RequestInit) => Promise<Response>
+    let release: () => void = () => {}
+    vi.stubGlobal("fetch", async (url: string, init?: RequestInit) => {
+      if (url.includes("/attempts")) await new Promise<void>((resolve) => (release = resolve))
+      return serve(url, init)
+    })
+    renderQuiz("chat=c1")
+
+    fireEvent.click(await screen.findByText("Empezar quiz"))
+    fireEvent.click(await screen.findByText(/Cloroplasto/))
+    fireEvent.click(screen.getByText(/Siguiente/))
+    fireEvent.click(await screen.findByText(/Nitrógeno/))
+    fireEvent.click(screen.getByText(/Finalizar/))
+
+    // Enviando: ni otra opción ni volver atrás
+    fireEvent.click(screen.getByText(/Oxígeno/))
+    expect(screen.getByText(/Nitrógeno/).closest("button")?.getAttribute("aria-pressed")).toBe("true")
+    fireEvent.click(screen.getByText(/Anterior/))
+    expect(screen.getByText("¿Qué gas se libera?")).toBeTruthy()
+
+    fireEvent.click(screen.getByText("Salir"))
+    await screen.findByText("Ponte a prueba")
+    release()
+    await new Promise((resolve) => setTimeout(resolve, 30))
+    expect(screen.queryByText("Acertaste 1 de 2")).toBeNull()
+    expect(screen.getByText("Ponte a prueba")).toBeTruthy()
+  })
 })

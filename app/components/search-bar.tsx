@@ -1,6 +1,6 @@
 "use client"
 
-import { Fragment, useState, useRef, useEffect, useCallback } from "react"
+import { Fragment, useState, useRef, useEffect, useLayoutEffect, useCallback } from "react"
 import { useRouter } from "next/navigation"
 import { toast } from "sonner"
 import { Button } from "@/components/ui/button"
@@ -52,6 +52,8 @@ const MAX_UPLOAD_BYTES = 25 * 1024 * 1024
 // pasa); el contador aparece cuando quedan 500
 const MAX_MESSAGE_CHARS = 20000
 const MESSAGE_WARNING_CHARS = 500
+// Con Shift+Enter el mensaje crece hacia arriba hasta unas 8 líneas; luego, scroll
+const MAX_INPUT_HEIGHT_PX = 200
 
 const LEGACY_OFFICE: Record<string, string> = { ".doc": ".docx", ".ppt": ".pptx", ".xls": ".xlsx" }
 
@@ -90,7 +92,7 @@ export function SearchBar({ isOpeningChat = false, inClass }: { isOpeningChat?: 
     dataUrl?: string
   } | null>(null)
   const fileInputRef = useRef<HTMLInputElement>(null)
-  const messageInputRef = useRef<HTMLInputElement>(null)
+  const messageInputRef = useRef<HTMLTextAreaElement>(null)
   const messagesContainerRef = useRef<HTMLDivElement>(null)
   const isUserScrolledRef = useRef(false)
 
@@ -106,6 +108,7 @@ export function SearchBar({ isOpeningChat = false, inClass }: { isOpeningChat?: 
     maybeGenerateTitle,
     takeFirstMessage,
     loadedChatId,
+    linkDocument,
   } = useChat()
   const chatId = activeChatId
 
@@ -129,6 +132,8 @@ export function SearchBar({ isOpeningChat = false, inClass }: { isOpeningChat?: 
     setMessages,
     chatId,
     concept: inClass?.concept,
+    // Si la respuesta falla, lo que se envió vuelve al campo para reintentarlo
+    onError: () => setQuery((current) => current || lastSentRef.current),
   })
 
   // Voz del tutor: con «Leer en voz», cada frase que se cierra en el stream se lee
@@ -209,22 +214,41 @@ export function SearchBar({ isOpeningChat = false, inClass }: { isOpeningChat?: 
     if (!isUserScrolledRef.current) scrollToBottom(false)
   }, [activeChatId, messages.length, scrollToBottom])
 
-  // El chat activo, o uno nuevo si no hay (y la URL pasa a apuntar a él)
+  // El chat activo, o uno nuevo si no hay (y la URL pasa a apuntar a él). Si ya se está
+  // creando uno (enviar y adjuntar a la vez), se espera a ese: nunca se crean dos
+  const creatingChatRef = useRef<Promise<string> | null>(null)
+  // Lo mismo, para el render: el chat que llega es el que se creó aquí
+  const [creatingChat, setCreatingChat] = useState(false)
+  useEffect(() => {
+    creatingChatRef.current = null
+  }, [chatId])
   const ensureChat = async (documentId?: string) => {
     if (chatId) return { id: chatId, isNew: false }
-    const chat = await ctxCreateChat(undefined, documentId)
-    router.replace(chatHref(chat.id))
-    return { id: chat.id, isNew: true }
+    if (creatingChatRef.current) return { id: await creatingChatRef.current, isNew: false }
+    // Lo que se esté escribiendo pasa al chat que se crea (ver los borradores)
+    setCreatingChat(true)
+    const creating = ctxCreateChat(undefined, documentId).then((chat) => {
+      router.replace(chatHref(chat.id))
+      return chat.id
+    })
+    creatingChatRef.current = creating
+    try {
+      return { id: await creating, isNew: true }
+    } catch (error) {
+      creatingChatRef.current = null
+      setCreatingChat(false)
+      throw error
+    }
   }
 
-  const generatePreview = (file: File): Promise<string | undefined> => {
+  const generatePreview = (file: File, mimeType: string): Promise<string | undefined> => {
     return new Promise((resolve) => {
-      if (file.type.startsWith("image/")) {
+      if (mimeType.startsWith("image/")) {
         const reader = new FileReader()
         reader.onload = (e) => resolve(e.target?.result as string)
         reader.onerror = () => resolve(undefined)
         reader.readAsDataURL(file)
-      } else if (isTextMime(file.type)) {
+      } else if (isTextMime(mimeType)) {
         const reader = new FileReader()
         reader.onload = (e) => resolve(e.target?.result as string)
         reader.onerror = () => resolve(undefined)
@@ -252,23 +276,33 @@ export function SearchBar({ isOpeningChat = false, inClass }: { isOpeningChat?: 
       return
     }
 
+    // Hay navegadores que no dan el tipo (.md, .py) o dan otro (.ts como vídeo MPEG-TS):
+    // si la extensión es conocida, manda ella
+    const known = mimeFromFilename(file.name)
+    const mimeType = known !== "application/octet-stream" ? known : file.type || known
+
     setIsUploading(true)
     try {
       const doc = await lariaAPI.documents.upload(file)
-      const dataUrl = await generatePreview(file)
-
       const { id: currentChatId, isNew: isNewChat } = await ensureChat(doc.id)
+      // Un chat nuevo ya nace con el documento; uno que ya existía se vincula ahora.
+      // Hasta que el chat lo tiene, no se enseña como adjunto
+      if (!isNewChat) await linkDocument(currentChatId, doc.id)
+
+      const dataUrl = await generatePreview(file, mimeType)
+      // El backend vincula un documento por chat (el nuevo sustituye al anterior): la
+      // tarjeta es la del que el tutor usa de verdad
       setUploadsByChat((prev) => ({
         ...prev,
-        [currentChatId]: [...(prev[currentChatId] ?? []), { filename: file.name, mimeType: file.type, size: file.size, document: doc, dataUrl }],
+        [currentChatId]: [{ filename: file.name, mimeType, size: file.size, document: doc, dataUrl }],
       }))
-      if (!isNewChat) {
-        await lariaAPI.chats.update(currentChatId, { document_id: doc.id })
-      }
 
       // Una nota, no una pregunta: con "user" el backend lanzaría un turno del tutor
-      // (llamada a la IA, respuesta fantasma y el perfil del alumno alterado)
-      await addMessage(currentChatId, "system", `${UPLOAD_NOTE_PREFIX}Subí el archivo: ${file.name}`)
+      // (llamada a la IA, respuesta fantasma y el perfil del alumno alterado). Es solo un
+      // aviso: si no se guarda, el archivo ya está subido y vinculado igual
+      await addMessage(currentChatId, "system", `${UPLOAD_NOTE_PREFIX}Subí el archivo: ${file.name}`).catch((error) =>
+        console.warn("No se pudo guardar la nota del archivo:", error),
+      )
 
       if (isNewChat) {
         // Título de apoyo hasta que la primera respuesta permita generar uno de verdad
@@ -279,7 +313,6 @@ export function SearchBar({ isOpeningChat = false, inClass }: { isOpeningChat?: 
       toast.error(error instanceof Error ? error.message : "Error al subir el archivo")
     } finally {
       setIsUploading(false)
-      if (fileInputRef.current) fileInputRef.current.value = ""
     }
   }
 
@@ -302,15 +335,23 @@ export function SearchBar({ isOpeningChat = false, inClass }: { isOpeningChat?: 
     }
   }, [activeDocumentId])
 
-  const localUploads = (chatId && uploadsByChat[chatId]) || []
+  // Los documentos que se quitaron de cada chat: no vuelven a salir, tampoco como el
+  // vinculado. Quitar la tarjeta no desvincula el documento en el servidor (el contrato
+  // conocido no tiene cómo)
+  const [hiddenByChat, setHiddenByChat] = useState<Record<string, string[]>>({})
+  const hidden = (chatId && hiddenByChat[chatId]) || []
+  const isShown = (documentId?: string) => !documentId || !hidden.includes(documentId)
+  const localUploads = ((chatId && uploadsByChat[chatId]) || []).filter((uf) => isShown(uf.document?.id))
   const uploadedFiles: UploadedFile[] =
-    localUploads.length > 0 || !linkedDocument
+    localUploads.length > 0 || !linkedDocument || !isShown(linkedDocument.id)
       ? localUploads
       : [{ document: linkedDocument, filename: linkedDocument.filename, mimeType: mimeFromFilename(linkedDocument.filename) }]
 
-  const removeFile = (index: number) => {
+  const removeFile = (file: UploadedFile) => {
     if (!chatId) return
-    setUploadsByChat((prev) => ({ ...prev, [chatId]: (prev[chatId] ?? []).filter((_, i) => i !== index) }))
+    const documentId = file.document?.id
+    if (documentId) setHiddenByChat((prev) => ({ ...prev, [chatId]: [...(prev[chatId] ?? []), documentId] }))
+    setUploadsByChat((prev) => ({ ...prev, [chatId]: (prev[chatId] ?? []).filter((uf) => uf !== file) }))
   }
 
   // Lo dictado se añade a lo que ya se hubiera escrito; mientras la frase no termina
@@ -333,14 +374,60 @@ export function SearchBar({ isOpeningChat = false, inClass }: { isOpeningChat?: 
     dictationBaseRef.current = query
     dictation.start()
   }
+
+  // Lo escrito en cada chat se queda en ese chat: al volver a él, sigue ahí ("" es el
+  // chat nuevo). Al pasar del chat nuevo al que se acaba de crear desde él (p. ej. al
+  // adjuntar) el texto lo acompaña: es el mismo chat
+  const [drafts, setDrafts] = useState<Record<string, string>>({})
+  const [draftChatId, setDraftChatId] = useState(chatId)
+  if (draftChatId !== chatId) {
+    setDraftChatId(chatId)
+    if (draftChatId === null && creatingChat) {
+      setCreatingChat(false)
+      // Lo del chat nuevo ya es de este: el próximo chat nuevo empieza vacío
+      setDrafts((prev) => ({ ...prev, "": "" }))
+    } else {
+      setDrafts((prev) => ({ ...prev, [draftChatId ?? ""]: query }))
+      setQuery(drafts[chatId ?? ""] ?? "")
+      setInterimText("")
+    }
+  }
+  // Y lo que se estuviera dictando no sigue escribiendo en otro chat
+  const { cancel: cancelDictation } = dictation
+  const dictationChatRef = useRef(chatId)
+  useEffect(() => {
+    if (dictationChatRef.current !== null && dictationChatRef.current !== chatId) cancelDictation()
+    dictationChatRef.current = chatId
+  }, [chatId, cancelDictation])
   const shownQuery = (interimText ? (query.trim() ? `${query.trimEnd()} ${interimText}` : interimText) : query).slice(0, MAX_MESSAGE_CHARS)
+  // El campo mide una línea y crece con cada salto de línea, hasta el tope. Sin medida
+  // (oculto), se deja con su alto natural
+  useLayoutEffect(() => {
+    const field = messageInputRef.current
+    if (!field) return
+    field.style.height = ""
+    field.style.overflowY = ""
+    const height = field.scrollHeight
+    // Con una línea se queda con su alto natural (scrollHeight redondea: 22,5 px → 23)
+    if (!height || height - field.getBoundingClientRect().height <= 1) return
+    field.style.height = `${Math.min(height, MAX_INPUT_HEIGHT_PX)}px`
+    field.style.overflowY = height > MAX_INPUT_HEIGHT_PX ? "auto" : "hidden"
+  }, [shownQuery])
   // Cerca del límite se ve cuánto queda
   const remaining = MAX_MESSAGE_CHARS - shownQuery.length
 
   const handleSend = () => sendMessage(shownQuery.trim())
 
+  // Lo último que se envió, para devolverlo al campo si la respuesta falla
+  const lastSentRef = useRef("")
+  // Desde que se pulsa Enviar hasta que termina la respuesta: mientras se crea el chat
+  // aún no hay stream, y un segundo envío lanzaría otro turno a la vez
+  const sendingRef = useRef(false)
+
   const sendMessage = async (userMessage: string) => {
-    if (!userMessage || isStreaming) return
+    if (!userMessage || isStreaming || sendingRef.current) return
+    sendingRef.current = true
+    lastSentRef.current = userMessage
 
     setQuery("")
     dictation.cancel()
@@ -372,6 +459,8 @@ export function SearchBar({ isOpeningChat = false, inClass }: { isOpeningChat?: 
       // Lo escrito no se pierde: vuelve al campo para reintentarlo
       setQuery((current) => current || userMessage)
       toast.error("No se pudo enviar el mensaje")
+    } finally {
+      sendingRef.current = false
     }
   }
 
@@ -645,7 +734,7 @@ export function SearchBar({ isOpeningChat = false, inClass }: { isOpeningChat?: 
                     dataUrl: uf.dataUrl,
                   })
                 }
-                onRemove={() => removeFile(index)}
+                onRemove={() => removeFile(uf)}
               />
             ))}
           </div>
@@ -658,8 +747,9 @@ export function SearchBar({ isOpeningChat = false, inClass }: { isOpeningChat?: 
           }`}
         >
           <div className="flex items-center px-4 md:px-5 py-3 md:py-3.5">
-            <input
+            <textarea
               ref={messageInputRef}
+              rows={1}
               value={shownQuery}
               onChange={(e) => {
                 setQuery(e.target.value)
@@ -668,10 +758,11 @@ export function SearchBar({ isOpeningChat = false, inClass }: { isOpeningChat?: 
               onFocus={() => setIsFocused(true)}
               onBlur={() => setIsFocused(false)}
               onKeyDown={(e) => {
-                if (e.key === "Enter" && shownQuery.trim() && !isStreaming) {
-                  e.preventDefault()
-                  handleSend()
-                }
+                // Enter envía; Shift+Enter, un salto de línea. Con un método de entrada (IME)
+                // a medias, Enter confirma la palabra: no envía
+                if (e.key !== "Enter" || e.shiftKey || e.nativeEvent.isComposing) return
+                e.preventDefault()
+                if (shownQuery.trim() && !isStreaming) handleSend()
               }}
               data-tour={inClass ? undefined : "chat"}
               placeholder={isStreaming ? "Generando respuesta…" : inClass ? "Pregunta sobre esta clase…" : "Pregunta lo que quieras…"}
@@ -679,7 +770,7 @@ export function SearchBar({ isOpeningChat = false, inClass }: { isOpeningChat?: 
               maxLength={MAX_MESSAGE_CHARS}
               aria-describedby={remaining <= MESSAGE_WARNING_CHARS ? "message-limit" : undefined}
               disabled={isStreaming}
-              className="w-full border-0 bg-transparent text-[14px] md:text-[15px] text-foreground placeholder:text-muted-foreground focus:outline-none disabled:opacity-50"
+              className="block w-full resize-none overflow-hidden border-0 bg-transparent text-[14px] md:text-[15px] text-foreground placeholder:text-muted-foreground focus:outline-none disabled:opacity-50"
             />
             {remaining <= MESSAGE_WARNING_CHARS && (
               <span
@@ -701,6 +792,9 @@ export function SearchBar({ isOpeningChat = false, inClass }: { isOpeningChat?: 
                 className="hidden"
                 onChange={(e) => {
                   const file = e.target.files?.[0]
+                  // Se vacía ya: así elegir otra vez el mismo archivo (tras un error o un
+                  // formato no admitido) vuelve a avisar
+                  e.target.value = ""
                   if (file) handleFileUpload(file)
                 }}
               />

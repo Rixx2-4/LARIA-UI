@@ -94,22 +94,63 @@ function PdfViewer({ src }: { src: string }) {
   )
 }
 
+// Un texto enorme (hasta 25 MB) pintado entero bloquearía la página: se enseña el principio
+const MAX_PREVIEW_CHARS = 200_000
+
 function TextViewer({ content }: { content: string; filename: string }) {
+  const cut = content.length > MAX_PREVIEW_CHARS
   return (
     <div className="w-full h-full overflow-auto bg-muted/30 rounded-xl p-4">
       <pre className="text-sm font-mono text-foreground whitespace-pre-wrap break-words">
-        {content}
+        {cut ? content.slice(0, MAX_PREVIEW_CHARS) : content}
       </pre>
+      {cut && <p className="mt-4 text-sm text-muted-foreground">Vista previa recortada: el archivo es más largo.</p>}
     </div>
   )
 }
 
-function GenericViewer({ filename, mimeType }: { filename: string; mimeType: string }) {
+// Baja el archivo original (con el token en la cabecera, nunca en la URL)
+async function downloadDocument(documentId: string, filename: string) {
+  const url = URL.createObjectURL(await lariaAPI.documents.content(documentId))
+  const link = document.createElement("a")
+  link.href = url
+  link.download = filename
+  link.click()
+  setTimeout(() => URL.revokeObjectURL(url), 1000)
+}
+
+// Sin vista previa (Word, PowerPoint, Excel…): al menos se puede descargar
+function GenericViewer({ filename, mimeType, documentId }: { filename: string; mimeType: string; documentId?: string }) {
+  const [downloading, setDownloading] = useState(false)
+  const [failed, setFailed] = useState(false)
+  const download = async () => {
+    if (!documentId) return
+    setDownloading(true)
+    setFailed(false)
+    try {
+      await downloadDocument(documentId, filename)
+    } catch {
+      setFailed(true)
+    } finally {
+      setDownloading(false)
+    }
+  }
   return (
     <div className="flex flex-col items-center justify-center h-full gap-4 text-muted-foreground">
       <FileTypeIcon mimeType={mimeType} className="h-8 w-8" />
       <p className="text-lg font-medium">{filename}</p>
       <p className="text-sm">Vista previa no disponible</p>
+      {documentId && (
+        <Button variant="outline" size="sm" onClick={download} disabled={downloading} className="gap-2">
+          <Download className="h-4 w-4" aria-hidden />
+          Descargar
+        </Button>
+      )}
+      {failed && (
+        <p role="alert" className="text-sm text-destructive">
+          No se pudo descargar el archivo
+        </p>
+      )}
     </div>
   )
 }
@@ -119,13 +160,34 @@ export function FileViewer({ filename, mimeType, documentId, previewDataUrl, onC
   const [isLoading, setIsLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const overlayRef = useRef<HTMLDivElement>(null)
+  const dialogRef = useRef<HTMLDivElement>(null)
+
+  // Es un diálogo modal: el foco entra al abrir, Tab no sale de él y, al cerrarlo,
+  // vuelve a donde estaba (la tarjeta del archivo)
+  useEffect(() => {
+    const previous = document.activeElement as HTMLElement | null
+    dialogRef.current?.focus()
+    return () => previous?.focus?.()
+  }, [])
 
   useEffect(() => {
-    const handleEscape = (e: KeyboardEvent) => {
-      if (e.key === "Escape") onClose()
+    const handleKey = (e: KeyboardEvent) => {
+      if (e.key === "Escape") return onClose()
+      if (e.key !== "Tab" || !dialogRef.current) return
+      const focusable = [...dialogRef.current.querySelectorAll<HTMLElement>("button:not([disabled]), a[href], iframe")]
+      if (!focusable.length) return
+      const first = focusable[0]
+      const last = focusable[focusable.length - 1]
+      if (e.shiftKey && (document.activeElement === first || document.activeElement === dialogRef.current)) {
+        e.preventDefault()
+        last.focus()
+      } else if (!e.shiftKey && document.activeElement === last) {
+        e.preventDefault()
+        first.focus()
+      }
     }
-    document.addEventListener("keydown", handleEscape)
-    return () => document.removeEventListener("keydown", handleEscape)
+    document.addEventListener("keydown", handleKey)
+    return () => document.removeEventListener("keydown", handleKey)
   }, [onClose])
 
   const [blobUrl, setBlobUrl] = useState<string | null>(null)
@@ -204,7 +266,7 @@ export function FileViewer({ filename, mimeType, documentId, previewDataUrl, onC
       return <TextViewer content={text} filename={filename} />
     }
 
-    return <GenericViewer filename={filename} mimeType={mimeType} />
+    return <GenericViewer filename={filename} mimeType={mimeType} documentId={documentId} />
   }
 
   return (
@@ -215,7 +277,14 @@ export function FileViewer({ filename, mimeType, documentId, previewDataUrl, onC
         if (e.target === overlayRef.current) onClose()
       }}
     >
-      <div className="relative w-full max-w-4xl h-[80vh] mx-4 bg-background rounded-2xl shadow-2xl overflow-hidden flex flex-col">
+      <div
+        ref={dialogRef}
+        role="dialog"
+        aria-modal="true"
+        aria-label={filename}
+        tabIndex={-1}
+        className="relative w-full max-w-4xl h-[80vh] mx-4 bg-background rounded-2xl shadow-2xl overflow-hidden flex flex-col focus:outline-none"
+      >
         <div className="flex items-center justify-between px-4 py-3 border-b border-border">
           <div className="min-w-0 flex-1">
             <p className="text-sm font-medium truncate">{filename}</p>

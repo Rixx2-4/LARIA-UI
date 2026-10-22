@@ -79,6 +79,16 @@ export function OnboardingTour() {
   const [step, setStep] = useState(0)
   const [rect, setRect] = useState<DOMRect | null>(null)
   const nextRef = useRef<HTMLButtonElement>(null)
+  const dialogRef = useRef<HTMLDivElement>(null)
+
+  // Otra cuenta en la misma pestaña: lo que hizo la anterior con el tutorial no cuenta
+  const [tourUserId, setTourUserId] = useState(user?.id)
+  if (tourUserId !== user?.id) {
+    setTourUserId(user?.id)
+    setDismissed(false)
+    setReplaying(false)
+    setStep(0)
+  }
 
   useEffect(
     () =>
@@ -118,7 +128,21 @@ export function OnboardingTour() {
     if (!open) return
     nextRef.current?.focus()
     const onKey = (event: KeyboardEvent) => {
-      if (event.key === "Escape") finish()
+      if (event.key === "Escape") return finish()
+      // Es modal: Tab da la vuelta dentro del tutorial, sin ir a la página de detrás
+      if (event.key !== "Tab" || !dialogRef.current) return
+      const buttons = [...dialogRef.current.querySelectorAll<HTMLElement>("button:not([disabled])")]
+      if (!buttons.length) return
+      const first = buttons[0]
+      const last = buttons[buttons.length - 1]
+      const inside = dialogRef.current.contains(document.activeElement)
+      if (event.shiftKey && (document.activeElement === first || !inside)) {
+        event.preventDefault()
+        last.focus()
+      } else if (!event.shiftKey && (document.activeElement === last || !inside)) {
+        event.preventDefault()
+        first.focus()
+      }
     }
     document.addEventListener("keydown", onKey)
     return () => document.removeEventListener("keydown", onKey)
@@ -147,6 +171,7 @@ export function OnboardingTour() {
       )}
 
       <div
+        ref={dialogRef}
         role="dialog"
         aria-modal="true"
         aria-labelledby="tutorial-titulo"

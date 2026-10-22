@@ -10,6 +10,11 @@ const POLL_MS = 5000
 const MAX_POLLS = 36 // 3 minutos
 const PENDING = new Set(["uploaded", "analyzing"])
 
+// Recién subido ("uploaded") ya está en cola para analizarse: se cuenta igual que "analyzing"
+export function isAnalysisPending(status: string | null): boolean {
+  return PENDING.has(status ?? "")
+}
+
 export interface DocumentStatus {
   status: string | null
   errorMessage: string | null

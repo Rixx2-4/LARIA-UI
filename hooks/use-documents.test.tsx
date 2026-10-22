@@ -1,6 +1,6 @@
 import { describe, it, expect, vi, afterEach, beforeEach } from "vitest"
 import { renderHook, act } from "@testing-library/react"
-import { useDocuments } from "./use-documents"
+import { documentState, useDocuments } from "./use-documents"
 import { setAuthToken } from "@/lib/laria-api"
 
 const doc = (status: string, has_analysis = false) => ({
@@ -68,5 +68,16 @@ describe("useDocuments", () => {
 
     await act(() => vi.advanceTimersByTimeAsync(10000))
     expect(result.current.documents[0].status).toBe("analyzed")
+  })
+
+  it("un análisis fallido («error», el estado del backend) deja de consultarse y sale como error", async () => {
+    const calls = stubStatuses("error")
+    const { result } = renderHook(() => useDocuments(true))
+
+    await act(() => vi.advanceTimersByTimeAsync(0))
+    expect(documentState(result.current.documents[0])).toBe("failed")
+
+    await act(() => vi.advanceTimersByTimeAsync(30000))
+    expect(calls()).toBe(1)
   })
 })

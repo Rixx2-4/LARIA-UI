@@ -5,7 +5,7 @@ import { Loader2, MessageCircleQuestion, RefreshCw, X } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { SearchBar } from "@/app/components/search-bar"
 import { FixedChatProvider } from "@/app/contexts/chat-context"
-import { ApiError, lariaAPI, type Chat } from "@/lib/laria-api"
+import { ApiError, lariaAPI, type Chat, type ChatMessage } from "@/lib/laria-api"
 import type { useSpeech } from "@/hooks/use-speech"
 
 // «Pregúntale a LARIA» durante la clase (ADR-054): el chat de esa ruta, con el SSE, la
@@ -129,6 +129,46 @@ export function ClassChatPanel({ pathId, concept, conceptTitle, speech, docked, 
     }
   }, [pathId, onOpenChange])
 
+  // El chat se desmonta al cerrar el panel: lo hablado se guarda aquí para que al
+  // volver a abrirlo siga ahí (y no solo lo que había al pedirlo la primera vez)
+  const keepMessages = useCallback((messages: ChatMessage[]) => {
+    setState((prev) => (prev.kind === "ready" ? { kind: "ready", chat: { ...prev.chat, messages } } : prev))
+  }, [])
+
+  // Al volver a abrirlo (o al pasar de panel lateral a hoja, que vuelve a montar el chat)
+  // se trae la versión guardada: si se cortó a mitad de una respuesta, lo que quedó a
+  // medias se sustituye por lo que el servidor guardó. Solo si entretanto no se ha
+  // escrito nada nuevo (no pisa una respuesta en curso)
+  const stateRef = useRef(state)
+  useEffect(() => {
+    stateRef.current = state
+  })
+  const wasClosedRef = useRef(false)
+  const dockedRef = useRef(docked)
+  useEffect(() => {
+    const remounted = dockedRef.current !== docked
+    dockedRef.current = docked
+    if (!open) {
+      wasClosedRef.current = true
+      return
+    }
+    if (!wasClosedRef.current && !remounted) return
+    wasClosedRef.current = false
+    const current = stateRef.current
+    if (current.kind !== "ready") return
+    const shown = current.chat.messages
+    lariaAPI.chats
+      .get(current.chat.id)
+      .then((saved) =>
+        setState((prev) =>
+          prev.kind === "ready" && prev.chat.messages === shown
+            ? { kind: "ready", chat: { ...prev.chat, messages: saved.messages ?? [] } }
+            : prev,
+        ),
+      )
+      .catch(() => {})
+  }, [open, docked])
+
   useEffect(() => {
     // Se pide al abrirlo por primera vez; el estado se actualiza tras la respuesta
     // eslint-disable-next-line react-hooks/set-state-in-effect
@@ -168,7 +208,7 @@ export function ClassChatPanel({ pathId, concept, conceptTitle, speech, docked, 
       </div>
       <div className="min-h-0 flex-1">
         {state.kind === "ready" ? (
-          <FixedChatProvider chat={state.chat}>
+          <FixedChatProvider chat={state.chat} onMessagesChange={keepMessages}>
             <SearchBar inClass={{ concept, speech, onBackToClass: () => onOpenChange(false) }} />
           </FixedChatProvider>
         ) : state.kind === "error" ? (

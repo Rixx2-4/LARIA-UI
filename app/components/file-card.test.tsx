@@ -28,7 +28,8 @@ describe("FileCard: análisis del documento", () => {
     vi.stubGlobal("fetch", fetchMock)
     render(<FileCard filename="libro.pdf" mimeType="application/pdf" documentId="d1" documentStatus="uploaded" onClick={() => {}} />)
 
-    expect(screen.queryByText(/Analizando/)).toBeNull()
+    // Recién subido ya se dice: no hay que esperar a la primera consulta
+    expect(screen.getByText("Analizando… puede tardar hasta un minuto")).toBeTruthy()
     await nextPoll()
     expect(screen.getByText("Analizando… puede tardar hasta un minuto")).toBeTruthy()
     await nextPoll()

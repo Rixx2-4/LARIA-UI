@@ -1,6 +1,6 @@
 "use client"
 
-import { Suspense, useEffect, useState } from "react"
+import { Suspense, useEffect, useRef, useState } from "react"
 import { useRouter, useSearchParams } from "next/navigation"
 import { ArrowRight, FileText, MessageSquare, RotateCcw, Settings2, Sparkles } from "lucide-react"
 import { Button } from "@/components/ui/button"
@@ -93,6 +93,9 @@ function Quiz({ chatId }: { chatId: string | null }) {
   const [onlyMistakes, setOnlyMistakes] = useState(false)
   // Tema para nivelarse sin material
   const [topicDraft, setTopicDraft] = useState("")
+  // Cada quiz tiene su turno: lo que llegue tarde de uno abandonado («Salir», «Cambiar
+  // ajustes») no lo pisa
+  const turnRef = useRef(0)
 
   const generateQuiz = async () => {
     if (!chatId) return
@@ -103,8 +106,10 @@ function Quiz({ chatId }: { chatId: string | null }) {
     }
     setIsLoading(true)
     setError(null)
+    const turn = ++turnRef.current
     try {
       const data = await lariaAPI.chats.generateQuiz(chatId, count, mix ?? undefined)
+      if (turn !== turnRef.current) return
       if (data.questions && data.questions.length > 0) {
         setQuizId(data.id)
         setQuestions(data.questions)
@@ -116,10 +121,11 @@ function Quiz({ chatId }: { chatId: string | null }) {
         setError("El quiz generado no tiene preguntas. Prueba de nuevo.")
       }
     } catch (err) {
+      if (turn !== turnRef.current) return
       console.error("Failed to generate quiz:", err)
       setError(err instanceof Error ? err.message : "Error al generar el quiz")
     } finally {
-      setIsLoading(false)
+      if (turn === turnRef.current) setIsLoading(false)
     }
   }
 
@@ -145,21 +151,26 @@ function Quiz({ chatId }: { chatId: string | null }) {
     if (!quizId) return
     setIsLoading(true)
     setError(null)
+    const turn = turnRef.current
     try {
       const data = await lariaAPI.quizzes.submitAttempt(quizId, answers)
+      if (turn !== turnRef.current) return
 
       const quizResults = toResults(questions, data.questions)
       setResults(quizResults)
       setStep("results")
     } catch (err) {
+      if (turn !== turnRef.current) return
       console.error("Failed to submit quiz:", err)
       setError(submitErrorMessage(err, "Error al enviar el intento"))
     } finally {
-      setIsLoading(false)
+      if (turn === turnRef.current) setIsLoading(false)
     }
   }
 
   const restartQuiz = () => {
+    turnRef.current++
+    setIsLoading(false)
     setStep("config")
     setQuizId(null)
     setQuestions([])

@@ -138,6 +138,8 @@ function profileInsights(profile: StudentProfile | null): { struggle: StruggleIt
 function Perfil() {
   const { user: authUser } = useAuth()
   const [isLoading, setIsLoading] = useState(true)
+  // Ya se pintó una vez: «Actualizar» recarga sin tapar la página con el esqueleto
+  const [loadedOnce, setLoadedOnce] = useState(false)
   const [error, setError] = useState<string | null>(null)
 
   const [learningProfile, setLearningProfile] = useState<StudentProfile | null>(null)
@@ -191,7 +193,7 @@ function Perfil() {
       setLearningProfile(profile)
       setHistory(hist)
       setDocuments(docList)
-
+      setLoadedOnce(true)
     } catch (err) {
       console.error("Error loading profile:", err)
       setError("No se pudieron cargar los datos del perfil")
@@ -206,7 +208,7 @@ function Perfil() {
     loadProfileData()
   }, [loadProfileData])
 
-  if (isLoading) {
+  if (isLoading && !loadedOnce) {
     return (
       <AppShell>
         <ProfileSkeleton />
@@ -261,8 +263,9 @@ function Perfil() {
     const pctScore = a.total_points > 0 ? Math.round((a.score / a.total_points) * 100) : 0
     return {
       fecha: formatDate(a.completed_at),
-      // Sin documento: es una ronda de nivelación (el resumen no trae el tema)
-      tema: a.document_id ? docNameMap[a.document_id] || "Documento" : "Nivelación",
+      // Sin documento: una ronda de nivelación o una práctica sobre un tema (el resumen no
+      // trae el tema ni cuál de las dos fue)
+      tema: a.document_id ? docNameMap[a.document_id] || "Documento" : "Nivelación o práctica",
       pctScore,
     }
   })
@@ -608,7 +611,7 @@ function Perfil() {
                 </div>
               </div>
 
-              <div className="col-span-2">
+              <div className="md:col-span-2">
                 <h4 className="text-[11.5px] text-muted-foreground mb-2 font-semibold">Estrategias efectivas recientes</h4>
                 {memory.last_effective_strategies?.length > 0 ? (
                   <div className="flex flex-wrap gap-2">

@@ -1,5 +1,7 @@
 import { describe, it, expect } from "vitest"
-import { dictationErrorMessage, transcriptFrom } from "./use-dictation"
+import { createElement } from "react"
+import { renderToString } from "react-dom/server"
+import { dictationErrorMessage, transcriptFrom, useDictation } from "./use-dictation"
 
 describe("dictationErrorMessage", () => {
   it("cada error del navegador dice qué pasa y qué hacer", () => {
@@ -38,5 +40,19 @@ describe("transcriptFrom (lo que entrega Chrome en Android)", () => {
 
   it("lo provisional que repite lo ya definitivo no se muestra dos veces", () => {
     expect(transcriptFrom(results(["hola", true], ["hola", false]))).toEqual({ finalText: "hola", interim: "" })
+  })
+})
+
+describe("useDictation al renderizar en el servidor", () => {
+  it("no dice que hay dictado: el HTML coincide con el primer render del navegador", () => {
+    ;(window as { SpeechRecognition?: unknown }).SpeechRecognition = class {}
+    function Probe() {
+      return createElement("span", null, useDictation({ onTranscript: () => {} }).isSupported ? "sí" : "no")
+    }
+    try {
+      expect(renderToString(createElement(Probe))).toContain("no")
+    } finally {
+      delete (window as { SpeechRecognition?: unknown }).SpeechRecognition
+    }
   })
 })

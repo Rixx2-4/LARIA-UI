@@ -6,7 +6,7 @@ import { useSpeech } from "@/hooks/use-speech"
 import { AuthProvider } from "@/app/contexts/auth-context"
 import { ChatProvider, useChat } from "@/app/contexts/chat-context"
 import { preferReducedMotion } from "@/test/media"
-import { doneEvent, tokenEvent } from "@/test/sse"
+import { controllableSSE, doneEvent, tokenEvent } from "@/test/sse"
 import { ClassChatPanel } from "./class-chat-panel"
 
 vi.mock("next/navigation", () => ({
@@ -100,6 +100,69 @@ describe("ClassChatPanel", () => {
     await screen.findByText("La luz excita la clorofila.")
     const stream = calls.find((c) => c.url.endsWith("/chats/cc1/stream"))
     expect(JSON.parse(String(stream?.init?.body))).toEqual({ role: "user", content: "¿Qué hace la clorofila?", concept: "luz" })
+  })
+
+  it("al cerrarlo y volver a abrirlo sigue lo hablado en esta clase", async () => {
+    const calls = backend((url) =>
+      url.endsWith("/chats/cc1/stream")
+        ? new Response(tokenEvent("La luz excita la clorofila.") + doneEvent(), { status: 200, headers: { "Content-Type": "text/event-stream" } })
+        : url.endsWith("/chats/cc1")
+          ? json({ ...classChat, messages: [{ role: "user", content: "¿Qué hace la clorofila?" }, { role: "assistant", content: "La luz excita la clorofila." }] })
+          : undefined,
+    )
+    const { rerender } = render(<Panel docked />)
+    const input = await screen.findByPlaceholderText("Pregunta sobre esta clase…")
+    fireEvent.change(input, { target: { value: "¿Qué hace la clorofila?" } })
+    fireEvent.keyDown(input, { key: "Enter" })
+    await screen.findByText("La luz excita la clorofila.")
+    await waitFor(() => expect(calls.some((c) => c.url.endsWith("/chats/cc1"))).toBe(true))
+
+    rerender(<Panel docked open={false} />)
+    expect(screen.queryByText("La luz excita la clorofila.")).toBeNull()
+    rerender(<Panel docked />)
+
+    expect(await screen.findByText("La luz excita la clorofila.")).toBeTruthy()
+    expect(screen.getByText("¿Qué hace la clorofila?")).toBeTruthy()
+  })
+
+  it("si se cerró a mitad de una respuesta, al volver se ve la que guardó el servidor", async () => {
+    const sse = controllableSSE()
+    const saved = [{ role: "user", content: "¿Qué hace la clorofila?" }, { role: "assistant", content: "Absorbe la luz y la convierte en energía." }]
+    backend((url) => (url.endsWith("/chats/cc1") ? json({ ...classChat, messages: saved }) : undefined))
+    const fetchMock = globalThis.fetch as (url: string, init?: RequestInit) => Promise<Response>
+    vi.stubGlobal("fetch", (url: string, init?: RequestInit) => (url.endsWith("/chats/cc1/stream") ? sse.fetchMock(url, init) : fetchMock(url, init)))
+
+    const { rerender } = render(<Panel docked />)
+    const input = await screen.findByPlaceholderText("Pregunta sobre esta clase…")
+    fireEvent.change(input, { target: { value: "¿Qué hace la clorofila?" } })
+    fireEvent.keyDown(input, { key: "Enter" })
+    sse.push(tokenEvent("Absorbe la"))
+    await screen.findByText("Absorbe la")
+
+    rerender(<Panel docked open={false} />)
+    rerender(<Panel docked />)
+
+    expect(await screen.findByText("Absorbe la luz y la convierte en energía.")).toBeTruthy()
+    expect(screen.queryByText("Absorbe la")).toBeNull()
+  })
+
+  it("al pasar de panel lateral a hoja (otro ancho) se recupera la respuesta guardada", async () => {
+    const sse = controllableSSE()
+    const saved = [{ role: "user", content: "¿Y la fase oscura?" }, { role: "assistant", content: "Fija el CO2 con la energía de la luminosa." }]
+    backend((url) => (url.endsWith("/chats/cc1") ? json({ ...classChat, messages: saved }) : undefined))
+    const serve = globalThis.fetch as (url: string, init?: RequestInit) => Promise<Response>
+    vi.stubGlobal("fetch", (url: string, init?: RequestInit) => (url.endsWith("/chats/cc1/stream") ? sse.fetchMock(url, init) : serve(url, init)))
+
+    const { rerender } = render(<Panel docked />)
+    const input = await screen.findByPlaceholderText("Pregunta sobre esta clase…")
+    fireEvent.change(input, { target: { value: "¿Y la fase oscura?" } })
+    fireEvent.keyDown(input, { key: "Enter" })
+    sse.push(tokenEvent("Fija el"))
+    await screen.findByText("Fija el")
+
+    rerender(<Panel docked={false} />)
+
+    expect(await screen.findByText("Fija el CO2 con la energía de la luminosa.")).toBeTruthy()
   })
 
   it("con el interruptor apagado (404 class_questions_disabled) desaparece", async () => {

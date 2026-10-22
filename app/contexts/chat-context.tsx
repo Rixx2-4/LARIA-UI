@@ -32,6 +32,8 @@ interface ChatContextType {
   // provisional: un título de apoyo que el generado podrá sustituir más tarde
   renameChat: (chatId: string, title: string, options?: { provisional?: boolean }) => Promise<void>
   addMessage: (chatId: string, role: "user" | "assistant" | "system", content: string) => Promise<void>
+  // Vincula un documento subido al chat (el backend admite uno por chat: sustituye al anterior)
+  linkDocument: (chatId: string, documentId: string) => Promise<void>
   setMessages: (msgs: ChatMessage[]) => void
   clearActiveChat: () => void
   // Tras cada respuesta: si el chat aún espera título, lo pide con la conversación
@@ -155,6 +157,14 @@ export function ChatProvider({ children }: { children: ReactNode }) {
     setMessages(chat.messages || [])
   }, [])
 
+  // Tras vincularlo, el chat activo y la lista lo saben: el quiz sobre el documento y el
+  // botón Quiz de la barra lateral dependen de ello
+  const linkDocument = useCallback(async (chatId: string, documentId: string) => {
+    await lariaAPI.chats.update(chatId, { document_id: documentId })
+    if (requestedChatIdRef.current === chatId) setActiveDocumentId(documentId)
+    await loadChats()
+  }, [loadChats])
+
   const clearActiveChat = useCallback(() => {
     requestedChatIdRef.current = null
     setActiveChatId(null)
@@ -226,6 +236,7 @@ export function ChatProvider({ children }: { children: ReactNode }) {
         deleteChat,
         renameChat,
         addMessage,
+        linkDocument,
         setMessages,
         clearActiveChat,
         maybeGenerateTitle,
@@ -249,9 +260,30 @@ export function useChat() {
 // Un único chat que ya existe (el de una clase, ADR-054): el chat de siempre puede
 // funcionar dentro de él sin tocar el chat activo de la app ni la lista. No se crea,
 // borra ni renombra desde aquí: el título lo pone el backend
-export function FixedChatProvider({ chat, children }: { chat: Chat; children: ReactNode }) {
+// onMessagesChange: quien lo monta guarda la conversación, para no perderla si lo desmonta.
+// Si después le pasa otros mensajes (p. ej. la versión guardada en el servidor), se adoptan
+export function FixedChatProvider({
+  chat,
+  onMessagesChange,
+  children,
+}: {
+  chat: Chat
+  onMessagesChange?: (messages: ChatMessage[]) => void
+  children: ReactNode
+}) {
   const [messages, setMessages] = useState<ChatMessage[]>(chat.messages ?? [])
   const noop = useCallback(async () => {}, [])
+
+  const [adopted, setAdopted] = useState(chat.messages)
+  if (adopted !== chat.messages) {
+    setAdopted(chat.messages)
+    // Lo que el padre guardó de aquí mismo ya es lo que hay; solo cambia si viene de fuera
+    if (chat.messages !== messages) setMessages(chat.messages ?? [])
+  }
+
+  useEffect(() => {
+    onMessagesChange?.(messages)
+  }, [messages, onMessagesChange])
 
   const addMessage = useCallback(async (chatId: string, role: "user" | "assistant" | "system", content: string) => {
     const updated = await lariaAPI.chats.addMessage(chatId, role, content)
@@ -275,6 +307,7 @@ export function FixedChatProvider({ chat, children }: { chat: Chat; children: Re
         deleteChat: noop,
         renameChat: noop,
         addMessage,
+        linkDocument: () => Promise.reject(new Error("Este chat no admite documentos")),
         setMessages,
         clearActiveChat: () => {},
         maybeGenerateTitle: noop,

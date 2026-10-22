@@ -113,4 +113,33 @@ describe("Tutorial de bienvenida", () => {
     expect(spotlight?.style.width).toBe("312px")
     target.remove()
   })
+
+  it("es modal: Tab da la vuelta dentro del tutorial, sin ir a la página de detrás", async () => {
+    stubServer(false)
+    renderTour()
+    const dialog = await screen.findByRole("dialog", { name: "¡Hola! Soy LARIA" })
+    const buttons = [...dialog.querySelectorAll("button")]
+
+    buttons.at(-1)!.focus()
+    fireEvent.keyDown(document, { key: "Tab" })
+    expect(document.activeElement).toBe(buttons[0])
+    fireEvent.keyDown(document, { key: "Tab", shiftKey: true })
+    expect(document.activeElement).toBe(buttons.at(-1))
+  })
+
+  it("si en la misma pestaña entra otra cuenta nueva, también lo ve", async () => {
+    stubServer(false)
+    renderTour()
+    fireEvent.click(await screen.findByRole("button", { name: "Saltar" }))
+    expect(screen.queryByRole("dialog")).toBeNull()
+
+    act(() => setAuthToken(null))
+    vi.stubGlobal("fetch", async (url: string) => {
+      if (url.endsWith("/users/me")) return json({ id: "u2", username: "luis", email: "l@l.l", onboarding_completed: false })
+      return json({})
+    })
+    act(() => setAuthToken("otro"))
+
+    expect(await screen.findByRole("dialog", { name: "¡Hola! Soy LARIA" })).toBeTruthy()
+  })
 })
