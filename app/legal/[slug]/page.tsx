@@ -51,7 +51,7 @@ export default function LegalPage({ params }: { params: Promise<{ slug: string }
                 key={item.slug}
                 href={legalHref(item.slug)}
                 aria-current={item.slug === slug ? "page" : undefined}
-                className="text-muted-foreground hover:text-foreground aria-[current=page]:font-medium aria-[current=page]:text-foreground"
+                className="py-2 text-muted-foreground hover:text-foreground md:py-0 aria-[current=page]:font-medium aria-[current=page]:text-foreground"
               >
                 {item.label}
               </Link>

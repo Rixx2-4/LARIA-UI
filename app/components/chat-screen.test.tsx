@@ -79,6 +79,36 @@ describe("ChatScreen", () => {
     expect(screen.queryByText("LARIA")).toBeNull()
   })
 
+  it("al abrir un chat sigue en el final aunque el contenido crezca después (diagramas, fórmulas)", async () => {
+    // jsdom no tiene ResizeObserver: se guarda su callback para simular que el contenido crece
+    const resized: (() => void)[] = []
+    vi.stubGlobal(
+      "ResizeObserver",
+      class {
+        constructor(callback: () => void) {
+          resized.push(callback)
+        }
+        observe() {}
+        disconnect() {}
+      },
+    )
+    const scrollTo = vi.spyOn(Element.prototype, "scrollTo")
+    vi.stubGlobal("fetch", async (url: string) => {
+      if (url.endsWith("/users/me")) return json({ id: "u1", username: "ana", email: "a@a.a" })
+      if (url.endsWith("/chats/")) return json({ chats: [{ id: "c1", title: "Átomos" }] })
+      if (url.endsWith("/chats/c1"))
+        return json({ id: "c1", title: "Átomos", messages: [{ role: "user", content: "¿Qué es un átomo?" }, { role: "assistant", content: "Una unidad." }] })
+      throw new Error(`Petición inesperada: ${url}`)
+    })
+    renderAt("c1")
+    await screen.findByText("Una unidad.")
+    await waitFor(() => expect(resized.length).toBeGreaterThan(0))
+
+    scrollTo.mockClear()
+    act(() => resized.at(-1)!())
+    expect(scrollTo).toHaveBeenCalledWith(expect.objectContaining({ behavior: "instant" }))
+  })
+
   it("mientras llega un chat existente no se presenta como un chat nuevo", async () => {
     let answer: (response: Response) => void = () => {}
     vi.stubGlobal("fetch", async (url: string) => {

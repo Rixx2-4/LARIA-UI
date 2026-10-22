@@ -408,7 +408,7 @@ function ChatHistoryItem({ title, isActive, mode, onModeChange, onSelect, onRena
             if (e.key === "Enter") finishRename(true)
             if (e.key === "Escape") finishRename(false)
           }}
-          className="w-full rounded border border-border bg-background px-2 py-1 text-[13px] focus:outline-none focus:ring-1 focus:ring-ring"
+          className="w-full rounded border border-border bg-background px-2 py-2 text-[13px] md:py-1 focus:outline-none focus:ring-1 focus:ring-ring"
         />
       </div>
     )
@@ -416,12 +416,12 @@ function ChatHistoryItem({ title, isActive, mode, onModeChange, onSelect, onRena
 
   if (mode === "confirm-delete") {
     return (
-      <div className="flex items-center justify-between gap-1 rounded bg-destructive/10 px-2 py-1.5 text-[12px]">
+      <div className="flex items-center justify-between gap-1 rounded bg-destructive/10 px-2 py-1.5 text-sm md:text-[12px]">
         <span className="min-w-0 truncate">¿Borrar?</span>
         <div className="flex shrink-0 gap-1">
           <button
             onClick={() => onModeChange("view")}
-            className="rounded px-1.5 py-0.5 hover:bg-accent"
+            className="rounded px-3 py-2 hover:bg-accent md:px-1.5 md:py-0.5"
           >
             Cancelar
           </button>
@@ -430,7 +430,7 @@ function ChatHistoryItem({ title, isActive, mode, onModeChange, onSelect, onRena
               onModeChange("view")
               onDelete()
             }}
-            className="rounded bg-destructive px-1.5 py-0.5 text-destructive-foreground hover:bg-destructive/90"
+            className="rounded bg-destructive px-3 py-2 text-destructive-foreground hover:bg-destructive/90 md:px-1.5 md:py-0.5"
           >
             Borrar
           </button>
@@ -439,9 +439,10 @@ function ChatHistoryItem({ title, isActive, mode, onModeChange, onSelect, onRena
     )
   }
 
+  // En móvil, filas y botones del tamaño de un dedo (en escritorio, compactos como siempre)
   return (
     <div
-      className={`group relative flex w-full items-center justify-between rounded text-[13px] leading-tight text-foreground transition-all duration-200 ${
+      className={`group relative flex w-full items-center justify-between rounded text-sm leading-tight text-foreground md:text-[13px] transition-all duration-200 ${
         isActive ? "bg-accent" : "hover:bg-accent"
       }`}
     >
@@ -449,7 +450,7 @@ function ChatHistoryItem({ title, isActive, mode, onModeChange, onSelect, onRena
       <button
         onClick={onSelect}
         aria-current={isActive ? "page" : undefined}
-        className="min-w-0 flex-1 truncate rounded px-2 py-1.5 pr-2 text-left"
+        className="min-w-0 flex-1 truncate rounded px-2 py-3 pr-2 text-left md:py-1.5"
       >
         {title}
       </button>
@@ -457,16 +458,16 @@ function ChatHistoryItem({ title, isActive, mode, onModeChange, onSelect, onRena
         <button
           aria-label={`Renombrar chat «${title}»`}
           onClick={startRename}
-          className="p-1 hover:text-foreground"
+          className="p-2.5 hover:text-foreground md:p-1"
         >
-          <Pencil className="h-3 w-3" />
+          <Pencil className="h-4 w-4 md:h-3 md:w-3" />
         </button>
         <button
           aria-label={`Borrar chat «${title}»`}
           onClick={() => onModeChange("confirm-delete")}
-          className="p-1 hover:text-destructive"
+          className="p-2.5 hover:text-destructive md:p-1"
         >
-          <Trash2 className="h-3 w-3" />
+          <Trash2 className="h-4 w-4 md:h-3 md:w-3" />
         </button>
       </div>
     </div>

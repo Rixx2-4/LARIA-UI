@@ -37,7 +37,8 @@ function ThemePicker() {
               checked ? "bg-background text-foreground shadow-sm" : "text-muted-foreground hover:text-foreground"
             }`}
           >
-            <Icon className="h-3.5 w-3.5" aria-hidden />
+            {/* A 320px el menú es más estrecho: sin sitio para el icono, solo el nombre */}
+            <Icon className="h-3.5 w-3.5 shrink-0 max-[359px]:hidden" aria-hidden />
             {label}
           </button>
         )
@@ -88,7 +89,10 @@ export function AccountMenu({ isOpen, onClose, onNavigate }: AccountMenuProps) {
     if (!isOpen || !panel || !anchor) return
     const place = () => {
       const rect = anchor.getBoundingClientRect()
-      panel.style.left = `${rect.right + MENU_GAP_PX}px`
+      const left = rect.right + MENU_GAP_PX
+      panel.style.left = `${left}px`
+      // En móviles estrechos (320px) no caben sus 288px al lado de la barra
+      panel.style.maxWidth = `${window.innerWidth - left - MENU_GAP_PX}px`
       panel.style.bottom = `${Math.max(MENU_GAP_PX * 2, window.innerHeight - rect.top + MENU_GAP_PX)}px`
     }
     place()

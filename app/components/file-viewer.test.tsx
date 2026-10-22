@@ -58,4 +58,26 @@ describe("FileViewer", () => {
     expect(screen.getByText("Vista previa recortada: el archivo es más largo.")).toBeTruthy()
     expect(document.querySelector("pre")?.textContent?.length).toBe(200_000)
   })
+
+  it("en un móvil, el PDF se abre con el visor del sistema o se descarga (el iframe queda en blanco)", async () => {
+    vi.spyOn(window, "matchMedia").mockImplementation(
+      (query: string) => ({ matches: query === "(pointer: coarse)", media: query, addEventListener() {}, removeEventListener() {} }) as unknown as MediaQueryList,
+    )
+    vi.stubGlobal("fetch", async () => new Response(new Blob(["%PDF"])))
+    render(<FileViewer filename="tema.pdf" mimeType="application/pdf" documentId="d1" onClose={() => {}} />)
+
+    const open = await screen.findByRole("link", { name: "Abrir el PDF" })
+    expect(open.getAttribute("href")).toBe("blob:archivo")
+    expect(open.getAttribute("target")).toBe("_blank")
+    expect(screen.getByRole("link", { name: "Descargar" }).getAttribute("download")).toBe("tema.pdf")
+    expect(document.querySelector("iframe")).toBeNull()
+  })
+
+  it("en escritorio, el PDF se ve dentro del visor", async () => {
+    vi.stubGlobal("fetch", async () => new Response(new Blob(["%PDF"])))
+    render(<FileViewer filename="tema.pdf" mimeType="application/pdf" documentId="d1" onClose={() => {}} />)
+
+    expect(await screen.findByTitle("Visor de PDF")).toBeTruthy()
+    expect(screen.queryByRole("link", { name: "Abrir el PDF" })).toBeNull()
+  })
 })
