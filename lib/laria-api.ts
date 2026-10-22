@@ -209,6 +209,11 @@ interface QuizQuestion {
   kind?: QuestionKind
   // Solo en las abiertas: lo más largo que se puede escribir
   max_chars?: number
+  // Método de estudio (ADR-055): "before" se responde antes de la explicación (recuerdo
+  // activo) y se envía con el resto; las demás, "after"
+  position?: "before" | "after"
+  // Una pregunta de repaso de OTRO concepto ya superado: «Repaso: Fracciones»
+  concept_title?: string | null
 }
 
 interface QuizResponse {
@@ -244,6 +249,8 @@ interface QuizAttemptQuestion {
   feedback?: string
   key_points?: { text: string; covered: boolean }[]
   model_answer?: string
+  // Una pregunta de repaso de otro concepto (ADR-055): cuenta para ese concepto, no para el paso
+  concept_title?: string | null
 }
 
 // Ruta de aprendizaje guiada (ADR-028): evaluación → ruta → clase por conceptos,
@@ -371,6 +378,13 @@ interface LessonResponse {
   visuals?: Visual[]
   // La comprobación (sin respuestas); null cuando la ruta está completada
   check: QuizResponse | null
+  // Ejemplos resueltos (ADR-055): los pasos hidden son huecos para completar y destapar;
+  // no se califican. null si el método no lo usa
+  worked_example?: WorkedExample | null
+}
+
+interface WorkedExample {
+  steps: { text: string; hidden: boolean }[]
 }
 
 // Agenda de repasos (ADR-051). La retención es una ESTIMACIÓN del modelo, no una medida
@@ -1149,6 +1163,6 @@ export type {
   QuizResponse, QuizQuestion, QuizAttemptResponse, QuizAttemptQuestion, QuestionKind, OpenVerdict, AssessmentMix, LearningPreferences,
   StreamCallbacks, TutorEnvelope, PlacementResult, PlacementLevel, ExplanationStyle,
   TutorVoice, VoicesResponse, NextSuggestion, StudyGoals, StudyTimeSummary, SessionMinutes, DailyGoalMinutes,
-  LegalDocument, StudyMethodKey, StudyPaceKey, StudyMethod, StudyPace, StudyCatalog, LessonOptions, ReviewStatus, ReviewItem, ReviewAgenda, RetentionCurve,
+  LegalDocument, WorkedExample, StudyMethodKey, StudyPaceKey, StudyMethod, StudyPace, StudyCatalog, LessonOptions, ReviewStatus, ReviewItem, ReviewAgenda, RetentionCurve,
   LearningPath, PathModule, PathModuleStatus, TeachingState, TeachingPhase, LessonResponse, CheckResponse, CheckOutcome,
 }
