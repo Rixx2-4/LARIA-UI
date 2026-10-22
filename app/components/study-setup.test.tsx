@@ -24,7 +24,7 @@ const path = (study: { study_method?: string | null; study_pace?: string | null 
 // Forma del contrato (ADR-055), con los textos que escribe el backend
 const catalog = {
   methods: [
-    { key: "active_recall", name: "Recuerdo activo", summary: "Recordar sin mirar.", good_for: "Retener.", available: true, unavailable_reason: null, unavailable_text: null, recommended: false, recommended_text: null },
+    { key: "active_recall", name: "Recuerdo activo", summary: "Recordar sin mirar.", good_for: "Ayuda a retener.", available: true, unavailable_reason: null, unavailable_text: null, recommended: false, recommended_text: null },
     { key: "worked_examples", name: "Ejemplos resueltos", summary: "Ver un ejemplo y completar pasos.", good_for: "Temas nuevos.", available: true, unavailable_reason: null, unavailable_text: null, recommended: true, recommended_text: "Recomendado en el tramo básico" },
     { key: "interleaving", name: "Intercalado", summary: "Mezclar con lo superado.", good_for: "Distinguir.", available: false, unavailable_reason: "needs_two_passed_concepts", unavailable_text: "Se abre cuando superes dos conceptos de esta ruta", recommended: false, recommended_text: null },
   ],
