@@ -19,8 +19,9 @@ import { DeleteClassDialog } from "@/app/components/delete-class-dialog"
 import { NextSuggestions } from "@/app/components/next-suggestions"
 import { BeforeStart, type StudySetup } from "@/app/components/before-start"
 import { PomodoroTimer } from "../pomodoro-timer"
+import { WorkedExample } from "../worked-example"
 import { ClassChatPanel, useClassChatOpen, useClassQuestionsEnabled, useDocked } from "../class-chat-panel"
-import { ApiError, isUnsafeTopic, lariaAPI, type AssessmentMix, type CheckResponse, type LessonOptions, type StudyPace, type LearningPath, type PathModule, type QuizResponse } from "@/lib/laria-api"
+import { ApiError, isUnsafeTopic, lariaAPI, type AssessmentMix, type CheckResponse, type LessonOptions, type StudyPace, type LearningPath, type PathModule, type QuizResponse, type WorkedExample as WorkedExampleData } from "@/lib/laria-api"
 import { CLASSES_HREF, NEW_CHAT_HREF, passageTestHref, placementHref, PROFILE_HREF } from "@/lib/routes"
 
 // La clase guiada de una ruta: explicación de un concepto, una comprobación corta y,
@@ -34,7 +35,8 @@ type View =
   | { kind: "setup"; mix: AssessmentMix | null; study: StudySetup | null; error?: string | null }
   // refused: el backend no trabaja este tema (filtro de seguridad): reintentar no sirve
   | { kind: "error"; message: string; needsPlacement: boolean; refused?: boolean }
-  | { kind: "lesson"; markdown: string; check: QuizResponse }
+  // workedExample: los pasos del ejemplo resuelto, si el método lo usa (ADR-055)
+  | { kind: "lesson"; markdown: string; check: QuizResponse; workedExample: WorkedExampleData | null }
   | { kind: "result"; result: CheckResponse; check: QuizResponse }
   | { kind: "completed" }
 
@@ -74,6 +76,9 @@ function Clase() {
   const [path, setPath] = useState<LearningPath | null>(null)
   const [view, setView] = useState<View>({ kind: "loading" })
   const [current, setCurrent] = useState(0)
+  // Recuerdo activo (ADR-055): las preguntas "before" se responden antes de ver la
+  // explicación; luego se envían con el resto, en un solo intento
+  const [warmupDone, setWarmupDone] = useState(false)
   const [answers, setAnswers] = useState<Record<number, string>>({})
   const [submitting, setSubmitting] = useState(false)
   const [checkError, setCheckError] = useState<string | null>(null)
@@ -127,7 +132,8 @@ function Clase() {
       optionsRef.current = {}
       setPath(lesson.path)
       setShownStep({ concept: lesson.path.teaching?.concept ?? undefined, title: lesson.path.teaching?.concept_title })
-      if (lesson.check) setView({ kind: "lesson", markdown: lesson.markdown ?? "", check: lesson.check })
+      setWarmupDone(false)
+      if (lesson.check) setView({ kind: "lesson", markdown: lesson.markdown ?? "", check: lesson.check, workedExample: lesson.worked_example ?? null })
       else if (lesson.path.teaching?.phase === "completed") setView({ kind: "completed" })
       else setView({ kind: "error", message: "No hay ninguna lección preparada ahora mismo.", needsPlacement: false })
     } catch (error) {
@@ -224,6 +230,13 @@ function Clase() {
   // Abrir un tramo nuevo investiga en internet y tarda: si la espera se alarga, se explica
   const slowLoading = useSlow(view.kind === "loading")
   const upcomingTier = path?.next_tier ?? null
+
+  // Las preguntas "before" (recuerdo activo) van antes de la explicación; si no quedara
+  // ninguna después, todo va junto como siempre
+  const lessonQuestions = view.kind === "lesson" ? view.check.questions : []
+  const before = lessonQuestions.filter((q) => q.position === "before")
+  const warmup = before.length < lessonQuestions.length ? before : []
+  const checkQuestions = warmup.length ? lessonQuestions.filter((q) => q.position !== "before") : lessonQuestions
 
   const title = path?.title || path?.topic || "Tu clase"
   const teaching = path?.teaching
@@ -335,32 +348,64 @@ function Clase() {
                   )}
                   {/* Por qué toca esto ahora: otra explicación, un repaso previo… */}
                   {teaching?.reason && <p className="rounded-lg bg-muted px-4 py-3 text-sm">{teaching.reason}</p>}
-                  {/* La explicación en la pizarra; la comprobación aparece cuando está entera */}
-                  <ClassBoard
-                    key={view.check.id}
-                    lessonKey={`clase:${pathId}:${view.check.id}`}
-                    markdown={view.markdown}
-                    speech={speech}
-                    emotion={lessonEmotion(teaching)}
-                  >
-                    <section aria-labelledby="comprobacion" className="space-y-4 border-t border-border pt-6">
-                      <h2 id="comprobacion" className="text-lg font-medium">
-                        Comprueba lo que has aprendido
-                      </h2>
-                      {view.check.questions[current] && (
+                  {warmup.length > 0 && !warmupDone ? (
+                    // Recuerdo activo: primero recordar sin mirar; la explicación viene después
+                    <section aria-labelledby="recuerda" className="space-y-4 rounded-xl border border-border bg-card p-5 sm:p-6">
+                      <div className="space-y-1">
+                        <h2 id="recuerda" className="text-lg font-medium">
+                          Antes de la explicación: recuerda sin mirar
+                        </h2>
+                        <p className="text-sm text-muted-foreground">
+                          Responde de memoria. Después verás la explicación y lo enviarás todo junto.
+                        </p>
+                      </div>
+                      {warmup[current] && (
                         <QuestionStep
-                          questions={view.check.questions}
+                          questions={warmup}
                           current={current}
                           answers={answers}
                           onAnswer={(question, letter) => setAnswers((prev) => ({ ...prev, [question.index]: letter }))}
                           onPrev={() => setCurrent((n) => Math.max(0, n - 1))}
-                          onNext={() => (current < view.check.questions.length - 1 ? setCurrent((n) => n + 1) : submit())}
-                          isSubmitting={submitting}
-                          error={checkError}
+                          onNext={() => {
+                            if (current < warmup.length - 1) return setCurrent((n) => n + 1)
+                            setCurrent(0)
+                            setWarmupDone(true)
+                          }}
+                          isSubmitting={false}
+                          error={null}
+                          finishLabel="Ver la explicación"
                         />
                       )}
                     </section>
-                  </ClassBoard>
+                  ) : (
+                    /* La explicación en la pizarra; la comprobación aparece cuando está entera */
+                    <ClassBoard
+                      key={view.check.id}
+                      lessonKey={`clase:${pathId}:${view.check.id}`}
+                      markdown={view.markdown}
+                      speech={speech}
+                      emotion={lessonEmotion(teaching)}
+                    >
+                      {view.workedExample && view.workedExample.steps.length > 0 && <WorkedExample example={view.workedExample} />}
+                      <section aria-labelledby="comprobacion" className="space-y-4 border-t border-border pt-6">
+                        <h2 id="comprobacion" className="text-lg font-medium">
+                          Comprueba lo que has aprendido
+                        </h2>
+                        {checkQuestions[current] && (
+                          <QuestionStep
+                            questions={checkQuestions}
+                            current={current}
+                            answers={answers}
+                            onAnswer={(question, letter) => setAnswers((prev) => ({ ...prev, [question.index]: letter }))}
+                            onPrev={() => setCurrent((n) => Math.max(0, n - 1))}
+                            onNext={() => (current < checkQuestions.length - 1 ? setCurrent((n) => n + 1) : submit())}
+                            isSubmitting={submitting}
+                            error={checkError}
+                          />
+                        )}
+                      </section>
+                    </ClassBoard>
+                  )}
                   {/* En los tramos intermedio y avanzado, en qué se basa la explicación */}
                   <ModuleSources sources={path?.modules.find((m) => m.concept === teaching?.concept)?.sources} />
                 </>
